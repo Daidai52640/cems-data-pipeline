@@ -19,16 +19,17 @@ def on_connect(client, userdata, flags, reason_code, properties):
     """连接成功时被调用"""
     if reason_code == 0:
         print(f"[连接成功] 已连上 {BROKER}:{PORT}")
-        # 连接成功后发消息
-        payload = "2026-09-09 21:30:00 SO2=35.2mg/m3 NOx=18.5mg/m3 Flag=N"
-        result = client.publish(TOPIC, payload, qos=1)
-        print(f"[已发布] 主题: {TOPIC}")
-        print(f"  内容: {payload}")
-        print(f"  发布结果: {result.rc}（0=成功）")
-        # 发完断开
-        client.disconnect()
     else:
         print(f"[连接失败] reason_code={reason_code}")
+
+def gen_data():
+    so2 = round(random.uniform(20, 50), 1)   # SO2 实测值 mg/m3
+    nox = round(random.uniform(10, 30), 1)   # NOx 实测值 mg/m3
+    o2 = round(random.uniform(5, 25), 1)    # O2 实测值 %
+    dust = round(random.uniform(0, 10), 1)   # 烟尘实测值 mg/m3
+    flow = round(random.uniform(80, 120), 1) # 流速 m3/s
+    return f"{time.strftime('%Y-%m-%d %H:%M:%S')} SO2={so2} NOx={nox} O2={o2} Dust={dust} Flow={flow} Flag=N"
+
 
 # ========== 主流程 ==========
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -36,7 +37,21 @@ client.on_connect = on_connect
 
 print("正在连接 EMQX...")
 client.connect(BROKER, PORT, keepalive=60)
+client.loop_start()
 
-# 事件循环（阻塞，等 on_connect 执行完发布后断开）
-client.loop_forever()
-print("发布端已退出")
+try:
+    count=0
+    while True:
+        count+=1
+        data = gen_data()
+        client.publish(TOPIC, data, qos=1)
+        print(f"第 {count} 条数据已发布：{data}")
+        time.sleep(5)
+
+except KeyboardInterrupt:
+    print("\n发布端已退出")
+    client.disconnect()
+
+
+
+
