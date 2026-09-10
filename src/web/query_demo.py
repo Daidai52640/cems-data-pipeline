@@ -4,18 +4,21 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Final, Optional
 
 import taosrest
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
+# 连接参数支持环境变量覆盖，默认值与本机直接运行一致。
+# 容器里执行：docker compose run --rm web python src/web/query_demo.py
 
 # ---- TDengine（对应 taosAdapter 的 REST 接口）----
-TD_URL: Final[str] = "http://localhost:6041"
-TD_USER: Final[str] = "root"
-TD_PASS: Final[str] = "taosdata"
-TD_DB: Final[str] = "cems"
-TD_STABLE: Final[str] = "cems_data"
+TD_URL: Final[str] = os.getenv("TD_URL", "http://localhost:6041")
+TD_USER: Final[str] = os.getenv("TD_USER", "root")
+TD_PASS: Final[str] = os.getenv("TD_PASS", "taosdata")
+TD_DB: Final[str] = os.getenv("TD_DB", "cems")
+TD_STABLE: Final[str] = os.getenv("TD_STABLE", "cems_data")
 
 # ---- 测点列（与超级表列名一致，改动后此处同步即可）----
 TD_COLUMNS: Final[tuple[str, ...]] = (

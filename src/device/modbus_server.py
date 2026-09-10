@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import random
 import threading
 import time
@@ -17,11 +18,12 @@ from pymodbus.datastore import (
 from pymodbus.server import StartTcpServer
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
+# 监听地址/端口支持环境变量覆盖，默认值与本机直接运行一致；容器部署时由 compose 注入。
 
 # ---- 服务监听 ----
-SERVER_HOST: Final[str] = "0.0.0.0"    # 监听所有网卡，网关可在同机或跨机访问
-SERVER_PORT: Final[int] = 5020         # 用 5020 避开系统保留的 502 端口
-SLAVE_ID: Final[int] = 1               # 从站地址，网关必须按这个地址读
+SERVER_HOST: Final[str] = os.getenv("SERVER_HOST", "0.0.0.0")   # 监听所有网卡，同机/跨机都可访问
+SERVER_PORT: Final[int] = int(os.getenv("SERVER_PORT", "5020"))  # 用 5020 避开系统保留的 502 端口
+SLAVE_ID: Final[int] = int(os.getenv("SLAVE_ID", "1"))           # 从站地址，网关必须按这个地址读
 
 # ---- 寄存器地图（与网关的"内存地图"约定，不可随意改动）----
 # 测点定义表：(MQTT 字段名, 寄存器地址, 仿真取值范围, 单位)

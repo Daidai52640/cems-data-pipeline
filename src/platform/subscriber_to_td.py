@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from typing import Any, Final, Optional
 
@@ -11,23 +12,25 @@ import paho.mqtt.client as mqtt
 import taosrest
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
+# 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
+# 容器化部署时由 docker-compose.yml 注入服务名（如 MQTT_HOST=emqx、TD_URL=http://tdengine:6041）。
 
 # ---- MQTT（对应 EMQX）----
-BROKER: Final[str] = "localhost"
-PORT: Final[int] = 1883
-TOPIC: Final[str] = "cems/plant1/data"
-MQTT_QOS: Final[int] = 1
-MQTT_KEEPALIVE: Final[int] = 60
-MQTT_CLIENT_ID: Final[str] = "cems-subscriber-plant1"
+BROKER: Final[str] = os.getenv("MQTT_HOST", "localhost")
+PORT: Final[int] = int(os.getenv("MQTT_PORT", "1883"))
+TOPIC: Final[str] = os.getenv("MQTT_TOPIC", "cems/plant1/data")
+MQTT_QOS: Final[int] = int(os.getenv("MQTT_QOS", "1"))
+MQTT_KEEPALIVE: Final[int] = int(os.getenv("MQTT_KEEPALIVE", "60"))
+MQTT_CLIENT_ID: Final[str] = os.getenv("MQTT_CLIENT_ID", "cems-subscriber-plant1")
 
 # ---- TDengine（对应 taosAdapter 的 REST 接口）----
-TD_URL: Final[str] = "http://localhost:6041"
-TD_USER: Final[str] = "root"
-TD_PASS: Final[str] = "taosdata"
-TD_DB: Final[str] = "cems"
-TD_STABLE: Final[str] = "cems_data"        # 超级表（模板）
-TD_PLANT: Final[str] = "plant1"            # 标签：厂区（同时也用作子表名）
-TD_DEVICE: Final[str] = "device1"          # 标签：设备号
+TD_URL: Final[str] = os.getenv("TD_URL", "http://localhost:6041")
+TD_USER: Final[str] = os.getenv("TD_USER", "root")
+TD_PASS: Final[str] = os.getenv("TD_PASS", "taosdata")
+TD_DB: Final[str] = os.getenv("TD_DB", "cems")
+TD_STABLE: Final[str] = os.getenv("TD_STABLE", "cems_data")   # 超级表（模板）
+TD_PLANT: Final[str] = os.getenv("TD_PLANT", "plant1")        # 标签：厂区（同时也用作子表名）
+TD_DEVICE: Final[str] = os.getenv("TD_DEVICE", "device1")     # 标签：设备号
 TD_KEEP_DAYS: Final[int] = 365             # 数据保留 1 年
 TD_DURATION_DAYS: Final[int] = 30          # 每 30 天一个分片
 

@@ -21,7 +21,14 @@
 - 功能：轮询读设备寄存器 → 换算真实值（÷10）→ 加时间戳 → MQTT 发布
 - 发布主题：`cems/plant1/data`
 - QoS：1
-- 断网续传：本地 JSONL 缓存（`data/cache.jsonl`），重连后自动补传
+- 断网续传：本地 JSONL 缓存，重连后自动补传。缓存分两个文件、各有一个写者：
+  - `data/cache.jsonl`——采集主循环追加写，放新数据
+  - `data/cache.jsonl.sending`——补传线程持有，放在途批次
+  两者用原子改名交接，所以补传期间新采的数据不会被覆盖；进程中途被杀也能接着补。
+- 送达判定：QoS=1 必须等到 broker 的 **PUBACK** 才算送达（`publish()` 返回 `rc=0`
+  只代表进了本机发送队列）。没等到 PUBACK 的数据一律转存缓存重试，不会静默丢弃。
+- 补传节奏可用环境变量调：`PUBLISH_ACK_TIMEOUT`（单条确认超时）、
+  `RESEND_WINDOW`（在途窗口条数）、`RESEND_RETRY_INTERVAL`（部分失败后的重试间隔）
 - 依赖：pymodbus、paho-mqtt
 
 ### 3. 平台接入层 `src/platform/subscriber_to_td.py`
@@ -39,14 +46,66 @@
 - 监听：0.0.0.0:5000（局域网可访问）
 - 依赖：flask、taospy
 
-## 运行顺序
+## 方式一：Docker Compose 一键启动（推荐）
 
-1. 启动容器：`docker start emqx`、`docker start tdengine`
-2. `python src/device/modbus_server.py` — 仿真设备
-3. `python src/gateway/gateway.py` — 网关
-4. `python src/platform/subscriber_to_td.py` — 平台接入（入库）
-5. `python src/web/web_dashboard.py` — Web 大屏
-6. 浏览器访问 `http://localhost:5000`（局域网：`http://<电脑IP>:5000`）
+一条命令拉起 EMQX + TDengine + 四个服务，无需本地装 Python 环境：
+
+```bash
+docker compose up -d --build
+```
+
+第一次会构建镜像（装依赖），之后启动只要几秒。数据库初始化、建库建表、订阅、
+采集全部自动完成，服务之间用健康检查排好启动顺序。
+
+| 服务 | 容器名 | 地址 |
+|---|---|---|
+| MQTT Broker (EMQX) | emqx | `localhost:1883`，管理台 `localhost:18083` |
+| 时序库 (TDengine) | tdengine | REST `localhost:6041` |
+| 仿真设备 | cems-device | `localhost:5020` |
+| 网关 | cems-gateway | — |
+| 平台接入 | cems-subscriber | — |
+| Web 大屏 | cems-web | `http://localhost:5000` |
+
+常用命令：
+
+```bash
+docker compose ps                     # 看六个服务状态
+docker compose logs -f gateway        # 跟踪某个服务日志
+docker compose down                   # 停止（数据保留在具名卷里）
+docker compose down -v                # 停止并连数据一起删
+docker compose run --rm web python src/web/query_demo.py   # 在容器里跑查询演示
+```
+
+数据落地位置：TDengine 数据在具名卷 `cems-tdengine-data`，EMQX 在 `cems-emqx-data`，
+网关断网缓存在宿主机的 `data/cache.jsonl`。
+
+### 构建报 `auth.docker.io` 鉴权错误的处理
+
+若 `docker compose up -d --build` 在最后一步报
+`failed to fetch oauth token: ... auth.docker.io`，这是 Docker Desktop 开了
+**containerd 镜像存储** + 该域名被 DNS 污染导致的（镜像其实已经构建出来了）。
+两种解法：
+
+```powershell
+# 解法 A：改用传统构建器（推荐，一条命令）
+$env:DOCKER_BUILDKIT=0; docker compose build; docker compose up -d
+```
+
+- 解法 B：Docker Desktop → Settings → General → 取消勾选
+  "Use containerd for pulling and storing images"，重启 Docker Desktop 后重试。
+
+## 方式二：本机直接运行（适合逐层调试）
+
+先起依赖：`docker compose up -d emqx tdengine`，再开四个终端依次运行：
+
+1. `python src/device/modbus_server.py` — 仿真设备
+2. `python src/gateway/gateway.py` — 网关
+3. `python src/platform/subscriber_to_td.py` — 平台接入（入库）
+4. `python src/web/web_dashboard.py` — Web 大屏
+5. 浏览器访问 `http://localhost:5000`（局域网：`http://<电脑IP>:5000`）
+
+各服务的连接参数都在文件顶部配置区，且支持用环境变量覆盖
+（如 `MQTT_HOST`、`TD_URL`），默认值就是本机 `localhost`，所以直接跑不用改代码。
 
 ## 辅助工具
 
@@ -58,3 +117,6 @@
 ## 环境依赖
 
 见 `requirements.txt`。Python 3.12。
+
+> 注意：`pymodbus` 已锁到 `<3.9`。3.9 起官方把 `ModbusSlaveContext` 改名、
+> 把 `slave=` 参数改成 `device_id=`，设备层会直接 ImportError。

@@ -1,0 +1,19 @@
+# 密钥/本地配置（只提交 .env.example，不提交 .env）
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 运行时产物
+data/*.jsonl
+data/*.jsonl.sending
+data/*.sending
+*.log
+
+# 编辑器
+.idea/
+.vscode/

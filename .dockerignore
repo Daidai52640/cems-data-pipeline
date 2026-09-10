@@ -1,0 +1,12 @@
+# 构建镜像时排除，减小构建上下文、加快构建
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+docs/
+data/
+*.log
+*.md
