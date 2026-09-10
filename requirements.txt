@@ -1,14 +1,18 @@
 # CEMS 工业数据采集演示项目 - Python 依赖
 # 安装：pip install -r requirements.txt
 
+# 说明：这里锁了主版本上限，保证"本机运行"和"容器运行"用的是同一套 API。
+# 例：pymodbus 3.9 起把 ModbusSlaveContext 改名、slave= 参数改成 device_id=，
+#     设备层会直接 ImportError，所以限定在 3.8 及以下。
+
 # 设备层：Modbus TCP
-pymodbus>=3.6.0
+pymodbus>=3.6.0,<3.9.0
 
 # 消息层：MQTT
-paho-mqtt>=2.1.0
+paho-mqtt>=2.1.0,<3.0.0
 
 # 存储层：TDengine
-taospy>=2.8.0
+taospy>=2.8.0,<3.0.0
 
 # Web层：Flask
-flask>=3.0.0
+flask>=3.0.0,<4.0.0

@@ -1,0 +1,182 @@
+# =============================================================================
+# CEMS 工业数据采集演示项目 —— 全链路一键启动
+#
+# 一条命令启动 6 个服务：
+#   EMQX(MQTT Broker) + TDengine(时序库)
+#   + 设备层 + 网关层 + 平台接入层 + Web 展示层
+#
+# 用法：
+#   docker compose up -d --build     # 启动（首次会构建镜像）
+#   docker compose ps                # 查看状态
+#   docker compose logs -f gateway   # 跟踪某个服务的日志
+#   docker compose down              # 停止并删除容器（数据保留在卷里）
+#   docker compose down -v           # 停止并连数据一起删除
+#
+# 启动后：浏览器打开 http://localhost:5000 看实时曲线
+#        管理台 http://localhost:18083 看 MQTT 连接（默认 admin/public）
+# =============================================================================
+
+name: cems
+
+# 四个 Python 服务共用同一镜像和网络配置，用 YAML 锚点复用。
+# 注意：整个 compose 里只有 device 声明 build —— 四个服务用的是同一个镜像，
+#       若每个服务都写 build，compose 会并发构建同一个镜像名而报 AlreadyExists。
+x-app: &app
+  image: cems-pipeline:latest
+  restart: unless-stopped
+  networks: [cems]
+  environment:
+    # 时区必须与 TDengine 容器一致，否则入库时间戳会整体偏移 8 小时
+    TZ: Asia/Shanghai
+
+services:
+
+  # ---------------- 基础设施：MQTT Broker ----------------
+  emqx:
+    image: emqx/emqx:latest
+    container_name: emqx
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "1883:1883"      # MQTT 协议端口（网关发布、平台订阅）
+      - "18083:18083"    # EMQX Dashboard 管理台
+    volumes:
+      - emqx-data:/opt/emqx/data
+      - emqx-log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD-SHELL", "emqx ctl status >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks: [cems]
+
+  # ---------------- 基础设施：时序数据库 ----------------
+  tdengine:
+    image: tdengine/tdengine:latest
+    container_name: tdengine
+    restart: unless-stopped
+    environment:
+      # ★ 关键：容器时区。默认镜像是 UTC，会让本地时间字符串被当成 UTC 解析，
+      #   导致库里时间比实际快 8 小时（taospy 读回时又按本地时区转换）
+      TZ: Asia/Shanghai
+    ports:
+      - "6030:6030"      # 原生连接端口
+      - "6041:6041"      # REST 接口端口（taospy 走这个）
+    volumes:
+      - tdengine-data:/var/lib/taos
+      - tdengine-log:/var/log/taos
+    healthcheck:
+      test: ["CMD-SHELL", "taos -s 'SHOW DATABASES;' >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks: [cems]
+
+  # ---------------- 1 设备层：Modbus 仿真设备 ----------------
+  device:
+    <<: *app
+    container_name: cems-device
+    build: .                       # 全项目唯一的构建入口，产出 cems-pipeline:latest
+    command: python src/device/modbus_server.py
+    environment:
+      TZ: Asia/Shanghai
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "5020"
+      SLAVE_ID: "1"
+    ports:
+      - "5020:5020"      # 暴露出来方便用 Modbus 调试工具直接看寄存器
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket;socket.create_connection(('127.0.0.1',5020),2)\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # ---------------- 2 网关层：轮询设备 → 发 MQTT ----------------
+  gateway:
+    <<: *app
+    container_name: cems-gateway
+    command: python src/gateway/gateway.py
+    environment:
+      TZ: Asia/Shanghai
+      MODBUS_HOST: device          # 容器内用服务名互访
+      MODBUS_PORT: "5020"
+      MODBUS_UNIT: "1"
+      MQTT_HOST: emqx
+      MQTT_PORT: "1883"
+      MQTT_TOPIC: cems/plant1/data
+      MQTT_QOS: "1"
+      POLL_INTERVAL: "5.0"
+      PUBLISH_ACK_TIMEOUT: "5.0"      # 单条等 PUBACK 的秒数，超时就转本地缓存
+      RESEND_WINDOW: "100"             # 补传在途窗口条数
+      RESEND_RETRY_INTERVAL: "30.0"    # 补传部分失败后的重试间隔（秒）
+    volumes:
+      # 断网缓存落到宿主机，重启容器数据不丢，也方便直接看 cache.jsonl
+      - ./data:/app/data
+    depends_on:
+      emqx:
+        condition: service_healthy
+      device:
+        condition: service_started
+
+  # ---------------- 3 平台接入层：订阅 MQTT → 写入 TDengine ----------------
+  subscriber:
+    <<: *app
+    container_name: cems-subscriber
+    command: python src/platform/subscriber_to_td.py
+    environment:
+      TZ: Asia/Shanghai
+      MQTT_HOST: emqx
+      MQTT_PORT: "1883"
+      MQTT_TOPIC: cems/plant1/data
+      MQTT_QOS: "1"
+      TD_URL: http://tdengine:6041
+      # 口令从 .env 读取，未配置时回落到本机演示默认值（见 .env.example）
+      TD_USER: ${TD_USER:-root}
+      TD_PASS: ${TD_PASS:-taosdata}
+      TD_DB: cems
+      TD_STABLE: cems_data
+      TD_PLANT: plant1
+      TD_DEVICE: device1
+    depends_on:
+      emqx:
+        condition: service_healthy
+      tdengine:
+        condition: service_healthy
+
+  # ---------------- 4 展示层：Flask + ECharts 大屏 ----------------
+  web:
+    <<: *app
+    container_name: cems-web
+    command: python src/web/web_dashboard.py
+    environment:
+      TZ: Asia/Shanghai
+      TD_URL: http://tdengine:6041
+      TD_USER: ${TD_USER:-root}
+      TD_PASS: ${TD_PASS:-taosdata}
+      TD_DB: cems
+      TD_STABLE: cems_data
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: "5000"
+      QUERY_MINUTES: "10"
+      REFRESH_SECONDS: "5"
+    ports:
+      - "5000:5000"      # 浏览器访问 http://localhost:5000
+    depends_on:
+      tdengine:
+        condition: service_healthy
+
+networks:
+  cems:
+    name: cems-net
+
+volumes:
+  # 由 compose 管理（实际名字带项目前缀，如 cems_tdengine-data）：
+  # 只要不执行 docker compose down -v，删容器、改配置、重建都不会丢数据
+  tdengine-data:
+  tdengine-log:
+  emqx-data:
+  emqx-log:

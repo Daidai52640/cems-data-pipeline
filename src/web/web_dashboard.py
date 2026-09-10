@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Final
 
 import taosrest
@@ -11,13 +12,15 @@ from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
+# 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
+# 容器化部署时由 docker-compose.yml 注入服务名（如 TD_URL=http://tdengine:6041）。
 
 # ---- TDengine（对应 taosAdapter 的 REST 接口）----
-TD_URL: Final[str] = "http://localhost:6041"
-TD_USER: Final[str] = "root"
-TD_PASS: Final[str] = "taosdata"
-TD_DB: Final[str] = "cems"
-TD_STABLE: Final[str] = "cems_data"
+TD_URL: Final[str] = os.getenv("TD_URL", "http://localhost:6041")
+TD_USER: Final[str] = os.getenv("TD_USER", "root")
+TD_PASS: Final[str] = os.getenv("TD_PASS", "taosdata")
+TD_DB: Final[str] = os.getenv("TD_DB", "cems")
+TD_STABLE: Final[str] = os.getenv("TD_STABLE", "cems_data")
 
 # ---- 测点列（与超级表列名一致，顺序即返回给前端的字段顺序）----
 POINTS: Final[tuple[str, ...]] = (
@@ -32,12 +35,12 @@ POINTS: Final[tuple[str, ...]] = (
 )
 
 # ---- 查询与刷新 ----
-QUERY_MINUTES: Final[int] = 10         # 查询最近 N 分钟数据
-REFRESH_SECONDS: Final[int] = 5        # 前端自动刷新间隔（秒）
+QUERY_MINUTES: Final[int] = int(os.getenv("QUERY_MINUTES", "10"))        # 查询最近 N 分钟数据
+REFRESH_SECONDS: Final[int] = int(os.getenv("REFRESH_SECONDS", "5"))     # 前端自动刷新间隔（秒）
 
 # ---- Web 服务 ----
-WEB_HOST: Final[str] = "0.0.0.0"       # 监听所有网卡，局域网可访问
-WEB_PORT: Final[int] = 5000
+WEB_HOST: Final[str] = os.getenv("WEB_HOST", "0.0.0.0")   # 监听所有网卡，局域网可访问
+WEB_PORT: Final[int] = int(os.getenv("WEB_PORT", "5000"))
 
 # ---- 日志 ----
 LOG_LEVEL: Final[int] = logging.INFO
@@ -232,7 +235,8 @@ HTML_PAGE = """<!DOCTYPE html>
           xAxis: { type: 'category', data: d.ts, axisLabel: AXIS_STYLE },
           yAxis: [
             { type: 'value', name: '浓度 (mg/m3)', axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
-            { type: 'value', name: 'O2/湿度 (%)', position: 'right', axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
+            { type: 'value', name: 'O2/湿度 (%)', position: 'right',
+              axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
             { type: 'value', name: '流量/温度/压力', position: 'right', offset: 60,
               axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE }
           ],
