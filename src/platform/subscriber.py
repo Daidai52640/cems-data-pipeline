@@ -10,7 +10,7 @@ import paho.mqtt.client as mqtt
 # ========== 配置 ==========
 BROKER = "localhost"   # EMQX 地址（本机）
 PORT = 1883            # MQTT 端口（EMQX 映射的）
-TOPIC = "cems/test"    # 订阅的主题
+TOPIC = "cems/plant1/data"    # 订阅的主题
 
 # ========== 回调函数 ==========
 

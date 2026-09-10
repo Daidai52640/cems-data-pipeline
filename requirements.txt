@@ -1,0 +1,14 @@
+# CEMS 工业数据采集演示项目 - Python 依赖
+# 安装：pip install -r requirements.txt
+
+# 设备层：Modbus TCP
+pymodbus>=3.6.0
+
+# 消息层：MQTT
+paho-mqtt>=2.1.0
+
+# 存储层：TDengine
+taospy>=2.8.0
+
+# Web层：Flask
+flask>=3.0.0

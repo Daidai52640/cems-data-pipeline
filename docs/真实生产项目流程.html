@@ -1,0 +1,99 @@
+<html style="margin:0;padding:0;">
+<div style="background-color:transparent;box-sizing:border-box;font-family:'Roboto','PingFang SC','Segoe UI',Arial,sans-serif;color:#1A1B1C;line-height:1.5;--accent:#A3D5E8;">
+
+  <!-- ===== 标题 ===== -->
+  <div style="margin:16px 0;padding:14px;background:linear-gradient(135deg,rgba(163,213,232,0.18),rgba(163,213,232,0.32));border-radius:14px;box-sizing:border-box;">
+    <div style="font-size:15px;font-weight:600;">真实工业项目全流程（以 CEMS 烟气在线监测为例）</div>
+    <div style="font-size:12px;color:#6B7280;margin-top:4px;">五层架构 · 每层标注"干什么 / 用什么技术 / 今天 demo 对应" · 示意结构</div>
+  </div>
+
+  <!-- ===== 五层架构（纵向） ===== -->
+  <div style="display:flex;flex-direction:column;gap:8px;box-sizing:border-box;">
+
+    <!-- 第5层 应用层 -->
+    <div style="padding:12px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-left:4px solid #9BBBF4;border-radius:10px;box-sizing:border-box;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;">
+        <div style="font-size:13px;font-weight:600;">⑤ 应用层（前端）</div>
+        <div style="font-size:12px;color:#6B7280;">Web 大屏 · 管理后台 · 移动端 · 报表 · 告警通知（短信/钉钉/邮件）</div>
+      </div>
+      <div style="font-size:12px;color:#1A1B1C;margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span style="background:rgba(155,187,244,0.15);padding:2px 8px;border-radius:6px;">技术：Vue/React + ECharts</span>
+        <span style="background:rgba(155,187,244,0.15);padding:2px 8px;border-radius:6px;">今天对应：还没学到（后面做）</span>
+      </div>
+    </div>
+
+    <!-- 第4层 平台层 -->
+    <div style="padding:12px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-left:4px solid #8BC8EA;border-radius:10px;box-sizing:border-box;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;">
+        <div style="font-size:13px;font-weight:600;">④ 平台层（服务端）</div>
+        <div style="font-size:12px;color:#6B7280;">数据接入 → 解析校验 → 存时序库 → 告警引擎 → 对外 API</div>
+      </div>
+      <div style="font-size:12px;color:#1A1B1C;margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span style="background:rgba(139,200,234,0.15);padding:2px 8px;border-radius:6px;">技术：TDengine/InfluxDB 时序库 + MySQL + 后端服务</span>
+        <span style="background:rgba(139,200,234,0.15);padding:2px 8px;border-radius:6px;">今天对应：subscriber.py（收到打印 = 接入，还没存）</span>
+      </div>
+    </div>
+
+    <!-- 第3层 传输层 -->
+    <div style="padding:12px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-left:4px solid #94D8C3;border-radius:10px;box-sizing:border-box;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;">
+        <div style="font-size:13px;font-weight:600;">③ 传输层（网络）</div>
+        <div style="font-size:12px;color:#6B7280;">4G/有线专网 · 心跳保活 · 断网续传</div>
+      </div>
+      <div style="font-size:12px;color:#1A1B1C;margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span style="background:rgba(148,216,195,0.2);padding:2px 8px;border-radius:6px;">协议：HJ212（上报环保局）/ MQTT（私有平台）</span>
+        <span style="background:rgba(148,216,195,0.2);padding:2px 8px;border-radius:6px;">今天对应：EMQX（MQTT 中转）</span>
+      </div>
+    </div>
+
+    <!-- 第2层 采集层 -->
+    <div style="padding:12px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-left:4px solid #F4B393;border-radius:10px;box-sizing:border-box;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;">
+        <div style="font-size:13px;font-weight:600;">② 采集层（数采仪/边缘网关）★ 你现在的 gateway.py</div>
+        <div style="font-size:12px;color:#6B7280;">协议转换 · 本地缓存（断网续传）· 边缘计算（折算/标定）· 打时间戳</div>
+      </div>
+      <div style="font-size:12px;color:#1A1B1C;margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span style="background:rgba(244,179,147,0.18);padding:2px 8px;border-radius:6px;">技术：ARM 盒子/工控机 + 固件（Modbus/OPC UA → MQTT/HJ212）</span>
+        <span style="background:rgba(244,179,147,0.18);padding:2px 8px;border-radius:6px;">今天对应：gateway.py（读→换算→加时间戳→发）</span>
+      </div>
+    </div>
+
+    <!-- 第1层 设备层 -->
+    <div style="padding:12px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-left:4px solid #A2DDAA;border-radius:10px;box-sizing:border-box;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;">
+        <div style="font-size:13px;font-weight:600;">① 设备层（现场）</div>
+        <div style="font-size:12px;color:#6B7280;">分析仪（SO2/NOx/O2/粉尘）+ 温压流传感器 → PLC/DCS</div>
+      </div>
+      <div style="font-size:12px;color:#1A1B1C;margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span style="background:rgba(162,221,170,0.2);padding:2px 8px;border-radius:6px;">信号：4-20mA 模拟量 · Modbus RTU/TCP · RS485</span>
+        <span style="background:rgba(162,221,170,0.2);padding:2px 8px;border-radius:6px;">今天对应：modbus_server.py（仿真设备）</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== 三条流 ===== -->
+  <div style="margin:16px 0;padding:14px;background:linear-gradient(135deg,rgba(82,196,26,0.08),rgba(82,196,26,0.16));border-radius:14px;box-sizing:border-box;">
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">贯穿全程的三条"流"</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;box-sizing:border-box;">
+
+      <div style="flex:1 1 200px;min-width:0;padding:12px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-radius:12px;box-sizing:border-box;">
+        <div style="font-size:13px;font-weight:600;color:#1A1B1C;">⬆ 数据流（上行·主力）</div>
+        <div style="font-size:12px;color:#6B7280;margin-top:6px;">设备 → 采集 → 传输 → 接入 → 存储 → 展示<br/>每5秒一条，量最大，你今天跑通的</div>
+      </div>
+
+      <div style="flex:1 1 200px;min-width:0;padding:12px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-radius:12px;box-sizing:border-box;">
+        <div style="font-size:13px;font-weight:600;color:#FAAD14;">⚠ 告警流（低频·要快）</div>
+        <div style="font-size:12px;color:#6B7280;margin-top:6px;">平台检测超限 → 告警 → 短信/钉钉通知<br/>pump-monitor 的 DingTalkNotifier 就是它</div>
+      </div>
+
+      <div style="flex:1 1 200px;min-width:0;padding:12px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);border-radius:12px;box-sizing:border-box;">
+        <div style="font-size:13px;font-weight:600;color:#9BBBF4;">⬇ 控制流（下行·要可靠）</div>
+        <div style="font-size:12px;color:#6B7280;margin-top:6px;">平台 → 网关 → 设备（远程校准/反吹/启停）<br/>必须 QoS 2 或带确认，不能重复执行</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</html>
