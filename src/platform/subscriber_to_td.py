@@ -22,6 +22,13 @@ TOPIC: Final[str] = os.getenv("MQTT_TOPIC", "cems/plant1/data")
 MQTT_QOS: Final[int] = int(os.getenv("MQTT_QOS", "1"))
 MQTT_KEEPALIVE: Final[int] = int(os.getenv("MQTT_KEEPALIVE", "60"))
 MQTT_CLIENT_ID: Final[str] = os.getenv("MQTT_CLIENT_ID", "cems-subscriber-plant1")
+# ★ 会话持久化：默认 False = 非干净会话（持久会话）。
+#   订阅端离线期间，broker 会为该 client_id 排队 QoS≥1 的消息，重连后自动补投；
+#   若置 True 变成干净会话，broker 不保留任何状态，离线期间的报文会被直接丢弃。
+#   持久会话依赖固定的 client_id，所以 MQTT_CLIENT_ID 不能改成随机值。
+MQTT_CLEAN_SESSION: Final[bool] = os.getenv("MQTT_CLEAN_SESSION", "0").strip().lower() in (
+    "1", "true", "yes", "on",
+)
 
 # ---- TDengine（对应 taosAdapter 的 REST 接口）----
 TD_URL: Final[str] = os.getenv("TD_URL", "http://localhost:6041")
@@ -227,12 +234,29 @@ def on_connect(
     reason_code: Any,
     properties: Any,
 ) -> None:
-    """连接/重连成功 → 订阅数据主题。"""
+    """连接/重连成功 → 订阅数据主题。
+
+    持久会话下 broker 会先补投离线期间排队的消息，再走实时消息，
+    所以这里不需要额外做什么；重新 SUBSCRIBE 是幂等的，顺便兜住
+    "会话已过期、broker 上已经没有订阅关系"的情况。
+    """
     if reason_code != 0:
         LOGGER.error("MQTT 连接失败 reason_code=%s", reason_code)
         return
 
-    LOGGER.info("MQTT 已连接: %s:%d", BROKER, PORT)
+    session_present = getattr(flags, "session_present", None)
+    LOGGER.info("MQTT 已连接: %s:%d（会话恢复=%s）", BROKER, PORT, session_present)
+
+    state: dict[str, Any] = userdata if isinstance(userdata, dict) else {}
+    is_reconnect = bool(state.get("connected_before"))
+    state["connected_before"] = True
+
+    if MQTT_CLEAN_SESSION:
+        LOGGER.warning("当前是干净会话，订阅端离线期间的消息不会被 broker 保留")
+    elif is_reconnect and session_present is False:
+        # 重连时 broker 说没有旧会话：会话已过期或被清理，这段时间的报文拿不回来了
+        LOGGER.warning("broker 未恢复旧会话，离线超过会话有效期期间的报文已丢失")
+
     try:
         client.subscribe(TOPIC, qos=MQTT_QOS)
         LOGGER.info("已订阅主题: %s (QoS=%d)", TOPIC, MQTT_QOS)
@@ -280,7 +304,12 @@ def main() -> None:
         LOGGER.error("首次连接 TDengine 失败，将在收到数据时自动重试")
 
     # 2. 连 MQTT（用 userdata 把写入器传给回调）
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=MQTT_CLIENT_ID)
+    # clean_session=False → 持久会话，broker 为离线期间的消息排队（配合固定 client_id）
+    client = mqtt.Client(
+        mqtt.CallbackAPIVersion.VERSION2,
+        client_id=MQTT_CLIENT_ID,
+        clean_session=MQTT_CLEAN_SESSION,
+    )
     client.user_data_set({"writer": writer})
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
