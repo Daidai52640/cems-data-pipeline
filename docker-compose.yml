@@ -133,6 +133,9 @@ services:
       MQTT_PORT: "1883"
       MQTT_TOPIC: cems/plant1/data
       MQTT_QOS: "1"
+      # 0 = 持久会话（默认）：订阅端离线期间 broker 会为 QoS≥1 的消息排队，重连后补投
+      MQTT_CLEAN_SESSION: "0"
+      MQTT_CLIENT_ID: cems-subscriber-plant1   # 持久会话靠它认人，不要改成随机值
       TD_URL: http://tdengine:6041
       # 口令从 .env 读取，未配置时回落到本机演示默认值（见 .env.example）
       TD_USER: ${TD_USER:-root}

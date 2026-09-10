@@ -33,6 +33,13 @@
 
 ### 3. 平台接入层 `src/platform/subscriber_to_td.py`
 - 功能：订阅 MQTT 主题 → 解析 8 个测点 → 写入 TDengine
+- 会话持久化：默认使用**非干净会话**（`MQTT_CLEAN_SESSION=0`）配合固定的 client_id。
+  订阅端离线期间，broker 会为 `cems/plant1/data` 上 QoS≥1 的消息排队，重连后自动补投。
+  若不持久化（干净会话），离线期间发布的报文会被 broker 直接丢弃，且发布端拿到的是 PUBACK，
+  看日志一切正常 —— 属于静默丢数据。
+  - broker 侧上限（EMQX 默认值）：会话保留 `session_expiry_interval=2h`、离线队列 `max_mqueue_len=1000` 条，
+    超出即丢最旧的；需要更长的断线容忍时间要改 EMQX 配置
+  - 把 `MQTT_CLEAN_SESSION` 置 1 可退回"离线即丢"，仅用于对比演示
 - TDengine 超级表：`cems.cems_data`（ts, so2, nox, flow, dust, o2, temp, humidity, pressure）
 - 老库自动升级：启动时 DESCRIBE 超级表，缺哪列用 ALTER STABLE 补哪列
 - 标签：plant, device
@@ -45,6 +52,25 @@
 - 刷新：前端每 5 秒自动拉取
 - 监听：0.0.0.0:5000（局域网可访问）
 - 依赖：flask、taospy
+
+## 方式零：一键启动（双击即可，就绪后自动打开浏览器）
+
+**双击 `一键启动.bat`** 就行。脚本会：构建并启动 6 个容器 → 轮询 `http://localhost:5000/api/health`
+→ **确认 Web 真的能响应之后**才打开浏览器（不是盲等几秒就开）。
+
+失败时不再假装成功：会打印占用端口的进程、`docker compose logs` 排查命令；
+Docker Desktop 没启动时会自动尝试拉起并等引擎就绪。
+
+| 命令 | 作用 |
+|---|---|
+| `一键启动.bat` | 默认 Docker 模式：启动全部服务 + 打开大屏 |
+| `一键启动.bat -Mode Local` | 本机模式：EMQX/TDengine 走容器，4 个服务用 4 个 Python 窗口（逐层看日志） |
+| `一键启动.bat -NoBrowser` | 只启动服务，不打开浏览器 |
+| `一键启动.bat -NoBuild` | 跳过镜像构建（改过 `src/` 代码时不要加） |
+| `一键启动.bat -Stop` | 停止全部容器（数据卷保留，数据不丢） |
+| `.\start.ps1 -DryRun` | 只打印将要执行的动作，不实际启动（排查用） |
+
+说明：`.bat` 只是外壳，真正逻辑在 `start.ps1`（同为项目文件，可直接传参运行）。
 
 ## 方式一：Docker Compose 一键启动（推荐）
 
