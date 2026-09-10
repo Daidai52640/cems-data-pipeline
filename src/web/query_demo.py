@@ -1,45 +1,142 @@
 # -*- coding: utf-8 -*-
-"""
-TDengine 查询演示（Day 14 收尾）
-功能：查入库数据 + INTERVAL 时间聚合（分钟/小时均值）
-运行：python query_demo.py
-      （需要 subscriber_to_td.py 在跑，库里才有数据）
-"""
+"""TDengine 查询演示脚本：查入库总量、最新明细与 INTERVAL 时间聚合均值。"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Final, Optional
 
 import taosrest
 
-TD_URL = "http://localhost:6041"
-TD_USER = "root"
-TD_PASS = "taosdata"
+# ==================== 1. 配置区（要改参数只动这里） ====================
+
+# ---- TDengine（对应 taosAdapter 的 REST 接口）----
+TD_URL: Final[str] = "http://localhost:6041"
+TD_USER: Final[str] = "root"
+TD_PASS: Final[str] = "taosdata"
+TD_DB: Final[str] = "cems"
+TD_STABLE: Final[str] = "cems_data"
+
+# ---- 查询参数 ----
+LATEST_LIMIT: Final[int] = 5           # 最新明细取几条
+INTERVAL_MINUTES: Final[int] = 30      # 聚合查询的时间范围（分钟）
+INTERVAL_WINDOW: Final[str] = "1m"     # 窗口大小：1m=分钟均值，1h=小时均值
+
+# ---- 日志 ----
+LOG_LEVEL: Final[int] = logging.INFO
+LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
+
+LOGGER: Final[logging.Logger] = logging.getLogger("web.query_demo")
 
 
-def main():
-    conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
-    cur = conn.cursor()
+# ==================== 2. 日志 ====================
 
-    # 1. 入库总条数
-    cur.execute("SELECT COUNT(*) FROM cems.cems_data")
-    print(f"入库总条数: {cur.fetchone()[0]}")
-
-    # 2. 最新5条原始数据
-    cur.execute("SELECT * FROM cems.cems_data ORDER BY ts DESC LIMIT 5")
-    print("\n最新5条原始数据:")
-    for r in cur.fetchall():
-        print(f"  {r[0]} | SO2={r[1]} NOx={r[2]} Flow={r[3]} | {r[4]}/{r[5]}")
-
-    # 3. ★ INTERVAL 时间聚合：按1分钟窗口算 SO2 均值（环保平台"分钟均值"曲线）
-    cur.execute(
-        "SELECT _wstart, AVG(so2) AS avg_so2, COUNT(*) AS n "
-        "FROM cems.cems_data WHERE ts >= now - 30m INTERVAL(1m)"
+def setup_logging() -> None:
+    """初始化日志：控制台输出，级别由 LOG_LEVEL 统一控制。"""
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        format=LOG_FORMAT,
+        datefmt=LOG_DATEFMT,
+        force=True,
     )
-    print("\n★ INTERVAL(1m) 分钟均值（最近30分钟，每1分钟一个窗口）:")
-    for r in cur.fetchall():
-        print(f"  窗口起点 {r[0]} | SO2均值 {round(r[1], 2)} | 原始条数 {r[2]}")
 
-    # 4. 想玩：改成 INTERVAL(1h) 就是小时均值报表
-    # cur.execute("SELECT _wstart, AVG(so2) FROM cems.cems_data WHERE ts >= now - 7d INTERVAL(1h)")
 
-    conn.close()
+# ==================== 3. 查询函数（每个函数各自兜住异常） ====================
+
+def connect_td() -> Optional[Any]:
+    """连接 TDengine 并做一次探测查询，失败返回 None（不抛异常）。
+
+    注意：taosrest.connect() 是惰性连接、不发请求，必须探测一次才能确认真的连得上。
+    """
+    try:
+        conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
+        cur = conn.cursor()
+        cur.execute("SHOW DATABASES")     # 探测：真正打到 taosAdapter 才算连上
+        LOGGER.info("TDengine 已连接: %s", TD_URL)
+        return conn
+    except Exception as exc:
+        LOGGER.error("连接 TDengine 失败: %s", exc)
+        return None
+
+
+def run_query(conn: Any, sql: str) -> Optional[list[tuple[Any, ...]]]:
+    """执行一条查询 SQL，失败返回 None（不抛异常，异常已记 error）。"""
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return list(cur.fetchall())
+    except Exception as exc:
+        LOGGER.error("查询失败: %s | SQL: %s", exc, sql)
+        return None
+
+
+def show_total(conn: Any) -> None:
+    """打印入库总条数。"""
+    rows = run_query(conn, f"SELECT COUNT(*) FROM {TD_DB}.{TD_STABLE}")
+    if rows:
+        LOGGER.info("入库总条数: %s", rows[0][0])
+
+
+def show_latest(conn: Any, limit: int = LATEST_LIMIT) -> None:
+    """打印最新 N 条原始数据。"""
+    rows = run_query(
+        conn,
+        f"SELECT * FROM {TD_DB}.{TD_STABLE} ORDER BY ts DESC LIMIT {limit}",
+    )
+    if rows is None:      # 查询失败（错误已由 run_query 记录），不再误报成"无数据"
+        return
+    LOGGER.info("最新 %d 条原始数据:", limit)
+    for row in rows:
+        LOGGER.info("  %s | SO2=%s NOx=%s Flow=%s | %s/%s", row[0], row[1], row[2], row[3], row[4], row[5])
+    if not rows:
+        LOGGER.info("  （库中暂无数据，确认 subscriber_to_td.py 在跑）")
+
+
+def show_interval_avg(
+    conn: Any,
+    minutes: int = INTERVAL_MINUTES,
+    window: str = INTERVAL_WINDOW,
+) -> None:
+    """打印 INTERVAL 时间聚合结果（环保平台"分钟均值"曲线的做法）。"""
+    rows = run_query(
+        conn,
+        f"SELECT _wstart, AVG(so2) AS avg_so2, COUNT(*) AS n "
+        f"FROM {TD_DB}.{TD_STABLE} WHERE ts >= now - {minutes}m INTERVAL({window})",
+    )
+    if rows is None:      # 查询失败，不再误报成"该时间段无数据"
+        return
+    LOGGER.info("★ INTERVAL(%s) 均值（最近 %d 分钟，每窗口一条）:", window, minutes)
+    for row in rows:
+        avg = round(row[1], 2) if row[1] is not None else None
+        LOGGER.info("  窗口起点 %s | SO2均值 %s | 原始条数 %s", row[0], avg, row[2])
+    if not rows:
+        LOGGER.info("  （该时间范围内没有数据，确认 subscriber_to_td.py 在跑）")
+
+
+# ==================== 4. 主流程 ====================
+
+def main() -> None:
+    """依次执行三类查询，单项失败不影响其余查询。"""
+    setup_logging()
+
+    conn = connect_td()
+    if conn is None:
+        LOGGER.error("TDengine 不可用，请确认容器已启动（docker start tdengine）后重试")
+        return
+
+    try:
+        show_total(conn)
+        show_latest(conn)
+        show_interval_avg(conn)
+    except Exception:
+        LOGGER.exception("查询演示异常退出")
+    finally:
+        try:
+            conn.close()
+        except Exception as exc:
+            LOGGER.debug("关闭 TDengine 连接时出错（忽略）: %s", exc)
+        LOGGER.info("查询演示结束")
 
 
 if __name__ == "__main__":
