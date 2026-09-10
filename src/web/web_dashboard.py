@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Web 展示大屏：Flask 提供 TDengine 近段数据接口，前端用 ECharts 画 SO2/NOx/Flow 实时曲线。"""
+"""Web 展示大屏：Flask 提供 TDengine 近段数据接口，前端用 ECharts 画 8 个烟气测点的实时曲线。"""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any, Final
 
 import taosrest
 from flask import Flask, Response, jsonify
+from werkzeug.exceptions import HTTPException
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 
@@ -17,6 +18,18 @@ TD_USER: Final[str] = "root"
 TD_PASS: Final[str] = "taosdata"
 TD_DB: Final[str] = "cems"
 TD_STABLE: Final[str] = "cems_data"
+
+# ---- 测点列（与超级表列名一致，顺序即返回给前端的字段顺序）----
+POINTS: Final[tuple[str, ...]] = (
+    "so2",        # 二氧化硫 mg/m3
+    "nox",        # 氮氧化物 mg/m3
+    "flow",       # 烟气流量 m3/s
+    "dust",       # 颗粒物 mg/m3
+    "o2",         # 氧含量 %
+    "temp",       # 烟气温度 ℃
+    "humidity",   # 烟气湿度 %
+    "pressure",   # 烟气压力 kPa
+)
 
 # ---- 查询与刷新 ----
 QUERY_MINUTES: Final[int] = 10         # 查询最近 N 分钟数据
@@ -53,7 +66,7 @@ class TdQueryError(RuntimeError):
 # ==================== 3. 数据查询 ====================
 
 def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, Any, Any, Any]]:
-    """查 TDengine 最近 N 分钟数据，按时间升序返回 [(ts, so2, nox, flow), ...]。
+    """查 TDengine 最近 N 分钟数据，按时间升序返回 [(ts, 各测点值...), ...]。
 
     查询失败抛 TdQueryError（由接口层兜住，不影响 Web 进程存活）。
     """
@@ -61,9 +74,10 @@ def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, Any, Any, Any]
     try:
         conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
         cur = conn.cursor()
+        columns = ", ".join(POINTS)
         # 按时间升序取最近数据（画曲线要按时间从左到右）
         cur.execute(
-            f"SELECT ts, so2, nox, flow FROM {TD_DB}.{TD_STABLE} "
+            f"SELECT ts, {columns} FROM {TD_DB}.{TD_STABLE} "
             f"WHERE ts >= now - {minutes}m ORDER BY ts ASC"
         )
         rows = list(cur.fetchall())
@@ -91,17 +105,14 @@ def api_data() -> tuple[Response, int] | Response:
         rows = query_recent()
     except TdQueryError as exc:
         # 查库失败不崩服务：返回空数据 + 错误信息，前端会提示
-        return (
-            jsonify({"ts": [], "so2": [], "nox": [], "flow": [], "error": str(exc)}),
-            503,
-        )
+        empty: dict[str, Any] = {"ts": [], "error": str(exc)}
+        empty.update({name: [] for name in POINTS})
+        return jsonify(empty), 503
 
-    return jsonify({
-        "ts": [str(row[0]) for row in rows],   # 时间轴
-        "so2": [row[1] for row in rows],       # SO2 序列
-        "nox": [row[2] for row in rows],       # NOx 序列
-        "flow": [row[3] for row in rows],      # Flow 序列
-    })
+    payload: dict[str, Any] = {"ts": [str(row[0]) for row in rows]}   # 时间轴
+    for index, name in enumerate(POINTS, start=1):                    # 各测点序列
+        payload[name] = [row[index] for row in rows]
+    return jsonify(payload)
 
 
 @app.route("/api/health")
@@ -126,10 +137,19 @@ def index() -> Response:
 
 
 @app.errorhandler(Exception)
-def handle_unexpected_error(exc: Exception) -> tuple[Response, int]:
-    """兜底错误处理：任何未预期异常都记日志并返回 JSON，不让进程挂掉。"""
+def handle_unexpected_error(exc: Exception) -> tuple[Response, int] | HTTPException:
+    """兜底错误处理：未预期异常记日志并返回 JSON，HTTP 异常（404 等）按原状态码返回。"""
+    if isinstance(exc, HTTPException):
+        # 404/405 这类是正常的 HTTP 语义，不是服务故障，不该记 error 也不该变成 500
+        return exc
     LOGGER.exception("接口处理异常: %s", exc)
     return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/favicon.ico")
+def favicon() -> tuple[str, int]:
+    """浏览器会自动请求图标，直接返回 204，避免刷出一堆无意义的 404 日志。"""
+    return "", 204
 
 
 # ==================== 5. 前端页面（HTML + ECharts） ====================
@@ -150,7 +170,7 @@ HTML_PAGE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-  <h1>CEMS 烟气在线监测 · 实时曲线</h1>
+  <h1>CEMS 烟气在线监测 · 实时曲线（8 测点）</h1>
   <div id="chart"></div>
   <div id="status">加载中...</div>
 
@@ -160,6 +180,20 @@ HTML_PAGE = """<!DOCTYPE html>
   var status = document.getElementById('status');
   var REFRESH_MS = __REFRESH_MS__;
   var REFRESH_SEC = __REFRESH_SEC__;
+
+  // 测点表：key 要与后端 /api/data 返回的字段一致
+  // axis: 0=左轴 浓度(mg/m3)；1=右轴1 O2/湿度(%)；2=右轴2 流量/温度/压力
+  var POINTS = [
+    { key: 'so2',      label: 'SO2',    unit: 'mg/m3', axis: 0, color: '#ef4444' },
+    { key: 'nox',      label: 'NOx',    unit: 'mg/m3', axis: 0, color: '#3b82f6' },
+    { key: 'dust',     label: '颗粒物', unit: 'mg/m3', axis: 0, color: '#a855f7' },
+    { key: 'o2',       label: 'O2',     unit: '%',     axis: 1, color: '#22c55e' },
+    { key: 'humidity', label: '湿度',   unit: '%',     axis: 1, color: '#06b6d4' },
+    { key: 'flow',     label: '流量',   unit: 'm3/s',  axis: 2, color: '#84cc16' },
+    { key: 'temp',     label: '温度',   unit: '℃',     axis: 2, color: '#f59e0b' },
+    { key: 'pressure', label: '压力',   unit: 'kPa',   axis: 2, color: '#ec4899' }
+  ];
+  var AXIS_STYLE = { color: '#94a3b8' };
 
   if (typeof echarts === 'undefined') {
     status.className = 'err';
@@ -188,24 +222,39 @@ HTML_PAGE = """<!DOCTYPE html>
         }
         myChart.setOption({
           tooltip: { trigger: 'axis' },
-          legend: { data: ['SO2', 'NOx', 'Flow'], textStyle: { color: '#cbd5e1' } },
-          grid: { left: 50, right: 50, top: 40, bottom: 40 },
+          legend: {
+            data: POINTS.map(function(p) { return p.label; }),
+            textStyle: { color: '#cbd5e1' },
+            type: 'scroll'
+          },
+          grid: { left: 60, right: 130, top: 60, bottom: 50 },
           animationDurationUpdate: 300,
-          xAxis: { type: 'category', data: d.ts, axisLabel: { color: '#94a3b8' } },
+          xAxis: { type: 'category', data: d.ts, axisLabel: AXIS_STYLE },
           yAxis: [
-            { type: 'value', name: 'SO2/NOx (mg/m3)', axisLabel: { color: '#94a3b8' } },
-            { type: 'value', name: 'Flow (m3/s)', axisLabel: { color: '#94a3b8' } }
+            { type: 'value', name: '浓度 (mg/m3)', axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
+            { type: 'value', name: 'O2/湿度 (%)', position: 'right', axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
+            { type: 'value', name: '流量/温度/压力', position: 'right', offset: 60,
+              axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE }
           ],
-          series: [
-            { name: 'SO2', type: 'line', data: d.so2, smooth: true, showSymbol: false, itemStyle: { color: '#ef4444' } },
-            { name: 'NOx', type: 'line', data: d.nox, smooth: true, showSymbol: false, itemStyle: { color: '#3b82f6' } },
-            { name: 'Flow', type: 'line', yAxisIndex: 1, data: d.flow, smooth: true, showSymbol: false, itemStyle: { color: '#22c55e' } }
-          ]
+          series: POINTS.map(function(p) {
+            return {
+              name: p.label,
+              type: 'line',
+              yAxisIndex: p.axis,
+              data: d[p.key] || [],
+              smooth: true,
+              showSymbol: false,
+              itemStyle: { color: p.color }
+            };
+          })
         });
-        var latest = d.so2[d.so2.length - 1];
+        var latest = POINTS.map(function(p) {
+          var arr = d[p.key] || [];
+          return p.label + '=' + arr[arr.length - 1];
+        }).join('  ');
         status.className = '';
-        status.textContent = '最近更新: ' + d.ts[d.ts.length - 1]
-          + ' | 最新 SO2=' + latest + ' mg/m3 | 每' + REFRESH_SEC + '秒自动刷新';
+        status.textContent = '最近更新: ' + d.ts[d.ts.length - 1] + ' | ' + latest
+          + ' | 每' + REFRESH_SEC + '秒自动刷新';
       })
       .catch(function() {
         showError('后端连不上（确认 web_dashboard.py 在跑）');

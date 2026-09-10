@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""TDengine 查询演示脚本：查入库总量、最新明细与 INTERVAL 时间聚合均值。"""
+"""TDengine 查询演示脚本：查入库总量、最新明细与各测点的 INTERVAL 时间聚合均值。"""
 
 from __future__ import annotations
 
@@ -16,6 +16,11 @@ TD_USER: Final[str] = "root"
 TD_PASS: Final[str] = "taosdata"
 TD_DB: Final[str] = "cems"
 TD_STABLE: Final[str] = "cems_data"
+
+# ---- 测点列（与超级表列名一致，改动后此处同步即可）----
+TD_COLUMNS: Final[tuple[str, ...]] = (
+    "so2", "nox", "flow", "dust", "o2", "temp", "humidity", "pressure",
+)
 
 # ---- 查询参数 ----
 LATEST_LIMIT: Final[int] = 5           # 最新明细取几条
@@ -82,13 +87,14 @@ def show_latest(conn: Any, limit: int = LATEST_LIMIT) -> None:
     """打印最新 N 条原始数据。"""
     rows = run_query(
         conn,
-        f"SELECT * FROM {TD_DB}.{TD_STABLE} ORDER BY ts DESC LIMIT {limit}",
+        f"SELECT ts, {', '.join(TD_COLUMNS)} FROM {TD_DB}.{TD_STABLE} "
+        f"ORDER BY ts DESC LIMIT {limit}",
     )
     if rows is None:      # 查询失败（错误已由 run_query 记录），不再误报成"无数据"
         return
     LOGGER.info("最新 %d 条原始数据:", limit)
     for row in rows:
-        LOGGER.info("  %s | SO2=%s NOx=%s Flow=%s | %s/%s", row[0], row[1], row[2], row[3], row[4], row[5])
+        LOGGER.info("  %s | %s", row[0], _format_values(row[1:]))
     if not rows:
         LOGGER.info("  （库中暂无数据，确认 subscriber_to_td.py 在跑）")
 
@@ -99,19 +105,27 @@ def show_interval_avg(
     window: str = INTERVAL_WINDOW,
 ) -> None:
     """打印 INTERVAL 时间聚合结果（环保平台"分钟均值"曲线的做法）。"""
+    averages = ", ".join(f"AVG({column}) AS avg_{column}" for column in TD_COLUMNS)
     rows = run_query(
         conn,
-        f"SELECT _wstart, AVG(so2) AS avg_so2, COUNT(*) AS n "
+        f"SELECT _wstart, {averages}, COUNT(*) AS n "
         f"FROM {TD_DB}.{TD_STABLE} WHERE ts >= now - {minutes}m INTERVAL({window})",
     )
     if rows is None:      # 查询失败，不再误报成"该时间段无数据"
         return
-    LOGGER.info("★ INTERVAL(%s) 均值（最近 %d 分钟，每窗口一条）:", window, minutes)
+    LOGGER.info("★ INTERVAL(%s) 各测点均值（最近 %d 分钟，每窗口一条）:", window, minutes)
     for row in rows:
-        avg = round(row[1], 2) if row[1] is not None else None
-        LOGGER.info("  窗口起点 %s | SO2均值 %s | 原始条数 %s", row[0], avg, row[2])
+        LOGGER.info("  窗口起点 %s | %s | 原始条数 %s", row[0], _format_values(row[1:-1]), row[-1])
     if not rows:
         LOGGER.info("  （该时间范围内没有数据，确认 subscriber_to_td.py 在跑）")
+
+
+def _format_values(values: tuple[Any, ...]) -> str:
+    """把一行测点值按列名格式化成 "so2=35.2 nox=18.5 ..."，并保留两位小数。"""
+    parts = []
+    for column, value in zip(TD_COLUMNS, values):
+        parts.append(f"{column}={round(value, 2) if value is not None else None}")
+    return " ".join(parts)
 
 
 # ==================== 4. 主流程 ====================

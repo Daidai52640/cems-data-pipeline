@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""平台接入：订阅 MQTT 上送报文，解析测点后写入 TDengine 时序库 cems.cems_data 超级表。"""
+"""平台接入：订阅 MQTT 上送报文，解析 8 个烟气测点后写入 TDengine 时序库 cems.cems_data 超级表。"""
 
 from __future__ import annotations
 
@@ -31,8 +31,19 @@ TD_DEVICE: Final[str] = "device1"          # 标签：设备号
 TD_KEEP_DAYS: Final[int] = 365             # 数据保留 1 年
 TD_DURATION_DAYS: Final[int] = 30          # 每 30 天一个分片
 
-# ---- 只入库约定的数值测点，Flag 等标记字段跳过 ----
-MEASURE_POINTS: Final[tuple[str, ...]] = ("SO2", "NOx", "Flow")
+# ---- 测点定义表：(MQTT 字段名, TDengine 列名)，顺序即入库列顺序 ----
+# 只入库这张表里的数值测点，Flag 等标记字段自动跳过。
+POINTS: Final[tuple[tuple[str, str], ...]] = (
+    ("SO2",      "so2"),        # 二氧化硫
+    ("NOx",      "nox"),        # 氮氧化物
+    ("Flow",     "flow"),       # 烟气流量
+    ("Dust",     "dust"),       # 颗粒物
+    ("O2",       "o2"),         # 氧含量
+    ("Temp",     "temp"),       # 烟气温度
+    ("Humidity", "humidity"),   # 烟气湿度
+    ("Pressure", "pressure"),   # 烟气压力
+)
+TD_COLUMNS: Final[tuple[str, ...]] = tuple(column for _, column in POINTS)
 TS_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
 
 # ---- 日志 ----
@@ -66,10 +77,10 @@ def parse_timestamp(text: str) -> str:
     return text
 
 
-def parse_payload(payload: str) -> tuple[str, float, float, float]:
-    """把 MQTT 报文解析成 (时间戳, so2, nox, flow)；格式不符抛 ValueError。
+def parse_payload(payload: str) -> tuple[str, dict[str, float]]:
+    """把 MQTT 报文解析成 (时间戳, {MQTT字段名: 数值})；格式不符抛 ValueError。
 
-    报文格式: "2026-09-10 12:00:00 SO2=35.2 NOx=18.5 Flow=95.3 Flag=N"
+    报文格式: "2026-09-10 12:00:00 SO2=35.2 NOx=18.5 ... Pressure=101.3 Flag=N"
     """
     parts = payload.split()
     if len(parts) < 3:
@@ -77,21 +88,22 @@ def parse_payload(payload: str) -> tuple[str, float, float, float]:
 
     ts = parse_timestamp(f"{parts[0]} {parts[1]}")
 
+    names = {name for name, _ in POINTS}
     data: dict[str, float] = {}
     for item in parts[2:]:
         key, sep, value = item.partition("=")
-        if not sep or key not in MEASURE_POINTS:
+        if not sep or key not in names:
             continue                    # 跳过 Flag 等非测点字段
         try:
             data[key] = float(value)
         except ValueError as exc:
             raise ValueError(f"测点 {key} 数值非法: {value!r}") from exc
 
-    missing = [key for key in MEASURE_POINTS if key not in data]
+    missing = [name for name, _ in POINTS if name not in data]
     if missing:
         raise ValueError(f"缺少测点 {missing}: {payload!r}")
 
-    return ts, data["SO2"], data["NOx"], data["Flow"]
+    return ts, data
 
 
 # ==================== 4. TDengine 写入器 ====================
@@ -121,9 +133,11 @@ class TdWriter:
             # ★ REST 接口无状态：USE 不生效，每条 SQL 必须显式带库名前缀 cems.xxx
             cur.execute(
                 f"CREATE STABLE IF NOT EXISTS {TD_DB}.{TD_STABLE} "
-                f"(ts TIMESTAMP, so2 FLOAT, nox FLOAT, flow FLOAT) "
+                f"(ts TIMESTAMP, so2 FLOAT, nox FLOAT, flow FLOAT, "
+                f"dust FLOAT, o2 FLOAT, temp FLOAT, humidity FLOAT, pressure FLOAT) "
                 f"TAGS (plant NCHAR(20), device NCHAR(20))"
             )
+            self._ensure_columns(cur)
         except Exception as exc:
             LOGGER.error("TDengine 连接或建表失败: %s", exc)
             self.close()
@@ -136,27 +150,48 @@ class TdWriter:
         LOGGER.info("TDengine 就绪: 库=%s, 超级表=%s", TD_DB, TD_STABLE)
         return True
 
-    def write(self, ts: str, so2: float, nox: float, flow: float) -> bool:
+    @staticmethod
+    def _ensure_columns(cur: Any) -> None:
+        """老库平滑升级：对比超级表实际列，缺哪列补哪列（幂等，可重复执行）。
+
+        CREATE STABLE IF NOT EXISTS 不会改动已存在的表，所以老版本建的 4 列超级表
+        必须靠 ALTER STABLE 把新测点列补上；历史数据不丢，新列的旧值为 NULL。
+        """
+        cur.execute(f"DESCRIBE {TD_DB}.{TD_STABLE}")
+        existing = {str(row[0]).lower() for row in cur.fetchall()}
+        for column in TD_COLUMNS:
+            if column not in existing:
+                cur.execute(f"ALTER STABLE {TD_DB}.{TD_STABLE} ADD COLUMN {column} FLOAT")
+                LOGGER.info("超级表新增测点列: %s FLOAT", column)
+
+    def write(self, ts: str, values: dict[str, float]) -> bool:
         """写入一条数据；首次失败自动重连重试一次，仍失败返回 False。"""
         if not self.ready and not self.connect():
             return False
 
-        if self._insert(ts, so2, nox, flow):
+        if self._insert(ts, values):
             return True
 
         LOGGER.error("入库失败，重连 TDengine 后重试一次")
-        if self.connect() and self._insert(ts, so2, nox, flow):
+        if self.connect() and self._insert(ts, values):
             return True
         return False
 
-    def _insert(self, ts: str, so2: float, nox: float, flow: float) -> bool:
-        """执行一次插入：自动建子表（USING 超级表模板 + TAGS 标签）。"""
+    def _insert(self, ts: str, values: dict[str, float]) -> bool:
+        """执行一次插入：自动建子表（USING 超级表模板 + TAGS 标签）。
+
+        显式列出列名、列序由 POINTS 统一决定，避免报文顺序与建表顺序漂移导致写错列。
+        """
         if self._cur is None:
             return False
+        # 显式列出列名时，主时间戳列 ts 必须一起列出，否则 TDengine 报
+        # "Primary timestamp column should not be null"
+        columns = ", ".join(("ts", *TD_COLUMNS))
+        numbers = ", ".join(f"{values[name]}" for name, _ in POINTS)   # 与 TD_COLUMNS 同序
         sql = (
             f"INSERT INTO {TD_DB}.{TD_PLANT} USING {TD_DB}.{TD_STABLE} "
             f"TAGS ('{TD_PLANT}', '{TD_DEVICE}') "
-            f"VALUES ('{ts}', {so2}, {nox}, {flow})"
+            f"({columns}) VALUES ('{ts}', {numbers})"
         )
         try:
             self._cur.execute(sql)
@@ -219,14 +254,15 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
     payload = msg.payload.decode("utf-8", errors="replace")
 
     try:
-        ts, so2, nox, flow = parse_payload(payload)
+        ts, values = parse_payload(payload)
     except ValueError as exc:
         LOGGER.error("报文解析失败: %s | 原始报文: %s", exc, payload)
         return
 
     writer: TdWriter = userdata["writer"]
-    if writer.write(ts, so2, nox, flow):
-        LOGGER.debug("已入库: %s SO2=%s NOx=%s Flow=%s", ts, so2, nox, flow)   # 高频成功降到 debug
+    if writer.write(ts, values):
+        # 高频成功降到 debug；只在排查数据问题时才需要开
+        LOGGER.debug("已入库: %s %s", ts, " ".join(f"{k}={v}" for k, v in values.items()))
 
 
 # ==================== 6. 主流程 ====================

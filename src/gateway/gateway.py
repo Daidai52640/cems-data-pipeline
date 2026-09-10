@@ -19,11 +19,23 @@ MODBUS_PORT: Final[int] = 5020
 MODBUS_UNIT: Final[int] = 1            # 从站地址
 
 # ---- 寄存器地图（必须与 modbus_server.py 保持一致）----
-REG_SO2: Final[int] = 0
-REG_NOX: Final[int] = 1
-REG_FLOW: Final[int] = 2
-REG_COUNT: Final[int] = 3              # 一次读 3 个寄存器
+# 测点定义表：(MQTT 字段名, 寄存器地址)，顺序即报文里的字段顺序
+POINTS: Final[tuple[tuple[str, int], ...]] = (
+    ("SO2", 0),        # 二氧化硫
+    ("NOx", 1),        # 氮氧化物
+    ("Flow", 2),       # 烟气流量
+    ("Dust", 3),       # 颗粒物
+    ("O2", 4),         # 氧含量
+    ("Temp", 5),       # 烟气温度
+    ("Humidity", 6),   # 烟气湿度
+    ("Pressure", 7),   # 烟气压力
+)
+REG_BASE: Final[int] = 0               # 寄存器起始地址
+REG_COUNT: Final[int] = len(POINTS)    # 一次读 8 个测点寄存器
 SCALE: Final[int] = 10                 # 还原系数：352 → 35.2
+
+# ---- 报文时间戳格式 ----
+TS_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
 
 # ---- MQTT（对应 EMQX）----
 MQTT_HOST: Final[str] = "localhost"
@@ -71,10 +83,10 @@ def _read_holding_registers(client: ModbusTcpClient, address: int, count: int) -
         return client.read_holding_registers(address=address, count=count, device_id=MODBUS_UNIT)
 
 
-def read_device(client: ModbusTcpClient) -> Optional[tuple[float, float, float]]:
-    """读设备 3 个保持寄存器并换算成真实值，任何失败都返回 None（不抛异常）。"""
+def read_device(client: ModbusTcpClient) -> Optional[dict[str, float]]:
+    """读设备全部测点寄存器并换算成真实值，返回 {测点名: 数值}；失败返回 None（不抛异常）。"""
     try:
-        response = _read_holding_registers(client, REG_SO2, REG_COUNT)
+        response = _read_holding_registers(client, REG_BASE, REG_COUNT)
     except Exception as exc:
         LOGGER.error("读 Modbus 设备异常: %s", exc)
         return None
@@ -84,11 +96,11 @@ def read_device(client: ModbusTcpClient) -> Optional[tuple[float, float, float]]
         return None
 
     try:
-        return (
-            response.registers[REG_SO2] / SCALE,
-            response.registers[REG_NOX] / SCALE,
-            response.registers[REG_FLOW] / SCALE,
-        )
+        # 返回的寄存器块从 REG_BASE 开始，所以下标要减去起始地址
+        return {
+            name: response.registers[address - REG_BASE] / SCALE
+            for name, address in POINTS
+        }
     except (IndexError, TypeError) as exc:
         LOGGER.error("Modbus 返回数据不完整: %s", exc)
         return None
@@ -221,12 +233,13 @@ def on_disconnect(
 
 # ==================== 6. 主流程 ====================
 
-def build_payload(so2: float, nox: float, flow: float) -> str:
-    """把三个测点值组装成上送报文：时间戳 + 测点 + 数据标记。"""
-    return (
-        f"{time.strftime('%Y-%m-%d %H:%M:%S')} "
-        f"SO2={so2} NOx={nox} Flow={flow} Flag=N"
-    )
+def build_payload(values: dict[str, float]) -> str:
+    """把全部测点值组装成上送报文：时间戳 + 各测点 K=V + 数据标记。
+
+    格式: "2026-09-10 12:00:00 SO2=35.2 NOx=18.5 ... Pressure=101.3 Flag=N"
+    """
+    body = " ".join(f"{name}={values[name]}" for name, _ in POINTS)
+    return f"{time.strftime(TS_FORMAT)} {body} Flag=N"
 
 
 def main() -> None:
@@ -268,9 +281,8 @@ def main() -> None:
                 time.sleep(MODBUS_RETRY_INTERVAL)
                 continue
 
-            so2, nox, flow = data
             count += 1
-            payload = build_payload(so2, nox, flow)
+            payload = build_payload(data)
 
             if mqtt_client.is_connected():
                 # ★ 在线：直接发；发布失败也按断网处理落盘续传

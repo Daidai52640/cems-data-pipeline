@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Modbus TCP 仿真设备：模拟 CEMS 分析仪，用保持寄存器对外提供 SO2/NOx/Flow 实时数据。"""
+"""Modbus TCP 仿真设备：模拟 CEMS 分析仪，用保持寄存器对外提供 8 个烟气测点的实时数据。"""
 
 from __future__ import annotations
 
@@ -24,17 +24,22 @@ SERVER_PORT: Final[int] = 5020         # 用 5020 避开系统保留的 502 端�
 SLAVE_ID: Final[int] = 1               # 从站地址，网关必须按这个地址读
 
 # ---- 寄存器地图（与网关的"内存地图"约定，不可随意改动）----
-REG_SO2: Final[int] = 0                # 地址 0：SO2，真实值 ×10 存整数
-REG_NOX: Final[int] = 1                # 地址 1：NOx，真实值 ×10 存整数
-REG_FLOW: Final[int] = 2               # 地址 2：Flow，真实值 ×10 存整数
-REG_COUNT: Final[int] = 10             # 寄存器总数（0~9，后 7 个备用）
-SCALE: Final[int] = 10                 # 放大系数：35.2 → 352（Modbus 寄存器只能存整数）
-
-# ---- 仿真数据范围（真实设备读数会小幅波动）----
-SO2_RANGE: Final[tuple[float, float]] = (20.0, 50.0)     # mg/m3
-NOX_RANGE: Final[tuple[float, float]] = (10.0, 30.0)     # mg/m3
-FLOW_RANGE: Final[tuple[float, float]] = (80.0, 120.0)   # m3/s
-UPDATE_INTERVAL: Final[float] = 2.0                      # 数据刷新周期（秒）
+# 测点定义表：(MQTT 字段名, 寄存器地址, 仿真取值范围, 单位)
+# 实测值一律 ×SCALE 存成整数，因为 Modbus 保持寄存器只能存 0~65535 的整数。
+POINTS: Final[tuple[tuple[str, int, tuple[float, float], str], ...]] = (
+    ("SO2",      0, (20.0, 50.0),   "mg/m3"),   # 二氧化硫
+    ("NOx",      1, (10.0, 30.0),   "mg/m3"),   # 氮氧化物
+    ("Flow",     2, (80.0, 120.0),  "m3/s"),    # 烟气流量
+    ("Dust",     3, (0.0, 10.0),    "mg/m3"),   # 颗粒物
+    ("O2",       4, (5.0, 12.0),    "%"),       # 氧含量
+    ("Temp",     5, (100.0, 180.0), "℃"),       # 烟气温度
+    ("Humidity", 6, (5.0, 15.0),    "%"),       # 烟气湿度（含湿量）
+    ("Pressure", 7, (95.0, 105.0),  "kPa"),     # 烟气压力
+)
+REG_BASE: Final[int] = 0               # 寄存器起始地址
+REG_COUNT: Final[int] = 10             # 数据块大小（0~9：8 个测点 + 2 个备用）
+SCALE: Final[int] = 10                 # 放大系数：35.2 → 352（寄存器只能存整数）
+UPDATE_INTERVAL: Final[float] = 2.0    # 数据刷新周期（秒）
 
 # ---- 日志 ----
 LOG_LEVEL: Final[int] = logging.INFO
@@ -62,12 +67,11 @@ def encode(value: float) -> int:
 
 
 def build_registers() -> list[int]:
-    """生成一轮仿真读数对应的寄存器数组（前 3 个为测点，其余补 0）。"""
-    return [
-        encode(random.uniform(*SO2_RANGE)),
-        encode(random.uniform(*NOX_RANGE)),
-        encode(random.uniform(*FLOW_RANGE)),
-    ] + [0] * (REG_COUNT - 3)
+    """生成一轮仿真读数对应的寄存器数组（按寄存器地址摆放，未用到的地址补 0）。"""
+    values = [0] * REG_COUNT
+    for _, address, (low, high), _ in POINTS:
+        values[address] = encode(random.uniform(low, high))
+    return values
 
 
 # ==================== 3. 数据刷新线程 ====================
@@ -77,13 +81,11 @@ def update_data(context: ModbusServerContext) -> None:
     while True:
         try:
             values = build_registers()
-            # 写入从站 SLAVE_ID 的保持寄存器（功能码 3 对应 hr 区），起始地址 REG_SO2
-            context[SLAVE_ID].setValues(3, REG_SO2, values)
+            # 写入从站 SLAVE_ID 的保持寄存器（功能码 3 对应 hr 区），起始地址 REG_BASE
+            context[SLAVE_ID].setValues(3, REG_BASE, values)
             LOGGER.debug(
-                "寄存器已刷新: SO2=%.1f NOx=%.1f Flow=%.1f",
-                values[REG_SO2] / SCALE,
-                values[REG_NOX] / SCALE,
-                values[REG_FLOW] / SCALE,
+                "寄存器已刷新: %s",
+                " ".join(f"{name}={values[addr] / SCALE}{unit}" for name, addr, _, unit in POINTS),
             )
         except Exception:
             # 单次刷新失败绝不能让线程退出，否则设备会永远返回旧值
@@ -113,8 +115,9 @@ def main() -> None:
 
     LOGGER.info("Modbus 仿真设备启动: %s:%d 从站地址=%d", SERVER_HOST, SERVER_PORT, SLAVE_ID)
     LOGGER.info(
-        "寄存器地图: 地址%d=SO2(×%d), 地址%d=NOx(×%d), 地址%d=Flow(×%d)",
-        REG_SO2, SCALE, REG_NOX, SCALE, REG_FLOW, SCALE,
+        "寄存器地图(×%d): %s",
+        SCALE,
+        ", ".join(f"地址{addr}={name}" for name, addr, _, _ in POINTS),
     )
 
     try:

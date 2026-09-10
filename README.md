@@ -14,7 +14,7 @@
 
 ### 1. 设备层 `src/device/modbus_server.py`
 - 功能：模拟 CEMS 分析仪，Modbus TCP 服务端
-- 寄存器：地址0=SO2、地址1=NOx、地址2=Flow，放大10倍存整数
+- 寄存器（均放大10倍存整数）：地址0=SO2、地址1=NOx、地址2=Flow、地址3=颗粒物Dust、地址4=O2、地址5=温度Temp、地址6=湿度Humidity、地址7=压力Pressure
 - 监听端口：5020
 
 ### 2. 网关层 `src/gateway/gateway.py`
@@ -25,14 +25,16 @@
 - 依赖：pymodbus、paho-mqtt
 
 ### 3. 平台接入层 `src/platform/subscriber_to_td.py`
-- 功能：订阅 MQTT 主题 → 解析测点（只取 SO2/NOx/Flow）→ 写入 TDengine
-- TDengine 超级表：`cems.cems_data`（ts, so2, nox, flow）
+- 功能：订阅 MQTT 主题 → 解析 8 个测点 → 写入 TDengine
+- TDengine 超级表：`cems.cems_data`（ts, so2, nox, flow, dust, o2, temp, humidity, pressure）
+- 老库自动升级：启动时 DESCRIBE 超级表，缺哪列用 ALTER STABLE 补哪列
 - 标签：plant, device
 - 依赖：paho-mqtt、taospy
 
 ### 4. 展示层 `src/web/web_dashboard.py`
-- 功能：Flask 后端 + ECharts 前端实时曲线
+- 功能：Flask 后端 + ECharts 前端实时曲线（8 测点 / 3 组 Y 轴）
 - 接口：`GET /api/data` 返回最近 10 分钟数据（JSON）
+- 健康检查：`GET /api/health` 返回 Web 与 TDengine 是否都通
 - 刷新：前端每 5 秒自动拉取
 - 监听：0.0.0.0:5000（局域网可访问）
 - 依赖：flask、taospy
