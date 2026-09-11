@@ -22,3 +22,6 @@ flask>=3.0.0,<4.0.0
 
 # Web 层：生产级 WSGI 服务器（Flask 自带的开发服务器不适合对外提供服务）
 waitress>=3.0.0,<4.0.0
+
+# Web 层：报表导出 Excel（只写不读，用 write_only 模式流式写）
+openpyxl>=3.1,<4.0
