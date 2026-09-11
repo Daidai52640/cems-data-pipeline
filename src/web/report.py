@@ -111,15 +111,41 @@ def parse_int(text: Optional[str], label: str, low: int, high: int, default: int
     return value
 
 
-def check_span(start: datetime, end: datetime, window: timedelta, label: str) -> None:
-    """校验时间范围：start 必须早于 end，且窗口数不超过 REPORT_MAX_POINTS。"""
+def check_span(
+    start: datetime,
+    end: datetime,
+    window: timedelta,
+    label: str,
+    max_points: Optional[int] = None,
+) -> None:
+    """校验时间范围：start 必须早于 end，且窗口数不超过上限。"""
+    limit = REPORT_MAX_POINTS if max_points is None else max_points
     if start >= end:
         raise ReportParamError(f"{label}：开始时间必须早于结束时间")
     windows = int((end - start) / window) + 1
-    if windows > REPORT_MAX_POINTS:
+    if windows > limit:
         raise ReportParamError(
-            f"{label}：预计 {windows} 个窗口，超过上限 {REPORT_MAX_POINTS} 个，请缩小时间范围"
+            f"{label}：预计 {windows} 个窗口，超过上限 {limit} 个，请缩小时间范围"
         )
+
+
+def floor_to_window(moment: datetime, window: timedelta) -> datetime:
+    """把时刻向下对齐到窗口边界（与 TDengine INTERVAL 的对齐口径一致）。"""
+    epoch = datetime(1970, 1, 1)
+    return epoch + ((moment - epoch) // window) * window
+
+
+def align_range(start: datetime, end: datetime, window: timedelta) -> tuple[datetime, datetime]:
+    """把查询范围向内对齐到窗口边界，只保留**完整**窗口。
+
+    不对齐的话，首末那半个窗口的均值会被当成整窗均值展示：
+    比如查 22:25:15~23:25:15，第一个窗口其实只有 45 秒的数据，
+    却和整分钟的窗口画在同一条线上，看着像数据掉了一截。
+    """
+    aligned_start = floor_to_window(start, window)
+    if aligned_start < start:
+        aligned_start += window          # 起点向上取整，保证第一个窗口是完整的
+    return aligned_start, floor_to_window(end, window)
 
 
 # ==================== 3. 查询与结果组装 ====================
@@ -130,18 +156,18 @@ def query_aggregate(
     window: str,
     *,
     fill_null: bool = False,
-    upper_inclusive: bool = False,
 ) -> list[tuple[Any, ...]]:
     """按窗口聚合求均值；聚合在 TDengine 侧用 INTERVAL + AVG 完成，不把原始点拉回 Python。
 
     拼进 SQL 的时间一律由已解析的 datetime 重新格式化得到，窗口串是代码里的常量，
     列名来自测点契约白名单 —— 没有任何一处拼接原始用户输入。
+    区间统一用半开写法 [start, end)：调用方（aggregate_series）已把范围向内对齐到窗口边界，
+    所以每个窗口都是完整的，不会出现"半个窗口被当成整窗均值"。
     """
     avg_columns = ", ".join(f"AVG({column})" for column in COLUMNS)
-    upper = "<=" if upper_inclusive else "<"
     sql = (
         f"SELECT _wstart, {avg_columns}, COUNT(*) FROM {TD_DB}.{TD_STABLE} "
-        f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts {upper} '{end.strftime(TS_FORMAT)}' "
+        f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts < '{end.strftime(TS_FORMAT)}' "
         f"INTERVAL({window})"
     )
     if fill_null:
@@ -231,7 +257,7 @@ def envelope(
     }
 
 
-def _clamp_to_now(end: datetime, now: datetime) -> datetime:
+def clamp_to_now(end: datetime, now: datetime) -> datetime:
     """查询上界统一不超过当前时刻，避免把未来时间戳的脏数据算进报表。"""
     if end > now:
         LOGGER.debug("end=%s 超过当前时刻，已收窄到 %s", end, now)
@@ -239,16 +265,60 @@ def _clamp_to_now(end: datetime, now: datetime) -> datetime:
     return end
 
 
+def query_raw(start: datetime, end: datetime, limit: int) -> list[tuple[Any, ...]]:
+    """原始点查询（曲线的短区间用）：不聚合，直接取原始行。
+
+    列名来自测点契约白名单，时间来自已解析的 datetime，没有任何原始输入拼接进 SQL。
+    """
+    columns = ", ".join(("ts", *COLUMNS))
+    sql = (
+        f"SELECT {columns} FROM {TD_DB}.{TD_STABLE} "
+        f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts <= '{end.strftime(TS_FORMAT)}' "
+        f"ORDER BY ts ASC LIMIT {limit}"
+    )
+    return _execute(sql)
+
+
+def aggregate_series(
+    start: datetime,
+    end: datetime,
+    unit: str,
+    window: timedelta,
+    *,
+    label: str,
+    pad_grid: bool,
+    max_points: Optional[int] = None,
+) -> dict[str, Any]:
+    """把一段区间聚合成均值序列 —— 报表页、Excel 导出、曲线三处共用这一份口径。
+
+    做三件事：范围向内对齐到窗口边界（只统计完整窗口）、在库侧用 INTERVAL + AVG 聚合、
+    可选地按窗口网格补 null（整段无数据时也返回完整网格而不是空数组）。
+    """
+    aligned_start, aligned_end = align_range(start, end, window)
+    if aligned_start >= aligned_end:            # 不足一个完整窗口
+        return envelope(unit, aligned_start, aligned_end, [])
+    check_span(aligned_start, aligned_end, window, label, max_points)
+
+    rows = query_aggregate(aligned_start, aligned_end, unit, fill_null=pad_grid)
+    if pad_grid:
+        count = int((aligned_end - aligned_start) / window)
+        grid = [aligned_start + index * window for index in range(count)]
+        points = points_on_grid(rows, grid)
+    else:
+        points = rows_to_points(rows)
+    return envelope(unit, aligned_start, aligned_end - timedelta(seconds=1), points)
+
+
 # ==================== 4. 四类报表 ====================
 
 def minute_report(start_text: Optional[str], end_text: Optional[str]) -> dict[str, Any]:
-    """分钟报表：默认最近 1 小时，按分钟聚合。"""
+    """分钟报表：默认最近 1 小时，按分钟聚合（只统计完整分钟窗口）。"""
     now = datetime.now()
     start = parse_time(start_text, "start", now - WINDOW_HOUR)
-    end = _clamp_to_now(parse_time(end_text, "end", now), now)
-    check_span(start, end, WINDOW_MINUTE, "分钟报表")
-    rows = query_aggregate(start, end, UNIT_MINUTE, upper_inclusive=True)
-    return envelope(UNIT_MINUTE, start, end, rows_to_points(rows))
+    end = clamp_to_now(parse_time(end_text, "end", now), now)
+    return aggregate_series(
+        start, end, UNIT_MINUTE, WINDOW_MINUTE, label="分钟报表", pad_grid=False,
+    )
 
 
 def day_report(date_text: Optional[str]) -> dict[str, Any]:
@@ -257,10 +327,9 @@ def day_report(date_text: Optional[str]) -> dict[str, Any]:
     first = first.replace(hour=0, minute=0, second=0, microsecond=0)
     next_day = first + WINDOW_DAY
     # 用半开区间 [当天 00:00, 次日 00:00)，否则跨到次日会产生第 25 个窗口
-    rows = query_aggregate(first, next_day, UNIT_HOUR, fill_null=True)
-    grid = [first + timedelta(hours=hour) for hour in range(24)]
-    points = points_on_grid(rows, grid)
-    return envelope(UNIT_HOUR, first, next_day - timedelta(seconds=1), points)
+    return aggregate_series(
+        first, next_day, UNIT_HOUR, WINDOW_HOUR, label="日报表", pad_grid=True,
+    )
 
 
 def month_report(year_text: Optional[str], month_text: Optional[str]) -> dict[str, Any]:
@@ -271,21 +340,24 @@ def month_report(year_text: Optional[str], month_text: Optional[str]) -> dict[st
     first = datetime(year, month, 1)
     days = calendar.monthrange(year, month)[1]      # 闰年自动给 29
     next_month = first + timedelta(days=days)
-    rows = query_aggregate(first, next_month, UNIT_DAY)
-    grid = [first + timedelta(days=offset) for offset in range(days)]
-    points = points_on_grid(rows, grid)
-    return envelope(UNIT_DAY, first, next_month - timedelta(seconds=1), points)
+    return aggregate_series(
+        first, next_month, UNIT_DAY, WINDOW_DAY, label="月报表", pad_grid=True,
+    )
 
 
 def custom_report(start_text: Optional[str], end_text: Optional[str]) -> dict[str, Any]:
-    """自由报表：默认最近 24 小时，按小时聚合，可跨天/跨月。"""
+    """自由报表：默认最近 24 小时，按小时聚合，可跨天/跨月。
+
+    按小时网格补齐：整段无数据时也返回完整网格（值 null）而不是空数组，
+    否则前端拿到空列表，分不清"没查到"和"这段确实没数据"。
+    """
     now = datetime.now()
     start = parse_time(start_text, "start", now - WINDOW_DAY)
-    end = _clamp_to_now(parse_time(end_text, "end", now), now)
+    end = clamp_to_now(parse_time(end_text, "end", now), now)
     if end - start > timedelta(days=CUSTOM_MAX_DAYS):
         raise ReportParamError(
             f"自由报表最多查询 {CUSTOM_MAX_DAYS} 天，当前跨度 {(end - start).days} 天"
         )
-    check_span(start, end, WINDOW_HOUR, "自由报表")
-    rows = query_aggregate(start, end, UNIT_HOUR, fill_null=True)
-    return envelope(UNIT_HOUR, start, end, rows_to_points(rows))
+    return aggregate_series(
+        start, end, UNIT_HOUR, WINDOW_HOUR, label="自由报表", pad_grid=True,
+    )
