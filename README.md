@@ -29,6 +29,9 @@
   只代表进了本机发送队列）。没等到 PUBACK 的数据一律转存缓存重试，不会静默丢弃。
 - 补传节奏可用环境变量调：`PUBLISH_ACK_TIMEOUT`（单条确认超时）、
   `RESEND_WINDOW`（在途窗口条数）、`RESEND_RETRY_INTERVAL`（部分失败后的重试间隔）
+- 断网缓存有容量上限（`CACHE_MAX_BYTES`，默认 64MB）：写满磁盘会让之后每条数据都丢，
+  所以超限时按"丢最旧、保最新"裁剪并打 CRITICAL；写盘走 `flush + fsync`，
+  进程被 kill 也不会丢尾部数据；启动时先校验 `data/` 可写
 - 依赖：pymodbus、paho-mqtt
 
 ### 3. 平台接入层 `src/platform/subscriber_to_td.py`
@@ -42,6 +45,15 @@
   - 把 `MQTT_CLEAN_SESSION` 置 1 可退回"离线即丢"，仅用于对比演示
 - TDengine 超级表：`cems.cems_data`（ts, so2, nox, flow, dust, o2, temp, humidity, pressure）
 - 老库自动升级：启动时 DESCRIBE 超级表，缺哪列用 ALTER STABLE 补哪列
+- 子表命名：`{厂区}_{设备}`（如 `plant1_device1`）。TDengine 对**已存在**的子表会沿用
+  第一次写入的 TAGS 且不报错，若拿厂区名当子表名，接入第二台设备时数据会被静默
+  挂到第一台的标签下；启动时还会核对该子表已有标签是否与配置一致
+  （子表名统一转小写后比对：TDengine 表名不区分大小写，不归一化就会查不到行、静默跳过检查）
+- 数值校验：每个测点先过 `math.isfinite()`（挡 NaN/inf）再过量程白名单
+  （`POINT_RANGES`，挡负数和超量程）。任一测点不合格就整条拒收 —— 因为 NaN/inf 会让
+  TDengine 报 syntax error，整行连其余 7 个正常测点一起丢，不如提前拦下。
+  拒收条数会累计在日志里（`报文已拒收（累计 N 条）`）
+- 启动自检：库名/表名/标签做标识符白名单校验（这些值会拼进 SQL），不合法直接拒绝启动
 - 标签：plant, device
 - 依赖：paho-mqtt、taospy
 
@@ -91,6 +103,22 @@ docker compose up -d --build
 | 网关 | cems-gateway | — |
 | 平台接入 | cems-subscriber | — |
 | Web 大屏 | cems-web | `http://localhost:5000` |
+
+### 端口暴露范围（默认只开本机）
+
+所有端口默认只绑定 `127.0.0.1`，同网段的其它设备访问不到。原因很实际：
+EMQX 的 1883 默认允许匿名发布（别人可以伪造数据）、18083 管理台默认 `admin/public`、
+TDengine 6041 用的是演示口令 `root/taosdata`（可以读写删库）。绑到 `0.0.0.0`
+等于把这三样一起交出去。
+
+需要局域网看大屏时，在 `.env` 里改：
+
+```ini
+BIND_ADDR=0.0.0.0
+```
+
+**改完必须同时改掉 `TD_PASS` 和 EMQX 的默认口令**，否则就是上面那种情况。
+`start.ps1` 在这种情况下会额外打一条告警。
 
 常用命令：
 

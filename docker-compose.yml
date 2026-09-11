@@ -14,6 +14,12 @@
 #
 # 启动后：浏览器打开 http://localhost:5000 看实时曲线
 #        管理台 http://localhost:18083 看 MQTT 连接（默认 admin/public）
+#
+# ★ 端口默认只绑定 127.0.0.1（仅本机可访问）：
+#   EMQX 1883 默认匿名可发布、TDengine 6041 用演示口令、18083 默认 admin/public，
+#   一旦绑到 0.0.0.0，同一 WiFi 下任何设备都能免登录读全量数据、甚至删库。
+#   需要在局域网演示大屏时，在 .env 里设 BIND_ADDR=0.0.0.0，
+#   并且务必同时改掉 TD_PASS 与 EMQX 默认口令。
 # =============================================================================
 
 name: cems
@@ -38,9 +44,16 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
+      # 持久会话的离线消息队列：订阅端离线期间 broker 为它排队，重连后补投。
+      # EMQX 默认 max_mqueue_len=1000、session_expiry_interval=2h，
+      # 按 5 秒/条算只能扛约 83 分钟 —— 断网更久就丢最旧的（且只在补传时才看得出来）。
+      # 这里调到 20000 条（约 27 小时）+ 24 小时会话有效期；
+      # 队列是占内存的，按你的断网容忍时长调，别无限放大。
+      EMQX_MQTT__MAX_MQUEUE_LEN: "20000"
+      EMQX_MQTT__SESSION_EXPIRY_INTERVAL: "24h"
     ports:
-      - "1883:1883"      # MQTT 协议端口（网关发布、平台订阅）
-      - "18083:18083"    # EMQX Dashboard 管理台
+      - "${BIND_ADDR:-127.0.0.1}:1883:1883"      # MQTT 协议端口（网关发布、平台订阅）
+      - "${BIND_ADDR:-127.0.0.1}:18083:18083"    # EMQX Dashboard 管理台
     volumes:
       - emqx-data:/opt/emqx/data
       - emqx-log:/opt/emqx/log
@@ -62,8 +75,8 @@ services:
       #   导致库里时间比实际快 8 小时（taospy 读回时又按本地时区转换）
       TZ: Asia/Shanghai
     ports:
-      - "6030:6030"      # 原生连接端口
-      - "6041:6041"      # REST 接口端口（taospy 走这个）
+      - "${BIND_ADDR:-127.0.0.1}:6030:6030"      # 原生连接端口
+      - "${BIND_ADDR:-127.0.0.1}:6041:6041"      # REST 接口端口（taospy 走这个）
     volumes:
       - tdengine-data:/var/lib/taos
       - tdengine-log:/var/log/taos
@@ -87,7 +100,7 @@ services:
       SERVER_PORT: "5020"
       SLAVE_ID: "1"
     ports:
-      - "5020:5020"      # 暴露出来方便用 Modbus 调试工具直接看寄存器
+      - "${BIND_ADDR:-127.0.0.1}:5020:5020"      # 方便用 Modbus 调试工具直接看寄存器
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import socket;socket.create_connection(('127.0.0.1',5020),2)\" || exit 1"]
       interval: 5s
@@ -167,7 +180,7 @@ services:
       QUERY_MINUTES: "10"
       REFRESH_SECONDS: "5"
     ports:
-      - "5000:5000"      # 浏览器访问 http://localhost:5000
+      - "${BIND_ADDR:-127.0.0.1}:5000:5000"      # 浏览器访问 http://localhost:5000
     depends_on:
       tdengine:
         condition: service_healthy

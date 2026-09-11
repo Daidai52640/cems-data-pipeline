@@ -5,11 +5,21 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+import uuid
+from pathlib import Path
 from typing import Any, Final
 
 import taosrest
 from flask import Flask, Response, jsonify
 from werkzeug.exceptions import HTTPException
+
+# 让 src/common 能被导入：三种启动方式（python src/x.py、python -m src.x、任意 CWD）都能工作
+PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.common.points import COLUMNS   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
@@ -22,21 +32,14 @@ TD_PASS: Final[str] = os.getenv("TD_PASS", "taosdata")
 TD_DB: Final[str] = os.getenv("TD_DB", "cems")
 TD_STABLE: Final[str] = os.getenv("TD_STABLE", "cems_data")
 
-# ---- 测点列（与超级表列名一致，顺序即返回给前端的字段顺序）----
-POINTS: Final[tuple[str, ...]] = (
-    "so2",        # 二氧化硫 mg/m3
-    "nox",        # 氮氧化物 mg/m3
-    "flow",       # 烟气流量 m3/s
-    "dust",       # 颗粒物 mg/m3
-    "o2",         # 氧含量 %
-    "temp",       # 烟气温度 ℃
-    "humidity",   # 烟气湿度 %
-    "pressure",   # 烟气压力 kPa
-)
+# ---- 测点列 ----
+# 列名与顺序统一来自 src/common/points.py，这里不再抄一份。
+POINTS: Final[tuple[str, ...]] = COLUMNS
 
 # ---- 查询与刷新 ----
 QUERY_MINUTES: Final[int] = int(os.getenv("QUERY_MINUTES", "10"))        # 查询最近 N 分钟数据
 REFRESH_SECONDS: Final[int] = int(os.getenv("REFRESH_SECONDS", "5"))     # 前端自动刷新间隔（秒）
+QUERY_LIMIT: Final[int] = int(os.getenv("QUERY_LIMIT", "5000"))          # 单次查询最多返回多少点
 
 # ---- Web 服务 ----
 WEB_HOST: Final[str] = os.getenv("WEB_HOST", "0.0.0.0")   # 监听所有网卡，局域网可访问
@@ -66,24 +69,42 @@ class TdQueryError(RuntimeError):
     """TDengine 查询失败（用于把底层异常统一成接口层可识别的错误）。"""
 
 
+def new_trace_id() -> str:
+    """生成一个短追踪 ID：对外只给这个，细节留在服务端日志里查。"""
+    return uuid.uuid4().hex[:12]
+
+
+def safe_error(exc: Exception, where: str) -> tuple[dict[str, Any], int]:
+    """把内部异常收敛成对外可返回的内容：通用文案 + 追踪 ID，细节只进日志。"""
+    trace_id = new_trace_id()
+    LOGGER.exception("[%s] 处理失败 trace_id=%s", where, trace_id)
+    return {"error": "服务内部错误，请稍后重试", "trace_id": trace_id}, 500
+
+
 # ==================== 3. 数据查询 ====================
 
 def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, Any, Any, Any]]:
     """查 TDengine 最近 N 分钟数据，按时间升序返回 [(ts, 各测点值...), ...]。
 
     查询失败抛 TdQueryError（由接口层兜住，不影响 Web 进程存活）。
+
+    两个约束是必须的：
+      ts <= now —— 库里一旦有时间戳在"未来"的脏数据（时钟跳变等），
+                   只写 ts >= now - N m 会把它们全捞回来，"最近 10 分钟"直接失真
+      LIMIT     —— 查询结果不能无上限膨胀，否则响应体会随着积压越滚越大
+    取数用"倒序 + LIMIT"再翻转，保证截断时留下的是**最新**的 N 个点。
     """
     conn: Any = None
     try:
         conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
         cur = conn.cursor()
         columns = ", ".join(POINTS)
-        # 按时间升序取最近数据（画曲线要按时间从左到右）
         cur.execute(
             f"SELECT ts, {columns} FROM {TD_DB}.{TD_STABLE} "
-            f"WHERE ts >= now - {minutes}m ORDER BY ts ASC"
+            f"WHERE ts >= now - {minutes}m AND ts <= now "
+            f"ORDER BY ts DESC LIMIT {QUERY_LIMIT}"
         )
-        rows = list(cur.fetchall())
+        rows = list(cur.fetchall())[::-1]      # 翻转成时间升序，画曲线从左到右
     except Exception as exc:
         LOGGER.error("查询 TDengine 失败: %s", exc)
         raise TdQueryError(str(exc)) from exc
@@ -107,8 +128,9 @@ def api_data() -> tuple[Response, int] | Response:
     try:
         rows = query_recent()
     except TdQueryError as exc:
-        # 查库失败不崩服务：返回空数据 + 错误信息，前端会提示
-        empty: dict[str, Any] = {"ts": [], "error": str(exc)}
+        # 查库失败不崩服务：返回空数据 + 通用提示，细节只在服务端日志里
+        body, _ = safe_error(exc, "GET /api/data")
+        empty: dict[str, Any] = {"ts": [], **body}
         empty.update({name: [] for name in POINTS})
         return jsonify(empty), 503
 
@@ -124,7 +146,8 @@ def api_health() -> tuple[Response, int] | Response:
     try:
         rows = query_recent(1)
     except TdQueryError as exc:
-        return jsonify({"ok": False, "td": "down", "error": str(exc)}), 503
+        body, _ = safe_error(exc, "GET /api/health")
+        return jsonify({"ok": False, "td": "down", **body}), 503
     return jsonify({"ok": True, "td": "up", "rows_last_1min": len(rows)})
 
 
@@ -145,8 +168,8 @@ def handle_unexpected_error(exc: Exception) -> tuple[Response, int] | HTTPExcept
     if isinstance(exc, HTTPException):
         # 404/405 这类是正常的 HTTP 语义，不是服务故障，不该记 error 也不该变成 500
         return exc
-    LOGGER.exception("接口处理异常: %s", exc)
-    return jsonify({"error": str(exc)}), 500
+    body, status = safe_error(exc, "未预期的接口异常")
+    return jsonify(body), status
 
 
 @app.route("/favicon.ico")
@@ -215,7 +238,7 @@ HTML_PAGE = """<!DOCTYPE html>
       .then(function(res) { return res.json(); })
       .then(function(d) {
         if (d.error) {
-          showError('查库失败：' + d.error);
+          showError('查库失败：' + d.error + (d.trace_id ? '（追踪号 ' + d.trace_id + '）' : ''));
           return;
         }
         if (!d.ts.length) {
