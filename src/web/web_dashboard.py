@@ -388,6 +388,8 @@ HTML_PAGE = """<!DOCTYPE html>
   // axis: 0=左轴 浓度(mg/m3)；1=右轴1 O2/湿度(%)；2=右轴2 流量/温度/压力
   var POINTS = __POINTS_JSON__;
   var AXIS_STYLE = { color: '#94a3b8' };
+  // 单次请求超时：fetch 默认不会超时，请求卡住时 finally 不执行、轮询会悄悄停掉
+  var FETCH_TIMEOUT_MS = 15000;
 
   if (typeof echarts === 'undefined') {
     status.className = 'err';
@@ -398,6 +400,9 @@ HTML_PAGE = """<!DOCTYPE html>
   var mode = 'realtime';      // realtime | free
   var timer = null;           // 只记实时模式的下一轮定时器，切模式时要能取消
   var busy = false;
+  // 视图代次：切模式就 +1。在途请求回来时若代次对不上，说明它属于上一个模式，
+  // 必须整帧丢弃 —— 否则上一轮实时请求回来会把自由区间的画面和状态栏盖回去（表现为"闪一下"）
+  var viewToken = 0;
 
   function showError(msg) {
     status.className = 'err';
@@ -411,6 +416,19 @@ HTML_PAGE = """<!DOCTYPE html>
 
   function val(id) {
     return document.getElementById(id).value;
+  }
+
+  function fetchWithTimeout(url) {
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, FETCH_TIMEOUT_MS);
+    return fetch(url, { signal: controller.signal })
+      .finally(function() { clearTimeout(timeoutId); });
+  }
+
+  function describeFetchError(err) {
+    return (err && err.name === 'AbortError')
+      ? '请求超时（超过 ' + (FETCH_TIMEOUT_MS / 1000) + ' 秒没有响应），稍后会自动重试'
+      : '后端连不上（确认 web_dashboard.py 在跑）';
   }
 
   function traceSuffix(body) {
@@ -494,9 +512,11 @@ HTML_PAGE = """<!DOCTYPE html>
 
   // ---- 实时模式：仍然用 /api/data，按 REFRESH_MS 定时刷新 ----
   function loadRealtime() {
-    fetch('/api/data')
+    var token = viewToken;
+    fetchWithTimeout('/api/data')
       .then(function(res) { return res.json(); })
       .then(function(d) {
+        if (token !== viewToken) { return; }      // 已经切走了，这帧作废
         if (d.error) {
           showError('查库失败：' + d.error + (d.trace_id ? '（追踪号 ' + d.trace_id + '）' : ''));
           return;
@@ -509,13 +529,15 @@ HTML_PAGE = """<!DOCTYPE html>
         showInfo('实时模式 | 最近 ' + d.ts[d.ts.length - 1] + ' | ' + latestText(d)
           + ' | 每' + REFRESH_SEC + '秒自动刷新');
       })
-      .catch(function() {
-        showError('后端连不上（确认 web_dashboard.py 在跑）');
+      .catch(function(err) {
+        if (token === viewToken) {
+          showError(describeFetchError(err));
+        }
       })
       .finally(function() {
         // 上一轮结束后才排下一轮（后端变慢不会堆请求）；切到自由区间后不再排，
         // 否则固定窗口的自动刷新会把用户选的区间覆盖掉
-        if (mode === 'realtime') {
+        if (token === viewToken && mode === 'realtime') {
           timer = setTimeout(loadRealtime, REFRESH_MS);
         }
       });
@@ -533,11 +555,14 @@ HTML_PAGE = """<!DOCTYPE html>
     busy = true;
     document.getElementById('free-query').disabled = true;
     showInfo('查询中…');
-    fetch('/api/curve?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end))
+    var token = viewToken;
+    var url = '/api/curve?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end);
+    fetchWithTimeout(url)
       .then(function(res) {
         return res.json().then(function(body) { return { ok: res.ok, body: body }; });
       })
       .then(function(r) {
+        if (token !== viewToken) { return; }      // 已经切走了，别用旧结果盖新画面
         if (!r.ok) {
           showError('查询失败：' + (r.body.error || '未知错误') + traceSuffix(r.body));
           return;
@@ -552,10 +577,13 @@ HTML_PAGE = """<!DOCTYPE html>
         showInfo(d.start + ' ~ ' + d.end + ' | 粒度：' + d.unit_label + ' | ' + d.points + ' 点'
           + (d.downsampled ? '（已降采样）' : '（原始点，未降采样）'));
       })
-      .catch(function() {
-        showError('后端连不上（确认 web_dashboard.py 在跑）');
+      .catch(function(err) {
+        if (token === viewToken) {
+          showError(describeFetchError(err));
+        }
       })
       .finally(function() {
+        // busy 要无条件放开：否则被切模式作废的那次请求会把按钮永久锁住
         busy = false;
         document.getElementById('free-query').disabled = false;
       });
@@ -563,6 +591,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
   function setMode(next) {
     mode = next;
+    viewToken += 1;              // 让上一个模式在途的请求作废，避免它回来时闪一下
     if (timer) {                 // 切模式先取消已排的定时器，避免两种模式互相覆盖
       clearTimeout(timer);
       timer = null;
