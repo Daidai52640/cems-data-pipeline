@@ -10,6 +10,7 @@ import sys
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Final
+from urllib.parse import quote
 
 import taosrest
 from flask import Flask, Response, jsonify, request
@@ -23,6 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.common.points import COLUMNS   # noqa: E402
 from src.common.points import POINTS as CONTRACT_POINTS   # noqa: E402
 from src.web import report   # noqa: E402
+from src.web import report_export   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
@@ -80,6 +82,11 @@ QUERY_LIMIT: Final[int] = int(os.getenv("QUERY_LIMIT", "5000"))          # 单�
 WEB_HOST: Final[str] = os.getenv("WEB_HOST", "0.0.0.0")   # 监听所有网卡，局域网可访问
 WEB_PORT: Final[int] = int(os.getenv("WEB_PORT", "5000"))
 WEB_THREADS: Final[int] = int(os.getenv("WEB_THREADS", "8"))   # waitress 工作线程数
+
+# ---- 报表导出 ----
+XLSX_MIME: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+# 给老浏览器用的 ASCII 兜底名；中文名走 Content-Disposition 的 filename*
+XLSX_ASCII_NAME: Final[str] = "CEMS_report.xlsx"
 
 # ---- 日志 ----
 LOG_LEVEL: Final[int] = logging.INFO
@@ -260,6 +267,35 @@ def report_page() -> Response:
     return Response(REPORT_PAGE.replace("__POINTS_JSON__", POINT_VIEWS_JSON), mimetype="text/html")
 
 
+@app.route("/api/report/export")
+def api_report_export() -> tuple[Response, int] | Response:
+    """报表导出（Excel）：一个接口覆盖四类报表，type 决定用哪套口径。
+
+    聚合与参数校验全部复用 report.py，导出路径不重写 SQL，保证与页面数据一致。
+    """
+    where = "GET /api/report/export"
+    try:
+        content, filename = report_export.export_workbook(request.args)
+    except (report_export.ExportParamError, report.ReportParamError) as exc:
+        # 参数问题返回 400 + JSON，绝不能把错误信息塞进 xlsx 里让用户下载
+        LOGGER.warning("[%s] 参数不合法: %s", where, exc)
+        return jsonify({"error": str(exc)}), 400
+    except report.ReportQueryError as exc:
+        body, _status = safe_error(exc, where)
+        return jsonify(body), 503
+
+    # 中文文件名必须放在 filename*（RFC 5987）里，只给 filename 的话浏览器会乱码
+    disposition = (
+        f'attachment; filename="{XLSX_ASCII_NAME}"; '
+        f"filename*=UTF-8''{quote(filename)}"
+    )
+    return Response(
+        content,
+        mimetype=XLSX_MIME,
+        headers={"Content-Disposition": disposition},
+    )
+
+
 @app.errorhandler(Exception)
 def handle_unexpected_error(exc: Exception) -> tuple[Response, int] | HTTPException:
     """兜底错误处理：未预期异常记日志并返回 JSON，HTTP 异常（404 等）按原状态码返回。"""
@@ -401,8 +437,6 @@ REPORT_PAGE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CEMS 数据报表</title>
-<!-- 本地加载 ECharts（随镜像发布，离线/内网不白屏） -->
-<script src="/static/echarts.min.js"></script>
 <style>
   body { margin:0; padding:20px; background:#0f172a; color:#e2e8f0; font-family:sans-serif; }
   h1 { font-size:20px; margin:0 0 4px; }
@@ -419,10 +453,9 @@ REPORT_PAGE = """<!DOCTYPE html>
   button { background:#0ea5e9; color:#0f172a; border:0; border-radius:6px; padding:6px 16px;
            font-size:13px; font-weight:600; cursor:pointer; }
   button:disabled { background:#475569; color:#94a3b8; cursor:not-allowed; }
-  #chart { width:100%; height:48vh; }
   #status { color:#94a3b8; font-size:13px; margin:8px 0; }
   #status.err { color:#f87171; }
-  .scroll { max-height:38vh; overflow:auto; border:1px solid #1e293b; border-radius:8px; }
+  .scroll { max-height:60vh; overflow:auto; border:1px solid #1e293b; border-radius:8px; }
   table { width:100%; border-collapse:collapse; font-size:12px; }
   th, td { border-bottom:1px solid #1e293b; padding:4px 8px; text-align:right; white-space:nowrap; }
   th:first-child, td:first-child { text-align:left; position:sticky; left:0; background:#0f172a; }
@@ -458,10 +491,10 @@ REPORT_PAGE = """<!DOCTYPE html>
     </span>
     <button id="query">查询</button>
     <button id="refresh">刷新</button>
+    <button id="export">导出 Excel</button>
   </div>
 
   <div id="status">选择时间范围后点「查询」</div>
-  <div id="chart"></div>
   <div class="scroll">
     <table id="table"><thead></thead><tbody></tbody></table>
   </div>
@@ -470,20 +503,12 @@ REPORT_PAGE = """<!DOCTYPE html>
 (function() {
   // 测点表由后端注入（真源 src/common/points.py），本页不再自己抄一份
   var POINTS = __POINTS_JSON__;
-  var AXIS_STYLE = { color: '#94a3b8' };
-  var chartEl = document.getElementById('chart');
   var statusEl = document.getElementById('status');
   var queryBtn = document.getElementById('query');
   var refreshBtn = document.getElementById('refresh');
+  var exportBtn = document.getElementById('export');
   var activeTab = 'minute';
   var busy = false;
-
-  if (typeof echarts === 'undefined') {
-    statusEl.className = 'err';
-    statusEl.textContent = '图表库加载失败（确认 /static/echarts.min.js 存在）';
-    return;
-  }
-  var chart = echarts.init(chartEl);
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function toLocalInput(d) {
@@ -513,20 +538,27 @@ REPORT_PAGE = """<!DOCTYPE html>
     }
   }
 
-  function buildUrl() {
+  // 当前 Tab 对应的查询参数；查询和导出共用，保证"屏幕上看到的 = 导出文件里的"
+  function currentParams() {
+    var enc = encodeURIComponent;
     if (activeTab === 'minute') {
-      return '/api/report/minute?start=' + encodeURIComponent(val('minute-start'))
-        + '&end=' + encodeURIComponent(val('minute-end'));
+      return 'start=' + enc(val('minute-start')) + '&end=' + enc(val('minute-end'));
     }
     if (activeTab === 'day') {
-      return '/api/report/day?date=' + encodeURIComponent(val('day-date'));
+      return 'date=' + enc(val('day-date'));
     }
     if (activeTab === 'month') {
-      return '/api/report/month?year=' + encodeURIComponent(val('month-year'))
-        + '&month=' + encodeURIComponent(val('month-month'));
+      return 'year=' + enc(val('month-year')) + '&month=' + enc(val('month-month'));
     }
-    return '/api/report/custom?start=' + encodeURIComponent(val('custom-start'))
-      + '&end=' + encodeURIComponent(val('custom-end'));
+    return 'start=' + enc(val('custom-start')) + '&end=' + enc(val('custom-end'));
+  }
+
+  function buildUrl() {
+    return '/api/report/' + activeTab + '?' + currentParams();
+  }
+
+  function buildExportUrl() {
+    return '/api/report/export?type=' + activeTab + '&' + currentParams();
   }
 
   function showStatus(msg, isErr) {
@@ -534,14 +566,17 @@ REPORT_PAGE = """<!DOCTYPE html>
     statusEl.className = isErr ? 'err' : '';
   }
 
-  function setBusy(on) {
+  // 查询/导出期间禁用全部按钮，并按动作显示"查询中…"/"导出中…"
+  function setBusy(on, action) {
     busy = on;
     queryBtn.disabled = on;
     refreshBtn.disabled = on;
-    queryBtn.textContent = on ? '查询中…' : '查询';
+    exportBtn.disabled = on;
+    queryBtn.textContent = (on && action === 'query') ? '查询中…' : '查询';
+    exportBtn.textContent = (on && action === 'export') ? '导出中…' : '导出 Excel';
   }
 
-  // 表格与折线共用同一份 points：null 在表里显示 —，在图上断线
+  // 表格是唯一主视图：窗口内没数据的测点显示 —（不能显示 0，否则和"值就是 0"混淆）
   function renderTable(points) {
     var head = '<tr><th>时间</th>';
     POINTS.forEach(function(p) {
@@ -562,45 +597,9 @@ REPORT_PAGE = """<!DOCTYPE html>
     document.querySelector('#table tbody').innerHTML = rows;
   }
 
-  function renderChart(points) {
-    chart.setOption({
-      tooltip: { trigger: 'axis' },
-      legend: {
-        data: POINTS.map(function(p) { return p.label; }),
-        textStyle: { color: '#cbd5e1' },
-        type: 'scroll'
-      },
-      grid: { left: 60, right: 130, top: 50, bottom: 50 },
-      xAxis: {
-        type: 'category',
-        data: points.map(function(pt) { return pt.ts; }),
-        axisLabel: AXIS_STYLE
-      },
-      yAxis: [
-        { type: 'value', name: '浓度 (mg/m3)', axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
-        { type: 'value', name: 'O2/湿度 (%)', position: 'right',
-          axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
-        { type: 'value', name: '流量/温度/压力', position: 'right', offset: 60,
-          axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE }
-      ],
-      series: POINTS.map(function(p) {
-        return {
-          name: p.label,
-          type: 'line',
-          yAxisIndex: p.axis,
-          data: points.map(function(pt) { return pt[p.key]; }),
-          smooth: true,
-          showSymbol: false,
-          connectNulls: false,     // 该窗口没数据就断开，不要拿相邻点连过去
-          itemStyle: { color: p.color }
-        };
-      })
-    }, true);
-  }
-
   function query() {
     if (busy) { return; }
-    setBusy(true);
+    setBusy(true, 'query');
     showStatus('查询中…', false);
     fetch(buildUrl())
       .then(function(res) {
@@ -613,7 +612,6 @@ REPORT_PAGE = """<!DOCTYPE html>
           return;
         }
         var points = r.body.points || [];
-        renderChart(points);
         renderTable(points);
         if (points.length) {
           showStatus('共 ' + points.length + ' 个窗口（' + r.body.unit + '）　'
@@ -626,6 +624,51 @@ REPORT_PAGE = """<!DOCTYPE html>
         showStatus('后端连不上（确认 web_dashboard.py 在跑）', true);
       })
       .finally(function() { setBusy(false); });
+  }
+
+  // 导出复用当前参数：屏幕上看到的窗口范围，就是导出文件里的范围
+  function exportExcel() {
+    if (busy) { return; }
+    setBusy(true, 'export');
+    showStatus('导出中…', false);
+    fetch(buildExportUrl())
+      .then(function(res) {
+        if (!res.ok) {
+          // 参数非法/查库失败都是 JSON（不是 xlsx），按错误展示，绝不当文件下载
+          return res.json()
+            .then(function(body) {
+              var extra = body.trace_id ? '（追踪号 ' + body.trace_id + '）' : '';
+              showStatus('导出失败：' + (body.error || '未知错误') + extra, true);
+            })
+            .catch(function() { showStatus('导出失败：HTTP ' + res.status, true); });
+        }
+        var disposition = res.headers.get('Content-Disposition') || '';
+        return res.blob().then(function(blob) { saveBlob(blob, filenameFrom(disposition)); });
+      })
+      .catch(function() {
+        showStatus('后端连不上（确认 web_dashboard.py 在跑）', true);
+      })
+      .finally(function() { setBusy(false); });
+  }
+
+  // 中文文件名在 Content-Disposition 的 filename* 里（RFC 5987），要解码再用
+  function filenameFrom(disposition) {
+    var matched = /filename\\*=UTF-8''([^;]+)/i.exec(disposition);
+    if (matched) { return decodeURIComponent(matched[1]); }
+    var plain = /filename="([^"]+)"/i.exec(disposition);
+    return plain ? plain[1] : 'CEMS_report.xlsx';
+  }
+
+  function saveBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showStatus('已导出：' + filename, false);
   }
 
   function switchTab(name) {
@@ -646,7 +689,7 @@ REPORT_PAGE = """<!DOCTYPE html>
   });
   queryBtn.addEventListener('click', query);
   refreshBtn.addEventListener('click', query);   // 手动刷新：不自动轮询
-  window.addEventListener('resize', function() { chart.resize(); });
+  exportBtn.addEventListener('click', exportExcel);
 
   initControls();
   switchTab('minute');
