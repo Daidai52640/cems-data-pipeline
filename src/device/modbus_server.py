@@ -6,8 +6,10 @@ from __future__ import annotations
 import logging
 import os
 import random
+import sys
 import threading
 import time
+from pathlib import Path
 from typing import Final
 
 from pymodbus.datastore import (
@@ -17,6 +19,13 @@ from pymodbus.datastore import (
 )
 from pymodbus.server import StartTcpServer
 
+# 让 src/common 能被导入：三种启动方式（python src/x.py、python -m src.x、任意 CWD）都能工作
+PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.common.points import POINTS, REG_BASE, REG_COUNT, SCALE   # noqa: E402
+
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 监听地址/端口支持环境变量覆盖，默认值与本机直接运行一致；容器部署时由 compose 注入。
 
@@ -25,22 +34,9 @@ SERVER_HOST: Final[str] = os.getenv("SERVER_HOST", "0.0.0.0")   # 监听所有�
 SERVER_PORT: Final[int] = int(os.getenv("SERVER_PORT", "5020"))  # 用 5020 避开系统保留的 502 端口
 SLAVE_ID: Final[int] = int(os.getenv("SLAVE_ID", "1"))           # 从站地址，网关必须按这个地址读
 
-# ---- 寄存器地图（与网关的"内存地图"约定，不可随意改动）----
-# 测点定义表：(MQTT 字段名, 寄存器地址, 仿真取值范围, 单位)
-# 实测值一律 ×SCALE 存成整数，因为 Modbus 保持寄存器只能存 0~65535 的整数。
-POINTS: Final[tuple[tuple[str, int, tuple[float, float], str], ...]] = (
-    ("SO2",      0, (20.0, 50.0),   "mg/m3"),   # 二氧化硫
-    ("NOx",      1, (10.0, 30.0),   "mg/m3"),   # 氮氧化物
-    ("Flow",     2, (80.0, 120.0),  "m3/s"),    # 烟气流量
-    ("Dust",     3, (0.0, 10.0),    "mg/m3"),   # 颗粒物
-    ("O2",       4, (5.0, 12.0),    "%"),       # 氧含量
-    ("Temp",     5, (100.0, 180.0), "℃"),       # 烟气温度
-    ("Humidity", 6, (5.0, 15.0),    "%"),       # 烟气湿度（含湿量）
-    ("Pressure", 7, (95.0, 105.0),  "kPa"),     # 烟气压力
-)
-REG_BASE: Final[int] = 0               # 寄存器起始地址
-REG_COUNT: Final[int] = 10             # 数据块大小（0~9：8 个测点 + 2 个备用）
-SCALE: Final[int] = 10                 # 放大系数：35.2 → 352（寄存器只能存整数）
+# ---- 寄存器地图 ----
+# 测点定义（字段名/地址/量程/单位）与换算系数 SCALE、寄存器数量 REG_COUNT
+# 统一来自 src/common/points.py，这里不再重复维护一份。
 UPDATE_INTERVAL: Final[float] = 2.0    # 数据刷新周期（秒）
 
 # ---- 日志 ----
@@ -71,8 +67,8 @@ def encode(value: float) -> int:
 def build_registers() -> list[int]:
     """生成一轮仿真读数对应的寄存器数组（按寄存器地址摆放，未用到的地址补 0）。"""
     values = [0] * REG_COUNT
-    for _, address, (low, high), _ in POINTS:
-        values[address] = encode(random.uniform(low, high))
+    for point in POINTS:
+        values[point.address] = encode(random.uniform(point.low, point.high))
     return values
 
 
@@ -87,7 +83,10 @@ def update_data(context: ModbusServerContext) -> None:
             context[SLAVE_ID].setValues(3, REG_BASE, values)
             LOGGER.debug(
                 "寄存器已刷新: %s",
-                " ".join(f"{name}={values[addr] / SCALE}{unit}" for name, addr, _, unit in POINTS),
+                " ".join(
+                    f"{point.name}={values[point.address] / SCALE}{point.unit}"
+                    for point in POINTS
+                ),
             )
         except Exception:
             # 单次刷新失败绝不能让线程退出，否则设备会永远返回旧值
@@ -119,7 +118,7 @@ def main() -> None:
     LOGGER.info(
         "寄存器地图(×%d): %s",
         SCALE,
-        ", ".join(f"地址{addr}={name}" for name, addr, _, _ in POINTS),
+        ", ".join(f"地址{point.address}={point.name}" for point in POINTS),
     )
 
     try:

@@ -57,6 +57,31 @@ if (Test-Path -LiteralPath $EnvFile) {
 $WebUrl = "http://localhost:$WebPort"
 $HealthUrl = "$WebUrl/api/health"
 
+# ---- 端口绑定地址：.env 的 BIND_ADDR（默认 127.0.0.1，只允许本机访问）----
+$BindAddr = '127.0.0.1'
+if (Test-Path -LiteralPath $EnvFile) {
+    $mb = Select-String -LiteralPath $EnvFile -Pattern '^\s*BIND_ADDR\s*=\s*(\S+)' -ErrorAction SilentlyContinue |
+          Select-Object -First 1
+    if ($mb) { $BindAddr = $mb.Matches[0].Groups[1].Value.Trim() }
+}
+$IsLoopbackBind = $BindAddr -in @('127.0.0.1', 'localhost', '::1')
+
+# ---- 安全联锁：要暴露到局域网，就必须先把演示口令换掉 ----
+if (-not $IsLoopbackBind) {
+    $bindPass = ''
+    if (Test-Path -LiteralPath $EnvFile) {
+        $mp = Select-String -LiteralPath $EnvFile -Pattern '^\s*TD_PASS\s*=\s*(\S+)' -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+        if ($mp) { $bindPass = $mp.Matches[0].Groups[1].Value.Trim() }
+    }
+    if (-not $bindPass -or $bindPass -eq 'taosdata') {
+        Write-Bad "BIND_ADDR=$BindAddr 会把 TDengine / EMQX 暴露给同网段设备，但 TD_PASS 还是演示默认值"
+        Write-Note '先在 .env 里把 TD_PASS 改成非默认口令，并改掉 EMQX 的 admin/public，再启动'
+        Write-Note '只想本机用就别改 BIND_ADDR（默认就是 127.0.0.1）'
+        exit 1
+    }
+}
+
 # ---- docker compose 命令探测：优先 v2 插件，其次老版 docker-compose ----
 $script:ComposeExe = 'docker'
 $script:ComposeArgs = @('compose')
@@ -351,11 +376,17 @@ if ($health.Body -match '"ok"\s*:\s*false') {
 
 Open-Browser -Url $WebUrl
 
-$lan = Get-LanUrl
 Write-Host ''
 Write-Host '----------- 访问地址 -----------' -ForegroundColor DarkCyan
 Write-Host " Web 大屏    : $WebUrl"
-if ($lan) { Write-Host " 局域网访问  : $lan" }
+if ($IsLoopbackBind) {
+    Write-Host ' 局域网访问  : 已关闭（端口只绑 127.0.0.1，同网段设备访问不到）'
+    Write-Host '               需要局域网演示：.env 里设 BIND_ADDR=0.0.0.0 并改掉默认口令'
+} else {
+    $lan = Get-LanUrl
+    if ($lan) { Write-Host " 局域网访问  : $lan" }
+    Write-Note "端口已暴露到 $BindAddr，请确认 TD_PASS 和 EMQX 口令都已改掉"
+}
 Write-Host ' EMQX 管理台 : http://localhost:18083  (默认 admin/public)'
 Write-Host ' 停止服务    : .\start.ps1 -Stop'
 Write-Host '--------------------------------' -ForegroundColor DarkCyan

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import threading
 import time
 from pathlib import Path
@@ -12,6 +13,13 @@ from typing import Any, Final, Optional
 
 import paho.mqtt.client as mqtt
 from pymodbus.client import ModbusTcpClient
+
+# 让 src/common 能被导入：三种启动方式（python src/x.py、python -m src.x、任意 CWD）都能工作
+PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.common.points import POINTS, REG_BASE, REG_COUNT, SCALE   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 所有连接参数都支持用环境变量覆盖，默认值与"本机直接运行"完全一致；
@@ -22,21 +30,8 @@ MODBUS_HOST: Final[str] = os.getenv("MODBUS_HOST", "localhost")
 MODBUS_PORT: Final[int] = int(os.getenv("MODBUS_PORT", "5020"))
 MODBUS_UNIT: Final[int] = int(os.getenv("MODBUS_UNIT", "1"))   # 从站地址
 
-# ---- 寄存器地图（必须与 modbus_server.py 保持一致）----
-# 测点定义表：(MQTT 字段名, 寄存器地址)，顺序即报文里的字段顺序
-POINTS: Final[tuple[tuple[str, int], ...]] = (
-    ("SO2", 0),        # 二氧化硫
-    ("NOx", 1),        # 氮氧化物
-    ("Flow", 2),       # 烟气流量
-    ("Dust", 3),       # 颗粒物
-    ("O2", 4),         # 氧含量
-    ("Temp", 5),       # 烟气温度
-    ("Humidity", 6),   # 烟气湿度
-    ("Pressure", 7),   # 烟气压力
-)
-REG_BASE: Final[int] = 0               # 寄存器起始地址
-REG_COUNT: Final[int] = len(POINTS)    # 一次读 8 个测点寄存器
-SCALE: Final[int] = 10                 # 还原系数：352 → 35.2
+# ---- 寄存器地图 ----
+# 测点定义（字段名/地址）、寄存器数量与换算系数统一来自 src/common/points.py
 
 # ---- 报文时间戳格式 ----
 TS_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
@@ -57,10 +52,15 @@ MODBUS_RETRY_INTERVAL: Final[float] = float(os.getenv("MODBUS_RETRY_INTERVAL", "
 # cache.jsonl         只由采集主循环追加写：新采集到的数据
 # cache.jsonl.sending 只由补传线程持有：正在补传的在途批次
 # 两个文件各有一个写者，靠"原子改名"交接，不存在整文件回写抹掉对方数据的情况。
-PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
-CACHE_FILE: Final[Path] = PROJECT_ROOT / "data" / "cache.jsonl"
-SENDING_FILE: Final[Path] = PROJECT_ROOT / "data" / "cache.jsonl.sending"
+DATA_DIR: Final[Path] = PROJECT_ROOT / "data"
+CACHE_FILE: Final[Path] = DATA_DIR / "cache.jsonl"
+SENDING_FILE: Final[Path] = DATA_DIR / "cache.jsonl.sending"
 CACHE_LOCK: Final[threading.Lock] = threading.Lock()   # 保护两个缓存文件的换手动作
+
+# 缓存容量上限：长期断网时文件会一直涨，写满磁盘后每条数据都会静默丢。
+# 超过上限就按"丢最旧、保最新"裁剪，并升 CRITICAL —— 宁可丢最早的，也别把盘写满。
+CACHE_MAX_BYTES: Final[int] = int(os.getenv("CACHE_MAX_BYTES", str(64 * 1024 * 1024)))
+CACHE_TRIM_RATIO: Final[float] = float(os.getenv("CACHE_TRIM_RATIO", "0.5"))  # 裁剪后保留的比例
 
 # ---- 发送确认与补传节奏 ----
 # 注意：paho 的 publish() 返回 rc=0 只代表"消息进了本机发送队列"，
@@ -115,8 +115,8 @@ def read_device(client: ModbusTcpClient) -> Optional[dict[str, float]]:
     try:
         # 返回的寄存器块从 REG_BASE 开始，所以下标要减去起始地址
         return {
-            name: response.registers[address - REG_BASE] / SCALE
-            for name, address in POINTS
+            point.name: response.registers[point.address - REG_BASE] / SCALE
+            for point in POINTS
         }
     except (IndexError, TypeError) as exc:
         LOGGER.error("Modbus 返回数据不完整: %s", exc)
@@ -178,16 +178,58 @@ def _write_lines(path: Path, lines: list[str]) -> bool:
 
 
 def save_to_cache(payload: str, reason: str = "离线") -> bool:
-    """把一条数据追加到 cache.jsonl 队尾（唯一写者是采集主循环）。"""
+    """把一条数据追加到 cache.jsonl 队尾（唯一写者是采集主循环）。
+
+    写后 flush + fsync：这样进程被 kill / 机器断电时，已写的数据才真的在盘上，
+    否则可能停在 OS page cache 里，重启后尾部数据凭空消失。
+    """
     try:
         with CACHE_LOCK:
-            CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
             with CACHE_FILE.open("a", encoding="utf-8") as fp:
                 fp.write(payload + "\n")
+                fp.flush()
+                os.fsync(fp.fileno())
+            _trim_cache_if_oversize()
         LOGGER.info("[缓存] %s，数据已入本地队列: %s", reason, payload)
         return True
     except OSError as exc:
-        LOGGER.error("[缓存] 写入本地失败，本条数据丢失: %s | %s", exc, payload)
+        # 磁盘满 / 无写权限：这条数据丢了，而且后续每条都会丢，必须显眼
+        LOGGER.critical("[缓存] 写入本地失败，本条数据丢失: %s | %s", exc, payload)
+        return False
+
+
+def _trim_cache_if_oversize() -> None:
+    """缓存超过容量上限时，按"丢最旧、保最新"裁剪（调用方需已持有 CACHE_LOCK）。"""
+    try:
+        size = CACHE_FILE.stat().st_size
+    except OSError as exc:
+        LOGGER.error("[缓存] 读取缓存大小失败: %s", exc)
+        return
+    if size <= CACHE_MAX_BYTES:
+        return
+
+    lines = _read_lines(CACHE_FILE)
+    keep = max(1, int(len(lines) * CACHE_TRIM_RATIO))
+    dropped = len(lines) - keep
+    LOGGER.critical(
+        "[缓存] 已积压 %.1f MB 超过上限 %.1f MB，丢弃最旧的 %d 条（保留最新 %d 条）—— "
+        "请尽快恢复与 broker 的连接",
+        size / 1024 / 1024, CACHE_MAX_BYTES / 1024 / 1024, dropped, keep,
+    )
+    _write_lines(CACHE_FILE, lines[dropped:])
+
+
+def check_data_dir_writable() -> bool:
+    """启动时确认缓存目录可写；不可写要立刻喊出来，而不是等第一条数据丢的时候才发现。"""
+    probe = DATA_DIR / ".write_probe"
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError as exc:
+        LOGGER.critical("[缓存] 数据目录不可写，断网缓存会全部失败: %s (%s)", DATA_DIR, exc)
         return False
 
 
@@ -208,13 +250,24 @@ def _publish_async(client: mqtt.Client, payload: str, tag: str) -> Optional[mqtt
 
 
 def _wait_published(info: mqtt.MQTTMessageInfo, payload: str, tag: str) -> bool:
-    """等 broker 的 PUBACK；超时或消息从未发出都算失败，由调用方落盘重试。"""
+    """等 broker 的 PUBACK；超时或消息从未发出都算失败，由调用方落盘重试。
+
+    ★ paho 的 wait_for_publish(timeout) 超时是**静默返回**（只有 rc 有问题才抛异常），
+    所以"没抛异常"绝不等于送达，必须再用 is_published() 复核，
+    否则超时的消息会被当成已送达而不再落盘，进程一退就丢。
+    """
     try:
         info.wait_for_publish(timeout=PUBLISH_ACK_TIMEOUT)
     except (ValueError, RuntimeError) as exc:
         LOGGER.warning(
             "[%s] %.0f 秒内未收到 PUBACK（%s），本条转入缓存: %s",
             tag, PUBLISH_ACK_TIMEOUT, exc, payload,
+        )
+        return False
+    if not info.is_published():
+        LOGGER.warning(
+            "[%s] 等待 %.0f 秒仍未收到 PUBACK，本条转入缓存: %s",
+            tag, PUBLISH_ACK_TIMEOUT, payload,
         )
         return False
     LOGGER.debug("[%s] 已确认送达 %s", tag, payload)
@@ -253,11 +306,20 @@ def _take_over_pending() -> list[str]:
 
 
 def _finish_resend(remaining: list[str], confirmed: int) -> None:
-    """补传收尾：未确认的行放回 cache.jsonl 队首，然后删掉 .sending。"""
+    """补传收尾：未确认的行放回 cache.jsonl 队首，写成功后才删 .sending。
+
+    ★ 回写失败时绝不能删 .sending —— 它是这批数据当下唯一的副本，
+    删掉就等于整批永久丢失。失败就原样留着，等下次补传接着处理。
+    """
     with CACHE_LOCK:
         # 始终重写 cache.jsonl：remaining 为空时就是清空成空文件。
         # 保持这个文件一直存在（哪怕是空的），避免"文件突然消失"让人以为数据丢了。
-        _write_lines(CACHE_FILE, remaining + _read_lines(CACHE_FILE))
+        if not _write_lines(CACHE_FILE, remaining + _read_lines(CACHE_FILE)):
+            LOGGER.critical(
+                "[补传] 回写 %s 失败，保留 %s（本批 %d 条未确认）等待下次重试",
+                CACHE_FILE.name, SENDING_FILE.name, len(remaining),
+            )
+            return
         try:
             SENDING_FILE.unlink(missing_ok=True)
         except OSError as exc:
@@ -410,13 +472,14 @@ def build_payload(values: dict[str, float]) -> str:
 
     格式: "2026-09-10 12:00:00 SO2=35.2 NOx=18.5 ... Pressure=101.3 Flag=N"
     """
-    body = " ".join(f"{name}={values[name]}" for name, _ in POINTS)
+    body = " ".join(f"{point.name}={values[point.name]}" for point in POINTS)
     return f"{time.strftime(TS_FORMAT)} {body} Flag=N"
 
 
 def main() -> None:
     """网关主流程：连 MQTT → 连设备 → 循环"读→换算→加时间戳→（直发/缓存）"。"""
     setup_logging()
+    check_data_dir_writable()     # 断网缓存目录不可写要立刻喊出来，别等丢数据才发现
     LOGGER.info(
         "网关启动: 设备 %s:%d → MQTT %s:%d 主题 %s (QoS=%d)",
         MODBUS_HOST, MODBUS_PORT, MQTT_HOST, MQTT_PORT, MQTT_TOPIC, MQTT_QOS,
@@ -439,6 +502,12 @@ def main() -> None:
     count = 0
     try:
         while True:
+            # 补传重试放在循环最开头：它只跟 broker 有关，不该被设备侧故障挡住。
+            # 放在循环末尾时，下面两处 continue（设备没连上 / 读失败）会把它整段跳过，
+            # 结果设备一坏、积压就再也补不出去，要等到下一次重连事件才动。
+            if mqtt_client.is_connected() and has_backlog():
+                RESEND_WORKER.trigger_if_due(mqtt_client, RESEND_RETRY_INTERVAL)
+
             if modbus_client is None:
                 time.sleep(MODBUS_RETRY_INTERVAL)
                 modbus_client = connect_modbus()
@@ -467,10 +536,6 @@ def main() -> None:
             else:
                 # 正在补传积压：新数据先排队，保证旧数据按序先送达
                 save_to_cache(payload, reason="补传中")
-
-            # 补传部分失败后，不必等下次重连：连着 broker 时按间隔自动重试
-            if mqtt_client.is_connected() and has_backlog():
-                RESEND_WORKER.trigger_if_due(mqtt_client, RESEND_RETRY_INTERVAL)
 
             time.sleep(POLL_INTERVAL)
     except KeyboardInterrupt:

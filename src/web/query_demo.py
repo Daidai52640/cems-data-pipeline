@@ -5,9 +5,18 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+from pathlib import Path
 from typing import Any, Final, Optional
 
 import taosrest
+
+# 让 src/common 能被导入：三种启动方式（python src/x.py、python -m src.x、任意 CWD）都能工作
+PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.common.points import COLUMNS   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致。
@@ -20,10 +29,8 @@ TD_PASS: Final[str] = os.getenv("TD_PASS", "taosdata")
 TD_DB: Final[str] = os.getenv("TD_DB", "cems")
 TD_STABLE: Final[str] = os.getenv("TD_STABLE", "cems_data")
 
-# ---- 测点列（与超级表列名一致，改动后此处同步即可）----
-TD_COLUMNS: Final[tuple[str, ...]] = (
-    "so2", "nox", "flow", "dust", "o2", "temp", "humidity", "pressure",
-)
+# ---- 测点列：统一来自 src/common/points.py ----
+TD_COLUMNS: Final[tuple[str, ...]] = COLUMNS
 
 # ---- 查询参数 ----
 LATEST_LIMIT: Final[int] = 5           # 最新明细取几条

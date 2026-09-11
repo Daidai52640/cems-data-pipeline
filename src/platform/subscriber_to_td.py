@@ -4,12 +4,23 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
+import re
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Final, Optional
 
 import paho.mqtt.client as mqtt
 import taosrest
+
+# 让 src/common 能被导入：三种启动方式（python src/x.py、python -m src.x、任意 CWD）都能工作
+PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.common.points import COLUMNS, NAMES, POINTS, RANGES   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
@@ -41,20 +52,29 @@ TD_DEVICE: Final[str] = os.getenv("TD_DEVICE", "device1")     # 标签：设备�
 TD_KEEP_DAYS: Final[int] = 365             # 数据保留 1 年
 TD_DURATION_DAYS: Final[int] = 30          # 每 30 天一个分片
 
-# ---- 测点定义表：(MQTT 字段名, TDengine 列名)，顺序即入库列顺序 ----
-# 只入库这张表里的数值测点，Flag 等标记字段自动跳过。
-POINTS: Final[tuple[tuple[str, str], ...]] = (
-    ("SO2",      "so2"),        # 二氧化硫
-    ("NOx",      "nox"),        # 氮氧化物
-    ("Flow",     "flow"),       # 烟气流量
-    ("Dust",     "dust"),       # 颗粒物
-    ("O2",       "o2"),         # 氧含量
-    ("Temp",     "temp"),       # 烟气温度
-    ("Humidity", "humidity"),   # 烟气湿度
-    ("Pressure", "pressure"),   # 烟气压力
-)
-TD_COLUMNS: Final[tuple[str, ...]] = tuple(column for _, column in POINTS)
+# ---- 子表名：厂区_设备 ----
+# TDengine 对**已存在的子表**会沿用第一次写入时的 TAGS 且不报任何错，
+# 所以子表名必须能区分设备。若只用厂区名（plant1），接入第二台设备时
+# 数据会被静默挂到第一台设备的标签下。这里改成 plant1_device1 这种形式。
+# 统一转小写：TDengine 的表名不区分大小写，若配置写成 Device1，
+# 实际建出来仍是 device1，而一致性检查按原样去查就会查不到行、静默跳过。
+CHILD_TABLE: Final[str] = f"{TD_PLANT}_{TD_DEVICE}".lower()
+
+# ---- 会被拼进 SQL 的标识符白名单（防注入）----
+SQL_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+# ---- 测点契约 ----
+# 测点定义（MQTT 字段名 / TDengine 列名 / 量程）统一来自 src/common/points.py：
+#   NAMES   报文里应该出现的字段名集合
+#   COLUMNS 入库列名，顺序即入库列顺序
+#   RANGES  量程白名单：超出量程、负数、NaN、inf 一律拒收
+#           （NaN/inf 会让 TDengine 报 syntax error，整行连其余正常测点一起被拒）
+TD_COLUMNS: Final[tuple[str, ...]] = COLUMNS
+POINT_RANGES: Final[dict[str, tuple[float, float]]] = RANGES
 TS_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
+
+# ---- 收发/拒收计数（把上游数据质量问题量化出来）----
+STATS: Final[dict[str, int]] = {"received": 0, "accepted": 0, "rejected": 0}
 
 # ---- 日志 ----
 LOG_LEVEL: Final[int] = logging.INFO
@@ -78,6 +98,23 @@ def setup_logging() -> None:
 
 # ==================== 3. 报文解析 ====================
 
+def validate_config() -> None:
+    """校验会被拼进 SQL 的配置值；不合法抛 ValueError，启动阶段就拦下来。
+
+    库名/表名/标签值都是直接拼进 SQL 的，只允许字母数字下划线（防注入）。
+    """
+    for label, value in (
+        ("TD_DB", TD_DB),
+        ("TD_STABLE", TD_STABLE),
+        ("TD_PLANT", TD_PLANT),
+        ("TD_DEVICE", TD_DEVICE),
+    ):
+        if not SQL_NAME_RE.match(value):
+            raise ValueError(
+                f"{label} 只能由字母、数字、下划线组成且以字母或下划线开头: {value!r}"
+            )
+
+
 def parse_timestamp(text: str) -> str:
     """校验时间戳格式（顺带挡掉拼进 SQL 的非法字符串），返回原字符串。"""
     try:
@@ -91,6 +128,10 @@ def parse_payload(payload: str) -> tuple[str, dict[str, float]]:
     """把 MQTT 报文解析成 (时间戳, {MQTT字段名: 数值})；格式不符抛 ValueError。
 
     报文格式: "2026-09-10 12:00:00 SO2=35.2 NOx=18.5 ... Pressure=101.3 Flag=N"
+
+    每个测点都要过两关：先 math.isfinite（挡 NaN/inf），再比量程白名单
+    （挡负数、超量程）。任一测点不合格就整条拒收 —— 因为 NaN/inf 会让
+    TDengine 报 syntax error，整行连其余正常测点一起丢，不如提前拦下。
     """
     parts = payload.split()
     if len(parts) < 3:
@@ -98,18 +139,24 @@ def parse_payload(payload: str) -> tuple[str, dict[str, float]]:
 
     ts = parse_timestamp(f"{parts[0]} {parts[1]}")
 
-    names = {name for name, _ in POINTS}
+    names = set(NAMES)
     data: dict[str, float] = {}
     for item in parts[2:]:
         key, sep, value = item.partition("=")
         if not sep or key not in names:
             continue                    # 跳过 Flag 等非测点字段
         try:
-            data[key] = float(value)
+            number = float(value)
         except ValueError as exc:
             raise ValueError(f"测点 {key} 数值非法: {value!r}") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"测点 {key} 不是有限数值（NaN/inf）: {value!r}")
+        low, high = POINT_RANGES[key]
+        if not low <= number <= high:
+            raise ValueError(f"测点 {key} 超出量程 [{low}, {high}]: {number}")
+        data[key] = number
 
-    missing = [name for name, _ in POINTS if name not in data]
+    missing = [name for name in NAMES if name not in data]
     if missing:
         raise ValueError(f"缺少测点 {missing}: {payload!r}")
 
@@ -148,6 +195,7 @@ class TdWriter:
                 f"TAGS (plant NCHAR(20), device NCHAR(20))"
             )
             self._ensure_columns(cur)
+            self._check_tags(cur)
         except Exception as exc:
             LOGGER.error("TDengine 连接或建表失败: %s", exc)
             self.close()
@@ -174,6 +222,38 @@ class TdWriter:
                 cur.execute(f"ALTER STABLE {TD_DB}.{TD_STABLE} ADD COLUMN {column} FLOAT")
                 LOGGER.info("超级表新增测点列: %s FLOAT", column)
 
+    @staticmethod
+    def _check_tags(cur: Any) -> None:
+        """核对子表已有标签是否与配置一致。
+
+        TDengine 对已存在的子表会沿用第一次写入的 TAGS 且不报错，
+        所以改标签/换设备时必须主动比对，否则数据会静默挂到旧标签上。
+        """
+        try:
+            cur.execute(
+                f"SELECT DISTINCT plant, device FROM {TD_DB}.{TD_STABLE} "
+                f"WHERE tbname = '{CHILD_TABLE}'"
+            )
+            rows = list(cur.fetchall())
+        except Exception as exc:
+            LOGGER.warning("子表标签一致性检查跳过（%s）", exc)
+            return
+
+        if not rows:
+            return                      # 子表还没建，首次写入时按当前配置创建
+        mismatched = [
+            (str(row[0]), str(row[1])) for row in rows
+            if str(row[0]) != TD_PLANT or str(row[1]) != TD_DEVICE
+        ]
+        if mismatched:
+            LOGGER.error(
+                "子表 %s 的标签与配置不一致：库中 %s，配置为 plant=%s device=%s。"
+                "新数据会挂到旧标签上，请改 TD_PLANT/TD_DEVICE 或清理该子表",
+                CHILD_TABLE, mismatched, TD_PLANT, TD_DEVICE,
+            )
+        else:
+            LOGGER.info("子表标签校验通过: %s -> (plant=%s, device=%s)", CHILD_TABLE, TD_PLANT, TD_DEVICE)
+
     def write(self, ts: str, values: dict[str, float]) -> bool:
         """写入一条数据；首次失败自动重连重试一次，仍失败返回 False。"""
         if not self.ready and not self.connect():
@@ -197,9 +277,9 @@ class TdWriter:
         # 显式列出列名时，主时间戳列 ts 必须一起列出，否则 TDengine 报
         # "Primary timestamp column should not be null"
         columns = ", ".join(("ts", *TD_COLUMNS))
-        numbers = ", ".join(f"{values[name]}" for name, _ in POINTS)   # 与 TD_COLUMNS 同序
+        numbers = ", ".join(f"{values[point.name]}" for point in POINTS)  # 与 TD_COLUMNS 同序
         sql = (
-            f"INSERT INTO {TD_DB}.{TD_PLANT} USING {TD_DB}.{TD_STABLE} "
+            f"INSERT INTO {TD_DB}.{CHILD_TABLE} USING {TD_DB}.{TD_STABLE} "
             f"TAGS ('{TD_PLANT}', '{TD_DEVICE}') "
             f"({columns}) VALUES ('{ts}', {numbers})"
         )
@@ -279,13 +359,20 @@ def on_disconnect(
 def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
     """收到消息 → 解析 → 入库；解析或入库失败只记日志，绝不抛异常打断订阅。"""
     payload = msg.payload.decode("utf-8", errors="replace")
+    STATS["received"] += 1
 
     try:
         ts, values = parse_payload(payload)
     except ValueError as exc:
-        LOGGER.error("报文解析失败: %s | 原始报文: %s", exc, payload)
+        # 故意拒收（格式错、非有限值、超量程）：计数并记下原因，方便看上游数据质量
+        STATS["rejected"] += 1
+        LOGGER.warning(
+            "报文已拒收（累计 %d 条）: %s | 原始报文: %s",
+            STATS["rejected"], exc, payload,
+        )
         return
 
+    STATS["accepted"] += 1
     writer: TdWriter = userdata["writer"]
     if writer.write(ts, values):
         # 高频成功降到 debug；只在排查数据问题时才需要开
@@ -297,6 +384,13 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
 def main() -> None:
     """连 TDengine → 连 MQTT → 订阅主题并持续入库。"""
     setup_logging()
+
+    # 0. 先校验配置：库名/表名/标签会被拼进 SQL，不合法就别带病运行
+    try:
+        validate_config()
+    except ValueError as exc:
+        LOGGER.critical("配置非法，拒绝启动: %s", exc)
+        return
 
     # 1. 初始化 TDengine（失败不退出：收到数据时会自动重连重试）
     writer = TdWriter()
