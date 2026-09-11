@@ -25,6 +25,7 @@ from src.common.points import COLUMNS   # noqa: E402
 from src.common.points import POINTS as CONTRACT_POINTS   # noqa: E402
 from src.web import report   # noqa: E402
 from src.web import report_export   # noqa: E402
+from src.web import curve   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
@@ -267,6 +268,24 @@ def report_page() -> Response:
     return Response(REPORT_PAGE.replace("__POINTS_JSON__", POINT_VIEWS_JSON), mimetype="text/html")
 
 
+@app.route("/api/curve")
+def api_curve() -> tuple[Response, int] | Response:
+    """自由区间曲线：按跨度自动分级降采样，返回结构与 /api/data 一致（列式）+ 粒度元信息。
+
+    实时模式仍然用 /api/data（契约不变）；长区间必须走这里，
+    否则原始点查询会被 LIMIT 静默截断，看起来像"前面那段没数据"。
+    """
+    where = "GET /api/curve"
+    try:
+        return jsonify(curve.build_curve(request.args.get("start"), request.args.get("end")))
+    except (curve.CurveParamError, report.ReportParamError) as exc:
+        LOGGER.warning("[%s] 参数不合法: %s", where, exc)
+        return jsonify({"error": str(exc)}), 400
+    except report.ReportQueryError as exc:
+        body, _status = safe_error(exc, where)
+        return jsonify(body), 503
+
+
 @app.route("/api/report/export")
 def api_report_export() -> tuple[Response, int] | Response:
     """报表导出（Excel）：一个接口覆盖四类报表，type 决定用哪套口径。
@@ -328,19 +347,39 @@ HTML_PAGE = """<!DOCTYPE html>
   #chart { width:100%; height:70vh; background:#0f172a; }
   #status { color:#94a3b8; font-size:13px; margin-top:10px; }
   #status.err { color:#f87171; }
+  .modes { display:flex; gap:8px; margin-bottom:10px; }
+  .mode { padding:5px 14px; border:1px solid #334155; border-radius:8px; cursor:pointer;
+          background:#1e293b; color:#cbd5e1; font-size:13px; user-select:none; }
+  .mode.active { background:#0ea5e9; border-color:#0ea5e9; color:#0f172a; font-weight:600; }
+  .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .controls label { font-size:13px; color:#94a3b8; }
+  .controls input { background:#1e293b; color:#e2e8f0; border:1px solid #334155;
+                    border-radius:6px; padding:5px 8px; font-size:13px; }
+  .controls button { background:#0ea5e9; color:#0f172a; border:0; border-radius:6px;
+                     padding:6px 16px; font-size:13px; font-weight:600; cursor:pointer; }
+  .controls button:disabled { background:#475569; color:#94a3b8; cursor:not-allowed; }
 </style>
 </head>
 <body>
-  <h1>CEMS 烟气在线监测 · 实时曲线（8 测点）</h1>
-  <div style="font-size:13px;margin-bottom:12px;">
+  <h1>CEMS 烟气在线监测 · 曲线（8 测点）</h1>
+  <div style="font-size:13px;margin-bottom:10px;">
     <a href="/report" style="color:#38bdf8;text-decoration:none;">报表 →</a>
+  </div>
+  <div class="modes" id="modes">
+    <span class="mode" data-mode="realtime">实时</span>
+    <span class="mode" data-mode="free">自由区间</span>
+  </div>
+  <div class="controls" id="free-controls" hidden>
+    <label>起</label> <input type="datetime-local" id="free-start">
+    <label>止</label> <input type="datetime-local" id="free-end">
+    <button id="free-query">查询</button>
   </div>
   <div id="chart"></div>
   <div id="status">加载中...</div>
 
 <script>
 (function() {
-  var chart = document.getElementById('chart');
+  var chartEl = document.getElementById('chart');
   var status = document.getElementById('status');
   var REFRESH_MS = __REFRESH_MS__;
   var REFRESH_SEC = __REFRESH_SEC__;
@@ -355,14 +394,106 @@ HTML_PAGE = """<!DOCTYPE html>
     status.textContent = '图表库加载失败（网络问题），请检查网络后刷新';
     return;
   }
-  var myChart = echarts.init(chart);
+  var myChart = echarts.init(chartEl);
+  var mode = 'realtime';      // realtime | free
+  var timer = null;           // 只记实时模式的下一轮定时器，切模式时要能取消
+  var busy = false;
 
   function showError(msg) {
     status.className = 'err';
     status.textContent = msg;
   }
 
-  function loadData() {
+  function showInfo(msg) {
+    status.className = '';
+    status.textContent = msg;
+  }
+
+  function val(id) {
+    return document.getElementById(id).value;
+  }
+
+  function traceSuffix(body) {
+    return (body && body.trace_id) ? '（追踪号 ' + body.trace_id + '）' : '';
+  }
+
+  function toLocalInput(date) {
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+    return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate())
+      + 'T' + pad2(date.getHours()) + ':' + pad2(date.getMinutes());
+  }
+
+  function initFreeInputs() {
+    var now = new Date();
+    var hourMs = 3600 * 1000;
+    if (!val('free-end')) {
+      document.getElementById('free-end').value = toLocalInput(now);
+    }
+    if (!val('free-start')) {
+      document.getElementById('free-start').value =
+        toLocalInput(new Date(now.getTime() - 6 * hourMs));
+    }
+  }
+
+  // 两个接口返回的都是列式结构，共用这一个渲染函数
+  // useTimeAxis：自由区间的点可能跨天跨月，category 轴会把标签挤成一团，改用 time 轴
+  function render(d, useTimeAxis) {
+    var xAxis = useTimeAxis
+      ? { type: 'time', axisLabel: AXIS_STYLE }
+      : { type: 'category', data: d.ts, axisLabel: AXIS_STYLE };
+    var series = POINTS.map(function(p) {
+      var values = d[p.key] || [];
+      var data = useTimeAxis
+        ? d.ts.map(function(ts, index) { return [ts.replace(' ', 'T'), values[index]]; })
+        : values;
+      return {
+        name: p.label,
+        type: 'line',
+        yAxisIndex: p.axis,
+        data: data,
+        smooth: true,
+        showSymbol: false,
+        connectNulls: false,     // 该窗口没数据就断开，不要拿相邻点连过去
+        itemStyle: { color: p.color }
+      };
+    });
+    myChart.setOption({
+      tooltip: { trigger: 'axis' },
+      legend: {
+        data: POINTS.map(function(p) { return p.label; }),
+        textStyle: { color: '#cbd5e1' },
+        type: 'scroll'
+      },
+      grid: { left: 60, right: 130, top: 60, bottom: 50 },
+      animationDurationUpdate: 300,
+      xAxis: xAxis,
+      yAxis: [
+        { type: 'value', name: '浓度 (mg/m3)', axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
+        { type: 'value', name: 'O2/湿度 (%)', position: 'right',
+          axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
+        { type: 'value', name: '流量/温度/压力', position: 'right', offset: 60,
+          axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE }
+      ],
+      series: series
+    }, true);
+  }
+
+  function latestText(d) {
+    return POINTS.map(function(p) {
+      var arr = d[p.key] || [];
+      return p.label + '=' + arr[arr.length - 1];
+    }).join('  ');
+  }
+
+  // 补齐网格后 ts 不为空、但全是 null —— 这种情况也要说"该区间无数据"
+  function hasAnyValue(d) {
+    return POINTS.some(function(p) {
+      return (d[p.key] || []).some(function(v) { return v !== null && v !== undefined; });
+    });
+  }
+
+  // ---- 实时模式：仍然用 /api/data，按 REFRESH_MS 定时刷新 ----
+  function loadRealtime() {
     fetch('/api/data')
       .then(function(res) { return res.json(); })
       .then(function(d) {
@@ -371,57 +502,92 @@ HTML_PAGE = """<!DOCTYPE html>
           return;
         }
         if (!d.ts.length) {
-          status.className = '';
-          status.textContent = '暂无数据（确认 gateway 和 subscriber_to_td 在跑）';
+          showInfo('暂无数据（确认 gateway 和 subscriber_to_td 在跑）');
           return;
         }
-        myChart.setOption({
-          tooltip: { trigger: 'axis' },
-          legend: {
-            data: POINTS.map(function(p) { return p.label; }),
-            textStyle: { color: '#cbd5e1' },
-            type: 'scroll'
-          },
-          grid: { left: 60, right: 130, top: 60, bottom: 50 },
-          animationDurationUpdate: 300,
-          xAxis: { type: 'category', data: d.ts, axisLabel: AXIS_STYLE },
-          yAxis: [
-            { type: 'value', name: '浓度 (mg/m3)', axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
-            { type: 'value', name: 'O2/湿度 (%)', position: 'right',
-              axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
-            { type: 'value', name: '流量/温度/压力', position: 'right', offset: 60,
-              axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE }
-          ],
-          series: POINTS.map(function(p) {
-            return {
-              name: p.label,
-              type: 'line',
-              yAxisIndex: p.axis,
-              data: d[p.key] || [],
-              smooth: true,
-              showSymbol: false,
-              itemStyle: { color: p.color }
-            };
-          })
-        });
-        var latest = POINTS.map(function(p) {
-          var arr = d[p.key] || [];
-          return p.label + '=' + arr[arr.length - 1];
-        }).join('  ');
-        status.className = '';
-        status.textContent = '最近更新: ' + d.ts[d.ts.length - 1] + ' | ' + latest
-          + ' | 每' + REFRESH_SEC + '秒自动刷新';
+        render(d, false);
+        showInfo('实时模式 | 最近 ' + d.ts[d.ts.length - 1] + ' | ' + latestText(d)
+          + ' | 每' + REFRESH_SEC + '秒自动刷新');
       })
       .catch(function() {
         showError('后端连不上（确认 web_dashboard.py 在跑）');
       })
       .finally(function() {
-        // 上一轮结束后才排下一轮：后端变慢时请求不会越堆越多
-        setTimeout(loadData, REFRESH_MS);
+        // 上一轮结束后才排下一轮（后端变慢不会堆请求）；切到自由区间后不再排，
+        // 否则固定窗口的自动刷新会把用户选的区间覆盖掉
+        if (mode === 'realtime') {
+          timer = setTimeout(loadRealtime, REFRESH_MS);
+        }
       });
   }
 
-  loadData();
+  // ---- 自由区间模式：走 /api/curve，一次一查，不自动刷新 ----
+  function loadFree() {
+    if (busy) { return; }
+    var start = val('free-start');
+    var end = val('free-end');
+    if (!start || !end) {
+      showError('请先选择起止时间');
+      return;
+    }
+    busy = true;
+    document.getElementById('free-query').disabled = true;
+    showInfo('查询中…');
+    fetch('/api/curve?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end))
+      .then(function(res) {
+        return res.json().then(function(body) { return { ok: res.ok, body: body }; });
+      })
+      .then(function(r) {
+        if (!r.ok) {
+          showError('查询失败：' + (r.body.error || '未知错误') + traceSuffix(r.body));
+          return;
+        }
+        var d = r.body;
+        render(d, true);
+        if (!d.ts.length || !hasAnyValue(d)) {
+          showInfo('该区间无数据（' + d.start + ' ~ ' + d.end + '）');
+          return;
+        }
+        // 必须显式告诉用户画的是原始点还是均值，别让人把均值曲线当原始曲线看
+        showInfo(d.start + ' ~ ' + d.end + ' | 粒度：' + d.unit_label + ' | ' + d.points + ' 点'
+          + (d.downsampled ? '（已降采样）' : '（原始点，未降采样）'));
+      })
+      .catch(function() {
+        showError('后端连不上（确认 web_dashboard.py 在跑）');
+      })
+      .finally(function() {
+        busy = false;
+        document.getElementById('free-query').disabled = false;
+      });
+  }
+
+  function setMode(next) {
+    mode = next;
+    if (timer) {                 // 切模式先取消已排的定时器，避免两种模式互相覆盖
+      clearTimeout(timer);
+      timer = null;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.mode'), function(el) {
+      var on = el.getAttribute('data-mode') === next;
+      el.className = 'mode' + (on ? ' active' : '');
+    });
+    document.getElementById('free-controls').hidden = (next !== 'free');
+    if (next === 'realtime') {
+      loadRealtime();
+    } else {
+      initFreeInputs();
+      showInfo('自由区间模式：选好起止时间后点「查询」（该模式不自动刷新）');
+    }
+  }
+
+  document.getElementById('modes').addEventListener('click', function(ev) {
+    var target = ev.target.getAttribute && ev.target.getAttribute('data-mode');
+    if (target && target !== mode) { setMode(target); }
+  });
+  document.getElementById('free-query').addEventListener('click', loadFree);
+  window.addEventListener('resize', function() { myChart.resize(); });
+
+  setMode('realtime');
 })();
 </script>
 </body>
