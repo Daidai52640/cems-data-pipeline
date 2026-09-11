@@ -8,10 +8,11 @@ __pycache__/
 venv/
 *.egg-info/
 
-# 运行时产物
-data/*.jsonl
-data/*.jsonl.sending
-data/*.sending
+# 运行时产物：data/ 下全是跑起来才生成的东西（断网缓存、可写自检探针等），
+# 一律不入库，只留一个占位文件保住目录
+data/*
+!data/.gitkeep
+
 *.log
 
 # 编辑器

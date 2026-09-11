@@ -29,6 +29,9 @@ name: cems
 #       若每个服务都写 build，compose 会并发构建同一个镜像名而报 AlreadyExists。
 x-app: &app
   image: cems-pipeline:latest
+  # 这个镜像只在本机构建、不在任何 registry 上，
+  # 所以要显式禁止拉取：否则新机器首次 up 会先白等一次 pull 超时/404 才回落到 build
+  pull_policy: never
   restart: unless-stopped
   networks: [cems]
   environment:
@@ -134,6 +137,14 @@ services:
         condition: service_healthy
       device:
         condition: service_started
+    healthcheck:
+      # 网关没有监听端口，靠"心跳文件是否新鲜"判断采集循环有没有卡死
+      test: ["CMD", "python", "-c",
+             "import sys,time,pathlib;p=pathlib.Path('/app/data/.gateway_alive');sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime<30 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   # ---------------- 3 平台接入层：订阅 MQTT → 写入 TDengine ----------------
   subscriber:
@@ -162,6 +173,15 @@ services:
         condition: service_healthy
       tdengine:
         condition: service_healthy
+    healthcheck:
+      # 订阅端是事件驱动的、没有自己的端口，这里探"能否连上 broker"：
+      # 连不上就意味着数据进不来（进程本身死没死，看容器状态即可）
+      test: ["CMD", "python", "-c",
+             "import socket;socket.create_connection(('emqx',1883),3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   # ---------------- 4 展示层：Flask + ECharts 大屏 ----------------
   web:
@@ -184,6 +204,15 @@ services:
     depends_on:
       tdengine:
         condition: service_healthy
+    healthcheck:
+      # 探自己的 /api/health：只要 HTTP 有响应（200 或 503）就说明 Web 在正常服务；
+      # 503 表示 Web 活着但查库失败，那属于依赖问题，不该判 Web 死了
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u,urllib.error as e\ntry:\n    u.urlopen('http://127.0.0.1:5000/api/health',timeout=3)\nexcept e.HTTPError:\n    pass"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 networks:
   cems:

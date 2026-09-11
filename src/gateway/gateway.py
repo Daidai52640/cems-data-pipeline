@@ -55,6 +55,7 @@ MODBUS_RETRY_INTERVAL: Final[float] = float(os.getenv("MODBUS_RETRY_INTERVAL", "
 DATA_DIR: Final[Path] = PROJECT_ROOT / "data"
 CACHE_FILE: Final[Path] = DATA_DIR / "cache.jsonl"
 SENDING_FILE: Final[Path] = DATA_DIR / "cache.jsonl.sending"
+HEARTBEAT_FILE: Final[Path] = DATA_DIR / ".gateway_alive"   # 供容器 healthcheck 判断循环是否还在转
 CACHE_LOCK: Final[threading.Lock] = threading.Lock()   # 保护两个缓存文件的换手动作
 
 # 缓存容量上限：长期断网时文件会一直涨，写满磁盘后每条数据都会静默丢。
@@ -231,6 +232,18 @@ def check_data_dir_writable() -> bool:
     except OSError as exc:
         LOGGER.critical("[缓存] 数据目录不可写，断网缓存会全部失败: %s (%s)", DATA_DIR, exc)
         return False
+
+
+def touch_heartbeat() -> None:
+    """刷新存活心跳：采集主循环每转一圈写一次，容器 healthcheck 靠它判断循环有没有卡死。
+
+    比"端口在不在听"更有意义 —— 网关没有监听端口，进程活着但循环卡死时
+    只有心跳文件能反映出来。写失败不致命（比如磁盘满），降级成 debug。
+    """
+    try:
+        HEARTBEAT_FILE.write_text(str(time.time()), encoding="utf-8")
+    except OSError as exc:
+        LOGGER.debug("写心跳文件失败（忽略）: %s", exc)
 
 
 def _publish_async(client: mqtt.Client, payload: str, tag: str) -> Optional[mqtt.MQTTMessageInfo]:
@@ -502,6 +515,8 @@ def main() -> None:
     count = 0
     try:
         while True:
+            touch_heartbeat()      # 每圈刷一次：healthcheck 靠它判断循环还活着
+
             # 补传重试放在循环最开头：它只跟 broker 有关，不该被设备侧故障挡住。
             # 放在循环末尾时，下面两处 continue（设备没连上 / 读失败）会把它整段跳过，
             # 结果设备一坏、积压就再也补不出去，要等到下一次重连事件才动。
