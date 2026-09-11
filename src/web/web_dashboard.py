@@ -44,6 +44,7 @@ QUERY_LIMIT: Final[int] = int(os.getenv("QUERY_LIMIT", "5000"))          # 单�
 # ---- Web 服务 ----
 WEB_HOST: Final[str] = os.getenv("WEB_HOST", "0.0.0.0")   # 监听所有网卡，局域网可访问
 WEB_PORT: Final[int] = int(os.getenv("WEB_PORT", "5000"))
+WEB_THREADS: Final[int] = int(os.getenv("WEB_THREADS", "8"))   # waitress 工作线程数
 
 # ---- 日志 ----
 LOG_LEVEL: Final[int] = logging.INFO
@@ -83,7 +84,7 @@ def safe_error(exc: Exception, where: str) -> tuple[dict[str, Any], int]:
 
 # ==================== 3. 数据查询 ====================
 
-def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, Any, Any, Any]]:
+def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, ...]]:
     """查 TDengine 最近 N 分钟数据，按时间升序返回 [(ts, 各测点值...), ...]。
 
     查询失败抛 TdQueryError（由接口层兜住，不影响 Web 进程存活）。
@@ -186,7 +187,8 @@ HTML_PAGE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CEMS 实时监测大屏</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<!-- 本地加载 ECharts（文件随镜像一起发布，离线/内网环境不会白屏） -->
+<script src="/static/echarts.min.js"></script>
 <style>
   body { margin:0; padding:20px; background:#0f172a; font-family: sans-serif; }
   h1 { color:#e2e8f0; font-size:20px; margin:0 0 16px; }
@@ -285,11 +287,14 @@ HTML_PAGE = """<!DOCTYPE html>
       })
       .catch(function() {
         showError('后端连不上（确认 web_dashboard.py 在跑）');
+      })
+      .finally(function() {
+        // 上一轮结束后才排下一轮：后端变慢时请求不会越堆越多
+        setTimeout(loadData, REFRESH_MS);
       });
   }
 
   loadData();
-  setInterval(loadData, REFRESH_MS);   // 定时刷新
 })();
 </script>
 </body>
@@ -300,18 +305,38 @@ HTML_PAGE = """<!DOCTYPE html>
 # ==================== 6. 主流程 ====================
 
 def main() -> None:
-    """启动 Flask 服务（阻塞运行）。"""
+    """启动 Web 服务（阻塞运行）。"""
     setup_logging()
     LOGGER.info("Web 大屏启动: http://localhost:%d （局域网: http://<本机IP>:%d）", WEB_PORT, WEB_PORT)
     LOGGER.info("数据源: %s 库=%s 超级表=%s 最近 %d 分钟", TD_URL, TD_DB, TD_STABLE, QUERY_MINUTES)
     try:
-        app.run(host=WEB_HOST, port=WEB_PORT, debug=False, threaded=True)
+        serve_forever()
     except OSError as exc:
-        LOGGER.error("Web 服务启动失败（端口 %d 可能被占用）: %s", WEB_PORT, exc)
+        # 端口被占/无权限属于启动失败：必须以非 0 退出码结束，
+        # 否则编排层（compose / 脚本）看到的是"正常退出"，不会告警也不会重启
+        LOGGER.critical("Web 服务启动失败（端口 %d 可能被占用）: %s", WEB_PORT, exc)
+        raise SystemExit(1) from exc
     except Exception:
         LOGGER.exception("Web 服务异常退出")
+        raise SystemExit(1)
     finally:
         LOGGER.info("Web 大屏已停止")
+
+
+def serve_forever() -> None:
+    """用 waitress（生产级 WSGI 服务器）起服务；没装时回落到 Flask 自带服务器。
+
+    Flask 自带的 werkzeug 开发服务器会在日志里警告"不要用于生产"，
+    而且没有正经的并发处理；本机演示无所谓，对外提供服务时应当用 waitress。
+    """
+    try:
+        from waitress import serve as waitress_serve
+    except ImportError:
+        LOGGER.warning("未安装 waitress，回落到 Flask 开发服务器（仅够本机演示）")
+        app.run(host=WEB_HOST, port=WEB_PORT, debug=False, threaded=True)
+        return
+    LOGGER.info("使用 waitress 启动（生产级 WSGI，线程数 %d）", WEB_THREADS)
+    waitress_serve(app, host=WEB_HOST, port=WEB_PORT, threads=WEB_THREADS, ident="cems-web")
 
 
 if __name__ == "__main__":

@@ -124,9 +124,14 @@ def main() -> None:
     try:
         StartTcpServer(context=context, address=(SERVER_HOST, SERVER_PORT))
     except OSError as exc:
-        LOGGER.error("Modbus 服务端启动失败（端口 %d 可能被占用）: %s", SERVER_PORT, exc)
+        # 端口被占/无权限属于启动失败：必须以非 0 退出码结束，
+        # 否则编排层（compose / 脚本）看到的是"正常退出"，不会告警也不会重启
+        LOGGER.critical("Modbus 服务端启动失败（端口 %d 可能被占用）: %s", SERVER_PORT, exc)
+        # 先记日志再退出，退出码交给上层判断
+        raise SystemExit(1) from exc
     except Exception:
         LOGGER.exception("Modbus 服务端异常退出")
+        raise SystemExit(1)
     finally:
         LOGGER.info("Modbus 仿真设备已停止")
 
