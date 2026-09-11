@@ -342,6 +342,9 @@ HTML_PAGE = """<!DOCTYPE html>
 <!-- 本地加载 ECharts（文件随镜像一起发布，离线/内网环境不会白屏） -->
 <script src="/static/echarts.min.js"></script>
 <style>
+  /* hidden 属性必须真的隐藏：.controls 的 display:flex 会盖过浏览器默认的 [hidden]{display:none}，
+     不写这条的话，实时模式下"起/止/查询"也会一直显示，用户会误以为已经切到自由区间 */
+  [hidden] { display:none !important; }
   body { margin:0; padding:20px; background:#0f172a; font-family: sans-serif; }
   h1 { color:#e2e8f0; font-size:20px; margin:0 0 16px; }
   #chart { width:100%; height:70vh; background:#0f172a; }
@@ -546,6 +549,9 @@ HTML_PAGE = """<!DOCTYPE html>
   // ---- 自由区间模式：走 /api/curve，一次一查，不自动刷新 ----
   function loadFree() {
     if (busy) { return; }
+    // 点「查询」就代表要看自由区间：万一控件被误显在实时模式下，这里也先把轮询停掉，
+    // 否则 5 秒后一轮自动刷新会把刚查到的曲线盖回去
+    if (mode !== 'free') { applyMode('free'); }
     var start = val('free-start');
     var end = val('free-end');
     if (!start || !end) {
@@ -589,7 +595,8 @@ HTML_PAGE = """<!DOCTYPE html>
       });
   }
 
-  function setMode(next) {
+  // 只切模式的状态与 UI（不触发查询），供切换按钮和"点查询时兜底"共用
+  function applyMode(next) {
     mode = next;
     viewToken += 1;              // 让上一个模式在途的请求作废，避免它回来时闪一下
     if (timer) {                 // 切模式先取消已排的定时器，避免两种模式互相覆盖
@@ -601,6 +608,10 @@ HTML_PAGE = """<!DOCTYPE html>
       el.className = 'mode' + (on ? ' active' : '');
     });
     document.getElementById('free-controls').hidden = (next !== 'free');
+  }
+
+  function setMode(next) {
+    applyMode(next);
     if (next === 'realtime') {
       loadRealtime();
     } else {
@@ -633,6 +644,7 @@ REPORT_PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CEMS 数据报表</title>
 <style>
+  [hidden] { display:none !important; }   /* 同上：别让 display:flex 盖过 hidden */
   body { margin:0; padding:20px; background:#0f172a; color:#e2e8f0; font-family:sans-serif; }
   h1 { font-size:20px; margin:0 0 4px; }
   .nav { font-size:13px; margin-bottom:14px; }
