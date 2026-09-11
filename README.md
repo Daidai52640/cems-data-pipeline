@@ -2,6 +2,8 @@
 
 模拟环保 CEMS 烟气在线监测数据采集全链路：仿真设备 → 网关 → MQTT Broker → 平台接入 → 时序库 → Web 实时大屏。
 
+![CEMS 数据采集链路架构](docs/cems-pipeline-architecture.visual-check.2048x1320.dark.png)
+
 ## 技术栈
 
 - 设备协议：Modbus TCP（功能码 03 读保持寄存器）
