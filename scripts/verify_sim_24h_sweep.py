@@ -26,7 +26,26 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.common.points import POINTS                                 # noqa: E402
 from src.device import simulator as SIM                              # noqa: E402
 
-SIMULATOR: SIM.CemsSimulator = SIM.CemsSimulator(seed=20261001)
+
+def build_shape_simulator() -> SIM.CemsSimulator:
+    """构造一个**关掉尖峰**的仿真器，专用于量"日周期形状"。
+
+    ⚠️ 为什么必须先关尖峰：本脚本用"隔天同相位采样的相关性"判断日周期是否稳定，
+       而尖峰是**与日周期无关的独立随机事件**（今天某时刻有、明天同一时刻多半没有）。
+       带着尖峰量，隔天相关系数会从 0.9 掉到 -0.08（实测），
+       于是"形状不一致"——但那是尖峰的贡献，不是日周期坏了。
+       量形状要在"无偶发事件"的稳态下量；尖峰的验收在
+       scripts/verify_sim_spike_exceedance.py 里单独做。
+    """
+    original = SIM.SPIKE_ENABLED
+    try:
+        SIM.SPIKE_ENABLED = False            # type: ignore[misc]
+        return SIM.CemsSimulator(seed=20261001)
+    finally:
+        SIM.SPIKE_ENABLED = original         # type: ignore[misc]
+
+
+SIMULATOR: SIM.CemsSimulator = build_shape_simulator()
 DAY_START: datetime = datetime(2026, 3, 1, 0, 0, tzinfo=timezone.utc)   # 00:00 当地
 STEP_SECONDS: int = 600          # 10 分钟一个采样点 → 一天 144 点
 POINTS_IN_DAY: int = 86400 // STEP_SECONDS
