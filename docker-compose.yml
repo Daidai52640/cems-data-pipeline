@@ -12,7 +12,7 @@
 #   docker compose down              # 停止并删除容器（数据保留在卷里）
 #   docker compose down -v           # 停止并连数据一起删除
 #
-# 启动后：浏览器打开 http://localhost:5000 看实时曲线
+# 启动后：浏览器打开 http://localhost:5001 看实时曲线
 #        管理台 http://localhost:18083 看 MQTT 连接（默认 admin/public）
 #
 # ★ 端口默认只绑定 127.0.0.1（仅本机可访问）：
@@ -77,9 +77,12 @@ services:
       # ★ 关键：容器时区。默认镜像是 UTC，会让本地时间字符串被当成 UTC 解析，
       #   导致库里时间比实际快 8 小时（taospy 读回时又按本地时区转换）
       TZ: Asia/Shanghai
+    # ✅ 已映射端口（2026-09-29）：原先本机装的 TDengine 企业版占用 6030/6041，
+    #    现已停用并卸载 → 端口释放，容器可以把 REST 端口暴露给宿主机。
+    #    用途：Taos Shell / Python 脚本 / 命令行 taos 直连容器里的社区版库。
     ports:
-      - "${BIND_ADDR:-127.0.0.1}:6030:6030"      # 原生连接端口
-      - "${BIND_ADDR:-127.0.0.1}:6041:6041"      # REST 接口端口（taospy 走这个）
+      - "${BIND_ADDR:-127.0.0.1}:6041:6041"    # REST（Taos Shell、taosrest 用这个）
+      - "${BIND_ADDR:-127.0.0.1}:6030:6030"    # 原生协议（taos CLI -Z 用）
     volumes:
       - tdengine-data:/var/lib/taos
       - tdengine-log:/var/log/taos
@@ -200,7 +203,11 @@ services:
       QUERY_MINUTES: "10"
       REFRESH_SECONDS: "5"
     ports:
-      - "${BIND_ADDR:-127.0.0.1}:5000:5000"      # 浏览器访问 http://localhost:5000
+      # ⚠️ 宿主机端口默认 5001 不是 5000：Windows 上 5000 常被其它进程的临时源端口占用，
+      #    Docker 会报 "bind: An attempt was made to access a socket in a way forbidden by
+      #    its access permissions"。原端口释放后可设 WEB_HOST_PORT=5000。
+      # ⚠️ 仍沿用 BIND_ADDR（默认只绑 127.0.0.1），别为了让外网访问而把它删掉。
+      - "${BIND_ADDR:-127.0.0.1}:${WEB_HOST_PORT:-5001}:5000"   # 浏览器 http://localhost:${WEB_HOST_PORT:-5001}
     depends_on:
       tdengine:
         condition: service_healthy

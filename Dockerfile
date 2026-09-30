@@ -16,9 +16,11 @@ WORKDIR /app
 
 # 先装依赖再拷代码：改代码时不会重复下载依赖（利用构建缓存）
 COPY requirements.txt ./
-# PIP_INDEX：默认用清华镜像（国内构建快且稳）；
-#            想用官方源：docker build --build-arg PIP_INDEX=https://pypi.org/simple .
-ARG PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+# PIP_INDEX：默认用阿里云镜像；
+#   ⚠️ 2026-10-01 实测：清华源（原默认）对 pip 返回 403 Forbidden，容器内与宿主机都一样，
+#      中科大 / 华为云同样不通，只有阿里云可用 → 故默认改成阿里云。
+#   想换源/回官方：docker build --build-arg PIP_INDEX=https://pypi.org/simple .
+ARG PIP_INDEX=https://mirrors.aliyun.com/pypi/simple/
 RUN pip install --no-cache-dir --retries 10 --timeout 60 \
         -i ${PIP_INDEX} \
         -r requirements.txt
