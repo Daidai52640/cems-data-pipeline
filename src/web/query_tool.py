@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""TDengine 查询演示脚本：查入库总量、最新明细与各测点的 INTERVAL 时间聚合均值。"""
+"""TDengine 查询工具：核对入库总量、最新明细，以及各测点的 INTERVAL 时间聚合均值。
+
+用途：不依赖 Web 大屏，直接从命令行确认「采集链路是否真的在入库」——
+入库总量长期不涨、最新明细停在同一时刻、或聚合窗口为空，都指向接入层/网关故障。
+"""
 
 from __future__ import annotations
 
@@ -20,7 +24,7 @@ from src.common.points import COLUMNS   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致。
-# 容器里执行：docker compose run --rm web python src/web/query_demo.py
+# 容器里执行：docker compose run --rm web python src/web/query_tool.py
 
 # ---- TDengine（对应 taosAdapter 的 REST 接口）----
 TD_URL: Final[str] = os.getenv("TD_URL", "http://localhost:6041")
@@ -42,7 +46,7 @@ LOG_LEVEL: Final[int] = logging.INFO
 LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
 
-LOGGER: Final[logging.Logger] = logging.getLogger("web.query_demo")
+LOGGER: Final[logging.Logger] = logging.getLogger("web.query_tool")
 
 
 # ==================== 2. 日志 ====================
@@ -141,7 +145,7 @@ def _format_values(values: tuple[Any, ...]) -> str:
 # ==================== 4. 主流程 ====================
 
 def main() -> None:
-    """依次执行三类查询，单项失败不影响其余查询。"""
+    """依次执行三类查询（总量 / 最新明细 / 窗口聚合），单项失败不影响其余查询。"""
     setup_logging()
 
     conn = connect_td()
@@ -154,13 +158,13 @@ def main() -> None:
         show_latest(conn)
         show_interval_avg(conn)
     except Exception:
-        LOGGER.exception("查询演示异常退出")
+        LOGGER.exception("查询工具异常退出")
     finally:
         try:
             conn.close()
         except Exception as exc:
             LOGGER.debug("关闭 TDengine 连接时出错（忽略）: %s", exc)
-        LOGGER.info("查询演示结束")
+        LOGGER.info("查询完成")
 
 
 if __name__ == "__main__":

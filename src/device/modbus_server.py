@@ -150,7 +150,8 @@ def main() -> None:
 
     # 初始化寄存器数据块（地址 0~9，初始全 0）
     block = ModbusSequentialDataBlock(0, [0] * REG_COUNT)
-    # 演示项目简化：四个区共用同一个 block，教学够用
+    # 实现简化：四个寄存器区（di/co/hr/ir）共用同一个 block —— 本仿真只读写保持寄存器，
+    # 不需要区分寄存器区，也就不必让四个区各自持有一份数据。
     slave = ModbusSlaveContext(di=block, co=block, hr=block, ir=block)
     context = ModbusServerContext(slaves=slave, single=True)
 
