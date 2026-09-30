@@ -105,6 +105,11 @@ services:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: "5020"
       SLAVE_ID: "1"
+      # 仿真信号：种子/时间基准/时钟偏移。同种子 + 同时间参数 => 逐值一致的输出。
+      # 不设 SIM_SEED 时设备层会用确定性默认值 20261001（不是随机种子）。
+      SIM_SEED: ${SIM_SEED:-20261001}
+      SIM_EPOCH: ${SIM_EPOCH:-2026-01-01T00:00:00+00:00}
+      SIM_CLOCK_SKEW: ${SIM_CLOCK_SKEW:-0}
     ports:
       - "${BIND_ADDR:-127.0.0.1}:5020:5020"      # 方便用 Modbus 调试工具直接看寄存器
     healthcheck:
