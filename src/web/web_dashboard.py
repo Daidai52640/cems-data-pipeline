@@ -935,12 +935,13 @@ def serve_forever() -> None:
     """用 waitress（生产级 WSGI 服务器）起服务；没装时回落到 Flask 自带服务器。
 
     Flask 自带的 werkzeug 开发服务器会在日志里警告"不要用于生产"，
-    而且没有正经的并发处理；本机演示无所谓，对外提供服务时应当用 waitress。
+    而且没有正经的并发处理；因此它只用于本机开发自测，
+    对外提供服务（含容器编排部署）时必须走 waitress。
     """
     try:
         from waitress import serve as waitress_serve
     except ImportError:
-        LOGGER.warning("未安装 waitress，回落到 Flask 开发服务器（仅够本机演示）")
+        LOGGER.warning("未安装 waitress，回落到 Flask 开发服务器（仅供本机开发自测，勿用于对外服务）")
         app.run(host=WEB_HOST, port=WEB_PORT, debug=False, threaded=True)
         return
     LOGGER.info("使用 waitress 启动（生产级 WSGI，线程数 %d）", WEB_THREADS)

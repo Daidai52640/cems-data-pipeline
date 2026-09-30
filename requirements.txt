@@ -1,4 +1,4 @@
-# CEMS 工业数据采集演示项目 - Python 依赖
+# CEMS 工业数据采集链路 - Python 依赖
 # 安装：pip install -r requirements.txt
 
 # 说明：这里锁了主版本上限，保证"本机运行"和"容器运行"用的是同一套 API。

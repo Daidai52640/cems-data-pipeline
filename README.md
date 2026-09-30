@@ -37,7 +37,7 @@
 - 依赖：pymodbus、paho-mqtt
 
 ### 3. 平台接入层 `src/platform/subscriber_to_td.py`
-- 功能：订阅 MQTT 主题 → 解析 8 个测点 → 写入 TDengine
+- 功能：订阅 MQTT 主题 → 解析 9 个测点 → 写入 TDengine
 - 会话持久化：默认使用**非干净会话**（`MQTT_CLEAN_SESSION=0`）配合固定的 client_id。
   订阅端离线期间，broker 会为 `cems/plant1/data` 上 QoS≥1 的消息排队，重连后自动补投。
   若不持久化（干净会话），离线期间发布的报文会被 broker 直接丢弃，且发布端拿到的是 PUBACK，
@@ -129,7 +129,7 @@ docker compose ps                     # 看六个服务状态
 docker compose logs -f gateway        # 跟踪某个服务日志
 docker compose down                   # 停止（数据保留在具名卷里）
 docker compose down -v                # 停止并连数据一起删
-docker compose run --rm web python src/web/query_demo.py   # 在容器里跑查询演示
+docker compose run --rm web python src/web/query_tool.py   # 在容器里核对入库情况
 ```
 
 数据落地位置：TDengine 数据在具名卷 `cems-tdengine-data`，EMQX 在 `cems-emqx-data`，
@@ -165,9 +165,8 @@ $env:DOCKER_BUILDKIT=0; docker compose build; docker compose up -d
 
 ## 辅助工具
 
-- `src/web/query_demo.py` — 查询入库数据 + INTERVAL 时间聚合演示
+- `src/web/query_tool.py` — 查询入库数据 + INTERVAL 时间聚合（运维排查用）
 - `src/platform/subscriber.py` — 旧版订阅端（仅打印，已废弃）
-- `docs/legacy/` — MQTT 学习阶段产物（publisher.py 等，已废弃）
 - `docs/` — 架构复习图（HTML）
 
 ## 环境依赖

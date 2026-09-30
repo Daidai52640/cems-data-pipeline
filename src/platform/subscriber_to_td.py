@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""平台接入：订阅 MQTT 上送报文，解析 8 个烟气测点后写入 TDengine 时序库 cems.cems_data 超级表。"""
+"""平台接入：订阅 MQTT 上送报文，解析 9 个烟气测点后写入 TDengine 时序库 cems.cems_data 超级表。"""
 
 from __future__ import annotations
 
@@ -232,7 +232,7 @@ class TdWriter:
     def _ensure_columns(cur: Any) -> None:
         """老库平滑升级：对比超级表实际列，缺哪列补哪列（幂等，可重复执行）。
 
-        CREATE STABLE IF NOT EXISTS 不会改动已存在的表，所以老版本建的 4 列超级表
+        CREATE STABLE IF NOT EXISTS 不会改动已存在的表，所以老版本建的超级表（测点列不全）
         必须靠 ALTER STABLE 把新测点列补上；历史数据不丢，新列的旧值为 NULL。
         """
         cur.execute(f"DESCRIBE {TD_DB}.{TD_STABLE}")
