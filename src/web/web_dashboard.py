@@ -45,7 +45,7 @@ POINTS: Final[tuple[str, ...]] = COLUMNS
 # ---- 测点在图表上的呈现方式（中文名 / Y 轴分组 / 配色）----
 # 列名和单位来自测点契约，这里只补"画在图上长什么样"。
 # 实时大屏和报表页共用同一份，注入前端，避免页面上再各抄一份测点表。
-# Y 轴分组：0=浓度(SO2/NOx/颗粒物) 1=O2/湿度 2=流量/温度/压力
+# Y 轴分组：0=浓度(SO2/NOx/颗粒物) 1=O2/湿度 2=流量/温度/压力 3=流速
 POINT_PRESENTATION: Final[dict[str, tuple[str, int, str]]] = {
     "so2": ("SO2", 0, "#ef4444"),
     "nox": ("NOx", 0, "#3b82f6"),
@@ -55,6 +55,7 @@ POINT_PRESENTATION: Final[dict[str, tuple[str, int, str]]] = {
     "flow": ("流量", 2, "#84cc16"),
     "temp": ("温度", 2, "#f59e0b"),
     "pressure": ("压力", 2, "#ec4899"),
+    "velocity": ("流速", 3, "#14b8a6"),
 }
 
 
@@ -388,7 +389,7 @@ HTML_PAGE = """<!DOCTYPE html>
   var REFRESH_SEC = __REFRESH_SEC__;
 
   // 测点表由后端注入（真源是 src/common/points.py + POINT_PRESENTATION），页面不再自己抄一份。
-  // axis: 0=左轴 浓度(mg/m3)；1=右轴1 O2/湿度(%)；2=右轴2 流量/温度/压力
+  // axis: 0=左轴 浓度(mg/m3)；1=右轴1 O2/湿度(%)；2=右轴2 流量/温度/压力；3=右轴3 流速(m/s)
   var POINTS = __POINTS_JSON__;
   var AXIS_STYLE = { color: '#94a3b8' };
   // 单次请求超时：fetch 默认不会超时，请求卡住时 finally 不执行、轮询会悄悄停掉
@@ -485,7 +486,7 @@ HTML_PAGE = """<!DOCTYPE html>
         textStyle: { color: '#cbd5e1' },
         type: 'scroll'
       },
-      grid: { left: 60, right: 130, top: 60, bottom: 50 },
+      grid: { left: 60, right: 190, top: 60, bottom: 50 },
       animationDurationUpdate: 300,
       xAxis: xAxis,
       yAxis: [
@@ -493,6 +494,8 @@ HTML_PAGE = """<!DOCTYPE html>
         { type: 'value', name: 'O2/湿度 (%)', position: 'right',
           axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
         { type: 'value', name: '流量/温度/压力', position: 'right', offset: 60,
+          axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
+        { type: 'value', name: '流速 (m/s)', position: 'right', offset: 120,
           axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE }
       ],
       series: series
