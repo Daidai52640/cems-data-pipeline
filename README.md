@@ -166,7 +166,6 @@ $env:DOCKER_BUILDKIT=0; docker compose build; docker compose up -d
 ## 辅助工具
 
 - `src/web/query_tool.py` — 查询入库数据 + INTERVAL 时间聚合（运维排查用）
-- `src/platform/subscriber.py` — 旧版订阅端（仅打印，已废弃）
 - `docs/` — 架构复习图（HTML）
 
 ## 环境依赖
