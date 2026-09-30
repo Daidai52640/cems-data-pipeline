@@ -20,7 +20,15 @@ PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.common.points import COLUMNS, NAMES, POINTS, RANGES   # noqa: E402
+from src.common.points import (   # noqa: E402
+    COLUMNS,
+    NAMES,
+    O2_COLUMN,
+    POINTS,
+    RANGES,
+    ZS_TARGETS,
+    to_reference_o2,
+)
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
@@ -72,6 +80,18 @@ SQL_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$
 TD_COLUMNS: Final[tuple[str, ...]] = COLUMNS
 POINT_RANGES: Final[dict[str, tuple[float, float]]] = RANGES
 TS_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
+
+# ---- 折算值（导出量）：只算、不进库 ----
+# ⚠️ 折算值**不给 TDengine 建列**。它是从"标干浓度 + 氧含量"算出来的导出量，
+#    存一份就必然有一天跟算出来的对不上（冗余必然漂）；库里保持 9 个物理量列。
+# ⚠️ 判定口径：**超标判的是折算值，不是标干值**。实测反例：SO2 标干 30.0 在限值
+#    35 以内（按标干判 = 达标），但 O2=9% 时折算 37.5（> 35）已超标 —— 同一份数据
+#    两种判法结论相反，所以折算值必须有一个能取到的出口（见 reference_values()）。
+# 公式、基准氧含量（6%）、参与折算的污染物、氧含量测点名全部来自 src/common/points.py
+# 契约，这里**不重复推导公式**，也不硬编码列名字符串。
+COLUMN_TO_NAME: Final[dict[str, str]] = {point.column: point.name for point in POINTS}
+O2_FIELD_NAME: Final[str] = COLUMN_TO_NAME[O2_COLUMN]
+REFERENCE_LOG_EVERY: Final[int] = 20       # 折算值抽样日志周期（条），避免每条都刷屏
 
 # ---- 收发/拒收计数（把上游数据质量问题量化出来）----
 STATS: Final[dict[str, int]] = {"received": 0, "accepted": 0, "rejected": 0}
@@ -305,7 +325,66 @@ class TdWriter:
             self._safe_close(conn)
 
 
-# ==================== 5. MQTT 回调 ====================
+# ==================== 5. 折算值（标干 → 基准氧含量） ====================
+#
+# 全仓库**唯一**调用 points.to_reference_o2() 的地方就是 reference_values()：
+#   - 只有它算折算值，别处要折算就调它 / 取最近值快照，不许再推一遍公式
+#   - 折算值不写库、不进寄存器（导出量，存了会漂）
+#   - O2 >= 21% 时 to_reference_o2() 返回 nan（分母 <= 0，折算无物理意义），
+#     这里原样透出，不绕过、不当 0
+
+# 最近一条**已成功入库**数据的折算值快照（含时间戳）；读接口返回副本
+LAST_REFERENCE: Final[dict[str, Any]] = {"ts": "", "values": {}}
+
+
+def reference_values(values: dict[str, float]) -> dict[str, float]:
+    """纯函数：把一条报文的标干浓度折算到基准氧含量下（不碰库、不改状态）。
+
+    入参 values 的键 = MQTT 报文字段名（Dust / SO2 / NOx / O2，即 points.NAMES），
+    返回值的键 = TDengine 列名（dust / so2 / nox，即 points.ZS_TARGETS），
+    这样既能直接打日志给下游看，也能与库里存的标干值按列名对齐比较。
+
+    公式（出自契约 points.to_reference_o2，本函数只做调用，不重写）：
+        折算浓度 = 标干浓度 × (21 - 基准氧含量) / (21 - 实测氧含量)
+
+    ⚠️ 返回 nan 的情形：实测 O2 >= 21%（契约行为，别绕过、别当 0）。
+    ⚠️ 判定口径：**超标判的是折算值，不是标干值**（本函数不做告警判定）。
+    """
+    o2 = values[O2_FIELD_NAME]
+    return {
+        column: to_reference_o2(values[COLUMN_TO_NAME[column]], o2)
+        for column in ZS_TARGETS
+    }
+
+
+def record_reference(ts: str, values: dict[str, float]) -> dict[str, float]:
+    """算一次折算值并记成"最近一条"快照；返回本次结果。
+
+    只在写入 TDengine **成功之后**调用：进不了库的数据不配当"最近一条"。
+    每条报文只调 reference_values() 一次，折算值全链路只在一处算。
+    """
+    snapshot = reference_values(values)
+    LAST_REFERENCE["values"] = snapshot
+    LAST_REFERENCE["ts"] = ts
+    return snapshot
+
+
+def latest_reference_values() -> dict[str, float]:
+    """取最近一条已入库数据的折算值（副本，键为 TDengine 列名 dust/so2/nox）。
+
+    验证脚本或下游可以直接：
+        from src.platform.subscriber_to_td import latest_reference_values
+    返回副本，避免调用方改到进程内的快照。
+    """
+    return dict(LAST_REFERENCE["values"])
+
+
+def latest_reference_timestamp() -> str:
+    """取最近一条已入库折算值对应的时间戳（没有则为空字符串）。"""
+    return str(LAST_REFERENCE["ts"])
+
+
+# ==================== 6. MQTT 回调 ====================
 
 def on_connect(
     client: mqtt.Client,
@@ -375,11 +454,22 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
     STATS["accepted"] += 1
     writer: TdWriter = userdata["writer"]
     if writer.write(ts, values):
+        # 写入成功后算折算值（全链路唯一一处），并留一份"最近值"给下游/验证脚本
+        references = record_reference(ts, values)
+        if STATS["accepted"] == 1 or STATS["accepted"] % REFERENCE_LOG_EVERY == 0:
+            # 抽样打 INFO 而不是每条都打（首条也打：重启后立刻能看到折算出口是活的）
+            LOGGER.info(
+                "折算值抽样（第 %d 条）: 标干 ts=%s O2=%.4f -> %s",
+                STATS["accepted"],
+                ts,
+                values[O2_FIELD_NAME],
+                " ".join(f"{column}={references[column]:.4f}" for column in ZS_TARGETS),
+            )
         # 高频成功降到 debug；只在排查数据问题时才需要开
         LOGGER.debug("已入库: %s %s", ts, " ".join(f"{k}={v}" for k, v in values.items()))
 
 
-# ==================== 6. 主流程 ====================
+# ==================== 7. 主流程 ====================
 
 def main() -> None:
     """连 TDengine → 连 MQTT → 订阅主题并持续入库。"""
