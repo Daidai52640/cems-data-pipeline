@@ -59,16 +59,20 @@ def setup_logging() -> None:
     )
 
 
-def encode(value: float) -> int:
-    """把真实值按 1 位小数取整后放大 SCALE 倍，转成寄存器可存的整数。"""
-    return int(round(round(value, 1) * SCALE))
+def encode(value: float, scale: int = SCALE) -> int:
+    """把真实值按 1 位小数取整后放大 scale 倍，转成寄存器可存的整数。
+
+    ⚠️ scale 是**每个测点自带**的（见 points.py）：Modbus 保持寄存器是 16 位无符号，
+    流量这类大数必须配更小的 scale，否则会溢出。
+    """
+    return int(round(round(value, 1) * scale))
 
 
 def build_registers() -> list[int]:
     """生成一轮仿真读数对应的寄存器数组（按寄存器地址摆放，未用到的地址补 0）。"""
     values = [0] * REG_COUNT
     for point in POINTS:
-        values[point.address] = encode(random.uniform(point.low, point.high))
+        values[point.address] = encode(random.uniform(point.low, point.high), point.scale)
     return values
 
 

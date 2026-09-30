@@ -19,7 +19,7 @@ PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.common.points import POINTS, REG_BASE, REG_COUNT, SCALE   # noqa: E402
+from src.common.points import POINTS, REG_BASE, REG_COUNT   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 所有连接参数都支持用环境变量覆盖，默认值与"本机直接运行"完全一致；
@@ -116,7 +116,7 @@ def read_device(client: ModbusTcpClient) -> Optional[dict[str, float]]:
     try:
         # 返回的寄存器块从 REG_BASE 开始，所以下标要减去起始地址
         return {
-            point.name: response.registers[point.address - REG_BASE] / SCALE
+            point.name: response.registers[point.address - REG_BASE] / point.scale
             for point in POINTS
         }
     except (IndexError, TypeError) as exc:
