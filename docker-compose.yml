@@ -110,6 +110,11 @@ services:
       SIM_SEED: ${SIM_SEED:-20261001}
       SIM_EPOCH: ${SIM_EPOCH:-2026-01-01T00:00:00+00:00}
       SIM_CLOCK_SKEW: ${SIM_CLOCK_SKEW:-0}
+      # 污染物偶发尖峰：每个刷新周期（2 秒）触发一个尖峰的独立概率，只作用于污染物
+      # （Dust/SO2/NOx）。0 = 关闭（此时污染物恒定达标，用于验证基线标定）。
+      # 折算值超标由展示/告警层用 points.to_reference_o2() 现算，库里不存折算列。
+      SIM_SPIKE_PROB: ${SIM_SPIKE_PROB:-0.004}
+      SIM_SPIKE_ENABLE: ${SIM_SPIKE_ENABLE:-1}
     ports:
       - "${BIND_ADDR:-127.0.0.1}:5020:5020"      # 方便用 Modbus 调试工具直接看寄存器
     healthcheck:

@@ -37,7 +37,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.common.points import POINTS                                 # noqa: E402
+from src.common.points import LIMITS, O2_REFERENCE, POINTS, to_reference_o2   # noqa: E402
 
 TD_URL: str = os.getenv("TD_URL", "http://127.0.0.1:6041")
 TD_USER: str = os.getenv("TD_USER", "root")
@@ -189,14 +189,47 @@ def section_c_step_size(columns: list[str], rows: list[list[Any]]) -> None:
     _check(worst_ratio <= MAX_STEP_RATIO, f"所有测点的相邻跳变都 ≤ 量程的 {MAX_STEP_RATIO:.0%}")
 
 
+def section_d_exceedance(columns: list[str], rows: list[list[Any]]) -> None:
+    """D. 库里真实数据按**折算值**口径判超标（判定口径的真源是 points.to_reference_o2）。
+
+    ⚠️ 折算值不存库：库里只有标干浓度 + 氧含量，折算在这里现算。
+       points.py 顶部已说明"折算值是导出量、不建列"，所以本段是**读取侧**计算，
+       不会给 cems_data 加任何列。
+    ⚠️ 判定口径必须是折算值：标干值达标不代表达标（氧含量高于基准时折算会放大）。
+    """
+    if "o2" not in columns:
+        _check(False, "库里没有 o2 列，无法做折算口径判定")
+        return
+
+    print(f"\n=== D. 折算口径超标统计（基准氧 {O2_REFERENCE}%，判定用折算值）===")
+    o2_index = columns.index("o2")
+    o2_values = [float(row[o2_index]) for row in rows]
+    print(f"  O2 实测 {min(o2_values):.2f}%~{max(o2_values):.2f}%"
+          f"（低于基准 {O2_REFERENCE}% 时折算**衰减**，高于时放大）")
+    print(f"{'测点':<7}{'限值':>7}{'标干均值':>9}{'折算均值':>9}{'折算峰值':>9}"
+          f"{'标干越限%':>10}{'折算越限%':>11}")
+    for name in ("Dust", "SO2", "NOx"):
+        index = columns.index(name.lower())
+        limit = LIMITS[name]
+        raw = [float(row[index]) for row in rows]
+        converted = [to_reference_o2(v, o) for v, o in zip(raw, o2_values)]
+        raw_over = 100.0 * sum(1 for v in raw if v > limit) / len(raw)
+        converted_over = 100.0 * sum(1 for c in converted if c > limit) / len(converted)
+        print(f"{name:<7}{limit:>7.1f}{statistics.mean(raw):>9.2f}"
+              f"{statistics.mean(converted):>9.2f}{max(converted):>9.2f}"
+              f"{raw_over:>9.1f}%{converted_over:>10.1f}%")
+    print("  说明：这段窗口短（默认 5 分钟），越限占比为 0 是正常的——"
+          "尖峰是偶发事件，事件率的证据见 scripts/verify_sim_spike_exceedance.py（24h 离线）")
+
+
 def main() -> int:
-    """依次跑完三段检查，返回进程退出码。"""
-    parser = argparse.ArgumentParser(description="检查库里新增数据的节奏与跳变幅度")
+    """依次跑完四段检查，返回进程退出码。"""
+    parser = argparse.ArgumentParser(description="检查库里新增数据的节奏、跳变与折算超标")
     parser.add_argument("--minutes", type=int, default=5, help="回看多少分钟（默认 5）")
     parser.add_argument(
         "--since",
         default=os.getenv("TD_SINCE", ""),
-        help="只统计该 UTC 时刻之后的数据（'YYYY-MM-DD HH:MM:SS'），用来掐掉改造前的旧数据",
+        help="只统计该时刻之后的数据（'YYYY-MM-DD HH:MM:SS'），用来掐掉改造前的旧数据",
     )
     args = parser.parse_args()
     since = parse_since(args.since)
@@ -215,6 +248,7 @@ def main() -> int:
     section_a_cadence(rows)
     section_b_freshness(rows)
     section_c_step_size(columns, rows)
+    section_d_exceedance(columns, rows)
 
     print("\n================ 结论 ================")
     if FAILURES:

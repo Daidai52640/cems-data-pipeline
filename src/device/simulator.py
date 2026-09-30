@@ -11,10 +11,11 @@
     - modbus_server 只负责 encode() 后写寄存器
 好处：验证脚本可以不启服务、不连端口，直接用假时钟驱动本模块跑验收。
 
-============================ 信号模型（五项叠加） ============================
-每个测点的值 = 量程百分比，各项相加后再裁回 [low, high]：
+============================ 信号模型（六项叠加） ============================
+每个测点的值 = 参照跨度比例（污染物=限值比，物理量=量程比），算完再裁回 [low, high]：
 
-    1. base      基线        每个测点一个固定水平（基荷工况），种子决定
+    1. base      基线        每个测点一个固定水平（基荷工况），种子决定；
+                            **污染物锚限值、物理量锚量程**（见下面的基线标定）
     2. diurnal   日周期      用实测时钟的"当天 0 点起的秒数"驱动正弦 + 12 小时谐波，
                             白天高、夜里低，峰值时刻按测点错开（烟气温度固定在 14 点）
     3. load * g  负荷耦合    全网共用一个缓慢的日负荷波形（流量/流速/温度正相关、
@@ -22,7 +23,9 @@
     4. drift     独立缓慢漂移 每测点自己的 value noise（多尺度平滑噪声），
                             相邻周期只挪一点点 → 这就是"惯性"
     5. jitter    传感器毛刺   白噪声，幅度只有日周期/漂移的**几十分之一**
-                            （见 NOISE_JITTER_SPAN）
+    6. spike     偶发尖峰     **只在污染物上**、低概率触发的短暂事件，
+                            单位是"限值比"（不乘 span_ratio，见 SPIKE_* 说明）
+                            ⇒ 让"超标"成为可演示的事件，而不是永远达标或永远超标
 
 ============================ 可复现性的关键设计 ============================
 本模块**没有随机游走状态**：每一点的读数都是 (种子, 时刻) 的纯函数。
@@ -32,15 +35,25 @@
 所以「同种子 + 同时刻参数 => 逐值一致」是构造上成立的，不需要额外对齐状态。
 
 ============================ 参数标定（不是拍脑袋） ============================
-幅度一律用**量程百分比**表示，量程来自 points.py（不得改）。以 Temp(0~300, scale=10) 为例：
+幅度都用**参照跨度比例**表示（污染物=限值，物理量=量程；两者用 span_ratio 换算）。
+以 SO2(量程 0~200、限值 35、span_ratio=0.175) 为例（量程 → 物理量要 ×200）：
 
-    日周期幅度  3.5% 量程 = ±10.5 degC     （烟气温度昼夜波动量级）
-    独立漂移    2.5% 量程 = ±7.5  degC     （数小时级工况漂移）
-    毛刺        0.05% 量程 = ±0.15 degC    （仪表末位跳动，见 NOISE_JITTER_SPAN）
+    基线        限值的 50%~68%   = 17.5~24 mg/m3   （平时达标，留约 30% 余量）
+    日周期幅度  3.5% 量程         = ±1.2 mg/m3      （≈ 限值的 ±3.5%）
+    独立漂移    3.0% 量程         = ±1.1 mg/m3
+    毛刺        0.25% 量程        = ±0.09 mg/m3
+    尖峰        限值的 0.30~0.55  = 10~19 mg/m3     （偶发，让折算值冲过限值）
 
-日周期与漂移的幅度是毛刺的 **50 倍以上**，时间尺度也分得开：
-24 小时（日周期）/ 数小时（漂移）/ 单次刷新（毛刺），
-所以曲线是"缓慢走势 + 末位小毛刺"，而不是随机数。
+日周期与漂移的幅度是毛刺的 **10 倍以上**（自检 C 段断言这一条），
+时间尺度也分得开：24 小时（日周期）/ 数小时（漂移）/ 单次刷新（毛刺）/
+数分钟（尖峰），所以曲线是"缓慢走势 + 末位小毛刺 + 偶发尖峰"，而不是随机数。
+
+★ 参照物必须按**判据**选，不能一律按量程（这是修过的真缺陷）：
+    污染物 → 锚"限值"（否则基线 = 量程 50%~90% = 限值的 3~10 倍 → 告警常亮）
+    O2     → 锚"实测运行区间"（实测烟气氧含量 3%~8%；按量程 40%~70% 会得到 12.5%，
+             而折算公式 折算 = 标干 × 15/(21-O2) 对 O2 极敏感：
+             O2=12.5% 时分母只有 8.5，全测点折算值被放大 1.9 倍 → 折算口径 100% 越限）
+    其他物理量 → 锚"量程"（没有法规判据，也没有折算敏感性）
 ============================================================================
 """
 
@@ -52,6 +65,7 @@ import os
 import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Final, Mapping, Optional
 
 from src.common.points import LIMITS, POINTS, Point
@@ -87,15 +101,30 @@ SECONDS_PER_DAY: Final[float] = 86400.0
 #     基线却取量程的 50%~90% ⇒ 必然远高于限值。
 #
 # 修正后的规则（按测点的**判据**锚定，不是按量程）：
-#   - 污染物（有环保限值，见 LIMITS[name] < high）：基线 = **限值 × 60%~85%**
+#   - 污染物（有环保限值，见 LIMITS[name] < high）：基线 = **限值 × 50%~68%**
 #       ⇒ 平时达标；日周期+漂移+毛刺+偶发尖峰才偶尔越过限值 ⇒ **超标成为事件**
 #   - 物理量（无限值判据）：基线 = 量程 × 40%~70%
 #       ⇒ 按工况合理区间取，没有法规参照
+# ⚠️ 上界别贪高（2026-10-01 实测教训）：先取到 0.75 时，NOx 的基线+漂移峰值就到了
+#    限值的 1.0 倍 ⇒ 24 小时里 **20% 的时间在越限**，看着又像"常年超标"。
+#    现在留出约 30% 余量：实测无尖峰时折算峰值 ≈ 0.62~0.71 倍限值、越限 0.0%，
+#    越限完全由尖峰驱动。
 # ⚠️ 换行业/换限值（points.py）时，这两个比例要跟着现场实际调整。
-BASELINE_OF_LIMIT_LOW: Final[float] = 0.60       # 污染物：占限值的比例区间下限
-BASELINE_OF_LIMIT_HIGH: Final[float] = 0.85
+BASELINE_OF_LIMIT_LOW: Final[float] = 0.50       # 污染物：占限值的比例区间下限
+BASELINE_OF_LIMIT_HIGH: Final[float] = 0.68
 BASELINE_OF_RANGE_LOW: Final[float] = 0.40       # 物理量：占量程的比例区间下限
 BASELINE_OF_RANGE_HIGH: Final[float] = 0.70
+# ⚠️⚠️ 例外：O2 必须锚"实测运行区间"，不能按量程（2026-10-01 第二次修正）⚠️⚠️
+#   O2 在契约里看起来像物理量（limit == high），所以按量程锚到 40%~70% → 10%~17.5%。
+#   但**实测烟气氧含量是 3%~8%**（燃煤锅炉），而且折算公式对 O2 极敏感：
+#       折算 = 标干 × (21-6)/(21-O2)
+#       O2=12.5% → ×1.88 ；O2=6% → ×1.0 ；O2=5% → ×0.94
+#   按量程锚定实测结果：O2 均值 12.55% → 全测点折算值被放大 1.9 倍
+#       ⇒ Dust/SO2/NOx 折算口径越限占比 **100%**（又变成"告警常亮"）
+#   ⇒ 这里显式把 O2 的基线区间钉在实测区间上。换行业（垃圾焚烧 8%~12% 等）要改这里。
+BASELINE_RANGE_OVERRIDE: Final[Mapping[str, tuple[float, float]]] = {
+    "O2": (0.18, 0.30),      # 量程 0~25% ⇒ 实测 4.5%~7.5%
+}
 # DIURNAL_*：日周期幅度与峰值时刻
 DIURNAL_AMPLITUDE: Final[float] = 0.035
 DIURNAL_HARMONIC_RATIO: Final[float] = 0.30      # 12 小时谐波占比（让白天/夜里不完全对称）
@@ -111,13 +140,47 @@ DRIFT_MIN_PERIOD: Final[float] = 900.0           # 最快漂移分量约 15 分�
 DRIFT_PERIOD_FACTOR: Final[float] = 4.0          # 慢分量周期 = 快分量 × 4
 DRIFT_SPLIT: Final[float] = 0.65                 # 慢分量占漂移幅度的比例
 # NOISE_JITTER_SPAN：传感器毛刺（白噪声）的半幅，单位是**量程百分比**。
-#   ⚠️ 不能用"LSB（寄存器量化步长）"当单位：各测点 scale 差 10 倍（Flow=1、其余=10），
+#   ⚠️ 不能用"LSB（寄存器量化步长）"当单位：各测点 scale 差 10 倍（Flow=1、Dust=100），
 #      同一个 LSB 幅度落到 Flow 上相当于 1/1=1.0 个物理单位、
-#      落到 Temp 上只有 1/10=0.1 个物理单位，再乘量程后前者会大到 ±0.25 倍量程。
+#      落到 SO2 上只有 1/10=0.1 个物理单位，再乘参照跨度后前者会大到 ±0.25 倍量程。
 #      按量程百分比取，各测点的相对幅度才一致。
 #   取值 0.0025 → 物理量毛刺 ±0.125% 量程；与漂移(3.0%) 的比值 = 1/12，
 #      满足"毛刺比漂移小一个数量级以上"的自检约束（这是硬约束，别为了曲线好看去破它）。
+#      按污染物换算：毛刺 ±0.09 mg/m3 ≈ 限值的 0.25%——毛刺必须远小于尖峰(限值的 30%~55%)。
 NOISE_JITTER_SPAN: Final[float] = 0.0025
+# ---- SPIKE_*：污染物偶发尖峰（2026-10-01 新增）----
+# 目的：让"超标"成为**事件**。没有它时污染物恒定低于限值、越限占比 0.00%，
+#       告警链路虽然通但没有任何可演示的触发。
+# ⚠️⚠️ 量纲：尖峰幅度是**限值比**，与日周期/漂移/毛刺的"量程比"不同，**不乘 span_ratio** ⚠️⚠️
+#   为什么必须例外：span_ratio 的作用是把"量程比"换算成"参照跨度比"。
+#   若尖峰也乘它（SO2 的 0.175），峰值只有 0.3×0.175 = 0.05 个限值 ⇒ 永远冲不破限值，
+#   加了这个尖峰等于没加。尖峰的**业务定义**就是"把折算值顶过限值"，所以它天然以限值为单位。
+#   （注：SO2 的 span_ratio = 0.175 与 BASELINE_OF_LIMIT_HIGH 恰好数值相近，容易看串。）
+# 幅度区间：0.30~0.55 个限值 ⇒ 叠加基线(0.50~0.68)后折算值约 1.0~1.2 倍限值
+#   ⇒ 真超标（能演示告警），但因为仍裁在量程内，不会被接入层拒收
+SPIKE_AMPLITUDE_LOW: Final[float] = float(os.getenv("SIM_SPIKE_AMPLITUDE_LOW", "0.30"))
+SPIKE_AMPLITUDE_HIGH: Final[float] = float(os.getenv("SIM_SPIKE_AMPLITUDE_HIGH", "0.55"))
+# 触发概率：**每个刷新周期（2 秒）触发一个尖峰的独立概率**（只对污染物生效）。
+#   ⚠️ 别按"每小时几次"直觉取值：判断当前时刻是否在尖峰内要扫 ±SPIKE_WIDTH_STEPS 步，
+#      所以"某采样落在尖峰窗口内"的概率 ≈ 1-(1-p)^(2×宽度步数)，不是 p 本身。
+#      实测教训：p=0.02 + 宽度 300 步 ⇒ 命中率 ≈ 1 ⇒ **几乎每个采样都在尖峰里**，
+#      污染物折算均值被顶到限值 5~6 倍 —— 和"基线锚错"是同一类事故（常亮 = 没有告警）。
+#   p=0.004 + 宽度 60 步 ⇒ 窗口命中率约 1/3，折算值越限时间占比约 1%~10%（随测点而不同）
+#      ⇒ 既算"偶发事件"，又保证 24 小时内每个污染物都能见到若干次超标。
+#   0 = 关闭尖峰（做基线标定/周期性自检时用 0，避免尖峰污染统计）。
+SPIKE_PROBABILITY: Final[float] = float(os.getenv("SIM_SPIKE_PROB", "0.004"))
+# 尖峰形状：以触发时刻为峰的对称三角包络，衰减到 SPIKE_WIDTH_STEPS 步时归零。
+#   不直接加方波的理由：方波跳变会让"相邻周期跳变"自检失真（尖峰上下沿是假跳变）；
+#   带包络后每个周期只爬升 峰高/步数（默认 ±0.55/60 ≈ 0.9% 限值 = 0.16% 量程），
+#   既真实又不触发告警误判。±2 分钟也和真实 CEMS 的短时波动量级相当。
+SPIKE_WIDTH_STEPS: Final[int] = int(os.getenv("SIM_SPIKE_WIDTH_STEPS", "60"))
+SPIKE_STEP_SECONDS: Final[float] = 2.0           # 尖峰包络的步长（与设备刷新周期对齐）
+# 总开关：SIM_SPIKE_ENABLE=0 时所有测点都不加尖峰。
+#   用途（自检脚本的 A/B 对照）：基线标定、日周期形状、相邻跳变都要在"无尖峰"下量一次，
+#   否则尖峰会污染这些统计（它不是常态信号，是偶发事件）。
+SPIKE_ENABLED: Final[bool] = os.getenv(
+    "SIM_SPIKE_ENABLE", "1",
+).strip().lower() not in ("0", "false", "no", "off")
 # LOAD_*：公共负荷波形（全网共享，"各测点随生产负荷同步涨落"）
 LOAD_SCALE: Final[float] = 0.012
 LOAD_PERIOD: Final[float] = 1800.0
@@ -153,11 +216,37 @@ LATTICE_SIZE: Final[int] = 8
 def _is_limit_anchored(point: Point) -> bool:
     """该测点的基线是否按**环保限值**锚定。
 
-    判定：契约里登记了 limit，且 limit 明显小于量程上限 ⇒ 这是有法规判据的污染物。
-    （物理量如温度、压力没有排放限值，按量程锚定。）
+    ⚠️ 2026-10-01 修正：原来只看 `limit < high*0.5` 这个**经验阈值**，
+    一旦某个污染物的限值落到量程一半以上（真实场景：NOx 限值 200 mg/m3 + 量程 0~400，
+    或老标准/非超低排放行业），它会被**静默判成物理量** → 基线改按量程锚定 →
+    均值直接顶到限值之上（复核实测：NOx 100% 时间越限）。这类静默正是本次修正要消灭的。
+
+    现在改为**显式声明 + 导入期校验**：声明在 LIMIT_ANCHORED_NAMES 里的测点必须
+    真的有 limit，且 limit 明显小于量程上限（防止把量程上限当限值填进来）。
     """
-    limit = LIMITS.get(point.name)
-    return limit is not None and limit < point.high * 0.5
+    return point.name in LIMIT_ANCHORED_NAMES
+
+
+# ---- 哪些测点的基线按环保限值锚定（显式声明，不靠经验阈值猜）----
+# 加新污染物时：① 在 points.py 填上它的 limit  ② 把名字加进这里
+LIMIT_ANCHORED_NAMES: Final[frozenset[str]] = frozenset({"Dust", "SO2", "NOx"})
+
+# 声明为污染物时，limit 必须明显小于量程上限（否则多半是把量程上限误填成了限值）
+_LIMIT_SANITY_RATIO: Final[float] = 0.5
+
+for _name in LIMIT_ANCHORED_NAMES:
+    _limit = LIMITS.get(_name)
+    if _limit is None:
+        raise ValueError(f"{_name} 被声明为按限值锚定，但 points.py 里没有它的 limit")
+    _point = next((p for p in POINTS if p.name == _name), None)
+    if _point is None:
+        raise ValueError(f"LIMIT_ANCHORED_NAMES 里的 {_name} 不在测点契约里")
+    if not (_limit < _point.high * _LIMIT_SANITY_RATIO):
+        raise ValueError(
+            f"{_name} 的 limit={_limit} 不小于量程上限 {_point.high} 的一半；"
+            "限值应当明显小于量程（超量程=拒收，超限值=告警，两者不是一回事）。"
+            "若确实如此，请从 LIMIT_ANCHORED_NAMES 里移除它或核对 points.py 的 limit。"
+        )
 
 
 def _baseline_span(point: Point) -> float:
@@ -168,10 +257,36 @@ def _baseline_span(point: Point) -> float:
 
 
 def _baseline_band(point: Point) -> tuple[float, float]:
-    """返回该测点的基线比例区间（占"参照跨度"的比例）。"""
+    """返回该测点的基线比例区间（占"参照跨度"的比例）。
+
+    优先级：显式区间覆盖 > 污染物锚限值 > 物理量锚量程。
+
+    ⚠️ override 的语义是**参照跨度比**（不是量程比）：污染物上 0.5 表示"限值的一半"，
+    物理量上表示"量程的一半"。原因是 `_ratio_at()` 的返回值统一乘以 `ref_span`，
+    若 override 单独用别的参照，就会与基线/幅度项量纲不一致（复核报告的 P4）。
+    """
+    override = BASELINE_RANGE_OVERRIDE.get(point.name)
+    if override is not None:
+        return override
     if _is_limit_anchored(point):
         return (BASELINE_OF_LIMIT_LOW, BASELINE_OF_LIMIT_HIGH)
     return (BASELINE_OF_RANGE_LOW, BASELINE_OF_RANGE_HIGH)
+
+
+
+def _spike_probability(point: Point) -> float:
+    """该测点是否参与偶发尖峰；不参与返回 0.0。
+
+    只有**污染物**（按限值锚定的测点）才加尖峰：
+      - 物理量（温度/压力/流量…）没有环保判据，"尖峰"没有业务含义
+      - O2 的 limit 等于量程上限，本来就不满足 _is_limit_anchored，自然不会加
+
+    SIM_SPIKE_ENABLE=0 可整体关闭（做基线标定、24h 周期性自检时用，
+    避免尖峰把"平时达标/周期形状"的统计污染掉）。
+    """
+    if not SPIKE_ENABLED or not _is_limit_anchored(point):
+        return 0.0
+    return max(0.0, min(1.0, SPIKE_PROBABILITY))
 
 
 def _derive_rng(salt: int | str, stream: str) -> random.Random:
@@ -236,6 +351,32 @@ def _local_seconds_of_day(moment: datetime) -> float:
     )
 
 
+def _spike_envelope(distance: int, width: int) -> float:
+    """尖峰包络：distance=0 时取 1.0，到 ±width 步时线性衰减到 0。
+
+    这里刻意不用二次/高斯形状：直接算 (1 - |d|/width) 就是三角包络，
+    形状不影响"是否超标"，但可让每个参数都能手算验证。
+    """
+    return max(0.0, 1.0 - abs(distance) / width)
+
+
+@lru_cache(maxsize=8192)
+def _spike_hit(seed: int, name: str, index: int, probability: float) -> float:
+    """第 index 步的尖峰峰值（未乘包络）；未触发返回 0.0。
+
+    ⚠️ 必须带 lru_cache：判断"当前时刻是否落在某个尖峰窗口内"要扫描 ±SPIKE_WIDTH_STEPS
+    步，而步长是 2 秒、窗口 300 步 ⇒ 每个采样点要问 601 次。
+    不带缓存时 24 小时自检要算几千万次 sha256（分钟级）；
+    带缓存后每个"步"只算一次。
+    ⚠️ 缓存键里必须含 seed 与 probability：否则不同种子/不同 SIM_SPIKE_PROB 的调用
+    会互相串味，破坏可复现性。
+    """
+    rng = _derive_rng(seed, f"spike:{name}:{index}")
+    if rng.random() >= probability:
+        return 0.0
+    return 1.0
+
+
 # ==================== 3. 测点参数与发生器 ====================
 
 @dataclass(frozen=True)
@@ -257,6 +398,8 @@ class PointSimParams:
     drift_period: float             # 慢漂移分量周期（秒）
     drift_period_fast: float
     coupling: float
+    spike_probability: float        # 每个刷新周期的尖峰触发概率（污染物 > 0，其余 = 0）
+    spike_amplitude: float          # 尖峰峰值（单位：限值比）——**不乘 span_ratio**，见 SPIKE_*
     lattice_slow: tuple[float, ...]
     lattice_fast: tuple[float, ...]
 
@@ -307,6 +450,8 @@ def _build_params(point: Point, seed: int) -> PointSimParams:
         drift_period=drift_period,
         drift_period_fast=drift_period / DRIFT_PERIOD_FACTOR,
         coupling=COUPLING_BY_NAME.get(point.name, 0.0),
+        spike_probability=_spike_probability(point),
+        spike_amplitude=rng.uniform(SPIKE_AMPLITUDE_LOW, SPIKE_AMPLITUDE_HIGH),
         lattice_slow=_build_lattice(rng),
         lattice_fast=_build_lattice(rng),
     )
@@ -350,6 +495,35 @@ class CemsSimulator:
         """传感器毛刺：由 (种子, 测点, 时刻) 确定性生成，与调用顺序无关。"""
         return _jit(f"jitter:{self.seed}:{name}", moment)
 
+    def _spike(self, params: PointSimParams, elapsed: float) -> float:
+        """偶发尖峰（单位：限值比）；没有尖峰时返回 0.0。
+
+        设计要点（都是为了"可复现 + 不破坏其它自检"）：
+          1. **无状态**：把时间轴按 SPIKE_STEP_SECONDS 切成整数步，尖峰是否发生
+             由 (种子, 测点名, 步号) 的 sha256 决定 ⇒ 同一时刻永远同一个答案，
+             跨进程/跨机器一致，也不需要 random 的隐藏状态
+          2. **中心 + 三角包络**：某一步触发后，把该步当作峰心，在 ±WIDTH 步内
+             按三角包络衰减 ⇒ 尖峰有上升沿/下降沿，不会是一个 2 秒宽的方波；
+             否则"相邻周期跳变"自检会被上下沿的假跳变带偏
+          3. 只在触发步的 ±WIDTH 内才做哈希，平时每个采样只查 1 步
+        """
+        if params.spike_probability <= 0.0:
+            return 0.0
+
+        width = SPIKE_WIDTH_STEPS
+        current = int(elapsed / SPIKE_STEP_SECONDS)
+        peak = 0.0
+        for offset in range(-width, width + 1):
+            index = current + offset
+            if index < 0:
+                continue
+            if _spike_hit(self.seed, params.name, index, params.spike_probability) <= 0.0:
+                continue
+            peak = max(peak, params.spike_amplitude * _spike_envelope(offset, width))
+            if peak >= params.spike_amplitude:
+                break               # 已经到峰心（包络最大就是 1.0），无需再扫
+        return peak
+
     def _ratio_at(self, params: PointSimParams, moment: datetime) -> float:
         """算出某测点该时刻的值，单位是"参照跨度比例"（污染物=限值比，物理量=量程比）。"""
         elapsed = (moment - SIM_EPOCH).total_seconds()
@@ -380,7 +554,9 @@ class CemsSimulator:
 
         # 4) 传感器毛刺（白噪声，幅度最小）
         jitter = k * NOISE_JITTER_SPAN * self._jitter(params.name, moment)
-        return params.base_ratio + diurnal + load + drift + jitter
+        # 5) 偶发尖峰：单位已经是"限值比"，**不能**乘 k（乘了就永远冲不破限值，见 SPIKE_*）
+        spike = self._spike(params, elapsed)
+        return params.base_ratio + diurnal + load + drift + jitter + spike
 
     # ---- 对外接口 ----
 

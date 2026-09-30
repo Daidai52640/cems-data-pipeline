@@ -24,7 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.common.points import LIMITS, POINTS                         # noqa: E402
+from src.common.points import LIMITS, POINTS, to_reference_o2       # noqa: E402
 from src.device import simulator as SIM                              # noqa: E402
 from src.device.modbus_server import build_registers, encode         # noqa: E402
 
@@ -198,12 +198,17 @@ def section_e_baseline_calibration() -> None:
        结果污染物常年顶在限值 3~10 倍（实测 SO2 均值 105 vs 限值 35），
        "超标告警"永远亮着 = 没有告警。
        根因是**锚错参照物**：污染物该锚"限值"，物理量才锚"量程"。
+    ⚠️ 同一类事故还有第二个入口（同日发现）：**O2 被当成物理量锚到量程 40%~70%**
+       ⇒ 实测氧含量 12.5%（真实烟气是 3%~8%），而折算公式对 O2 极敏感
+       ⇒ 全测点折算值被放大 1.9 倍、折算口径越限 100%。所以这里**折算了也判一次**。
     """
     print("\n=== E. 基线标定（污染物应锚在限值上，物理量锚在量程上）===")
-    print("%-10s %8s %10s %10s %9s %8s" % ("测点", "限值", "均值", "最大", "均值/限值", "越限%"))
+    print("%-10s %8s %10s %10s %9s %8s %10s"
+          % ("测点", "限值", "均值", "最大", "均值/限值", "越限%", "折算越限%"))
     moments = [
         FAKE_START + timedelta(seconds=30 * i) for i in range(24 * 60 * 2)   # 24 小时
     ]
+    o2_values = [SIMULATOR.sample("O2", m) for m in moments]
     for point in POINTS:
         values = [SIMULATOR.sample(point.name, m) for m in moments]
         mean = sum(values) / len(values)
@@ -211,14 +216,25 @@ def section_e_baseline_calibration() -> None:
         limit = LIMITS.get(point.name)
         anchored = limit is not None and limit < point.high * 0.5
         if not anchored:
-            print("%-10s %8s %10.2f %10.2f %9s %8s"
-                  % (point.name, "-", mean, peak, "-", "-"))
+            print("%-10s %8s %10.2f %10.2f %9s %8s %10s"
+                  % (point.name, "-", mean, peak, "-", "-", "-"))
             continue
         over_pct = 100.0 * sum(1 for v in values if v > limit) / len(values)
-        print("%-10s %8.1f %10.2f %10.2f %9.2f %7.2f%%"
-              % (point.name, limit, mean, peak, mean / limit, over_pct))
+        # 折算口径（真源：points.to_reference_o2）——判定超标就是这个口径
+        converted = [to_reference_o2(v, o) for v, o in zip(values, o2_values)]
+        converted_over = 100.0 * sum(1 for c in converted if c > limit) / len(converted)
+        print("%-10s %8.1f %10.2f %10.2f %9.2f %7.2f%% %9.2f%%"
+              % (point.name, limit, mean, peak, mean / limit, over_pct, converted_over))
         _check(mean < limit, f"{point.name} 均值 {mean:.2f} 低于限值 {limit:.1f}（平时达标）")
-        _check(over_pct < 50.0, f"{point.name} 越限占比 {over_pct:.1f}% 低于 50%（超标是事件不是常态）")
+        _check(
+            over_pct < 50.0,
+            f"{point.name} 标干越限占比 {over_pct:.1f}% 低于 50%（超标是事件不是常态）",
+        )
+        _check(
+            converted_over < 50.0,
+            f"{point.name} 折算越限占比 {converted_over:.1f}% 低于 50%"
+            "（O2 锚定正确时折算口径也不该常年超标）",
+        )
 
 
 def main() -> int:

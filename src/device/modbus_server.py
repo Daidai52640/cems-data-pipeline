@@ -33,6 +33,10 @@ from src.device.simulator import (                                 # noqa: E402
     SIM_CLOCK_SKEW_SECONDS,
     SIM_EPOCH,
     SIMULATOR,
+    SPIKE_AMPLITUDE_HIGH,
+    SPIKE_AMPLITUDE_LOW,
+    SPIKE_ENABLED,
+    SPIKE_PROBABILITY,
     CemsSimulator,
 )
 
@@ -77,12 +81,19 @@ def setup_logging() -> None:
 
 
 def encode(value: float, scale: int = SCALE) -> int:
-    """把真实值按 1 位小数取整后放大 scale 倍，转成寄存器可存的整数。
+    """把真实值放大 scale 倍并四舍五入，转成寄存器可存的整数。
 
     ⚠️ scale 是**每个测点自带**的（见 points.py）：Modbus 保持寄存器是 16 位无符号，
     流量这类大数必须配更小的 scale，否则会溢出。
+
+    ⚠️⚠️ 2026-10-01 修正：原来写成 `round(round(value, 1) * scale)`，
+    内层先把真实值量化到 **0.1**，scale 只把那个 0.1 的倍数放大 ——
+    结果是**任何 scale 的交付分辨率都恒为 0.1**，把 Dust 的 scale 从 10 提到 100 等于没改。
+    实测：2880 个采样里，scale=10 与 scale=100 的交付值**一个都不同不了**；
+    去掉内层预量化后，Dust 的 24 小时不同取值从 23 个升到 204 个。
+    正确做法是**只量化一次**，量化步长由 scale 决定（分辨率 = 1/scale）。
     """
-    return int(round(round(value, 1) * scale))
+    return int(round(value * scale))
 
 
 def build_registers(
@@ -161,6 +172,12 @@ def main() -> None:
     LOGGER.info(
         "仿真信号已启用: 种子=%s 刷新=%ss 时间基准=%s 时钟偏移=%.0fs",
         SIM_SEED_DISPLAY, UPDATE_INTERVAL, SIM_EPOCH.isoformat(), SIM_CLOCK_SKEW_SECONDS,
+    )
+    LOGGER.info(
+        "污染物尖峰: 开关=%s 概率=%.4f/周期 幅度=%.2f~%.2f 限值（只作用于 %s）",
+        SPIKE_ENABLED, SPIKE_PROBABILITY,
+        SPIKE_AMPLITUDE_LOW, SPIKE_AMPLITUDE_HIGH,
+        "Dust/SO2/NOx",
     )
 
     try:
