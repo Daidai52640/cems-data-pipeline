@@ -297,6 +297,20 @@ services:
       CACHE_MARGIN_SECONDS: ${CACHE_MARGIN_SECONDS:-60}
       # 条目 TTL：兜底失效（水位丢失 / 外部直接改库 / 超长滞后补传）
       CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+      # ---- 报表覆盖率标记（缺数要标出来，不许消失，见 src/web/report.py 头部） ----
+      # 覆盖率的分母来源：应有条数 = 窗口秒数 / 采集周期。
+      # ⚠️ 必须与 gateway 的 POLL_INTERVAL 一致（上面 gateway 当前固定 "5.0"）。
+      POLL_INTERVAL: ${POLL_INTERVAL:-5.0}
+      # 门限（0~1）：低于它判 insufficient，绝不判达标。默认 0.75 =
+      # docs/告警判据设计.md §3.4 的 ALARM_COVERAGE_MIN；调到 0.84 以上会误标正常数据
+      # （实测天花板 5.0/5.154 = 97.0%，干净 1 分钟窗口覆盖率 P05=91.7% / 最差 83.3%）。
+      REPORT_COVERAGE_MIN: ${REPORT_COVERAGE_MIN:-0.75}
+      # 缺口清单上限（只截清单，不截计数）：整段断档时避免响应体翻倍
+      REPORT_GAP_MAX: ${REPORT_GAP_MAX:-200}
+      # 在途样本宽限（秒）：只作用于进行中的窗口，防"刚过十几秒就说这一小时缺数"。
+      # 依据 = 网关补传实测最大滞后 32.1 s（docs/性能与可靠性指标.md §4.2），取 60 s；
+      # 与 CACHE_MARGIN_SECONDS 同一依据、同一取值。
+      REPORT_INFLIGHT_GRACE_SECONDS: ${REPORT_INFLIGHT_GRACE_SECONDS:-60}
     ports:
       # ⚠️ 宿主机端口默认 5001 不是 5000：Windows 上 5000 常被其它进程的临时源端口占用，
       #    Docker 会报 "bind: An attempt was made to access a socket in a way forbidden by
