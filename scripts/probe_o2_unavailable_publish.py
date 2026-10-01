@@ -10,13 +10,21 @@
     - 会在 TDengine cems.cems_data 留下真实数据行（时间戳倒推 2 小时，不覆盖实时数据）
     - 用完即弃；不要在正式环境运行
 
+🛑🛑 跑之前必读：它会**往真实数据库写探针数据** 🛑🛑
+    - 探针行有可识别的签名：o2=22（或你传的 --o2）、dust=4、so2=30、nox=40
+    - 跑完请按窗口清理，例如：
+        docker exec tdengine taos -s "DELETE FROM cems.cems_data WHERE ts >= '<起始>' AND ts <= '<结束>';"
+      或按签名逐窗口核对后再删（**别用宽泛条件删，会连带删掉实时数据**）
+    - 它用独立 client_id（见 PROBE_CLIENT_ID），**不会挤掉网关/订阅端的会话**；
+      但也**不要**把它加进 compose 或定时任务——它是人工一次性工具
+
 用法：
     python scripts/probe_o2_unavailable_publish.py              # 默认发 20 条（确保命中抽样日志）
     python scripts/probe_o2_unavailable_publish.py --count 40
     python scripts/probe_o2_unavailable_publish.py --o2 21.0
 
 MQTT 参数默认取与环境变量同名的本机默认值（MQTT_HOST/MQTT_PORT/MQTT_TOPIC/MQTT_QOS），
-与接入层一致；本脚本**不改**主题、QoS 和 client_id 约定。
+与接入层一致；主题与 QoS 与接入层一致，**client_id 用探针专用值**（不占用订阅端/网关会话）。
 """
 
 from __future__ import annotations
