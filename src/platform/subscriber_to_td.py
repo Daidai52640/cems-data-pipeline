@@ -27,7 +27,9 @@ from src.common.points import (   # noqa: E402
     POINTS,
     RANGES,
     ZS_TARGETS,
+    ZS_UNAVAILABLE_SENTINEL,
     to_reference_o2,
+    to_transmit_value,
 )
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
@@ -327,13 +329,21 @@ class TdWriter:
 
 # ==================== 5. 折算值（标干 → 基准氧含量） ====================
 #
+# 折算值分**两层**，职责不同，别混：
+#   ① 数学层 reference_values()：调 points.to_reference_o2() 算折算浓度。
+#      O2 >= 21% 时分母 <= 0，折算无物理意义 → 返回 nan（数学语义，也是判定口径）。
+#   ② 协议层 transmit_reference_values()：调 points.to_transmit_value()，把 nan 编码成
+#      HJ 212-2025 §8.1.1 d) 要求的哨兵值（+9999.99），有限折算值原样透出。
+#   record_reference() 记录的是②（往外报的那一份）；抽样日志也打②。
+#   ⚠️ 判定/统计必须用①：哨兵值 9999.99 大于任何限值，拿它比限值必然误报。
+#
 # 全仓库**唯一**调用 points.to_reference_o2() 的地方就是 reference_values()：
 #   - 只有它算折算值，别处要折算就调它 / 取最近值快照，不许再推一遍公式
 #   - 折算值不写库、不进寄存器（导出量，存了会漂）
 #   - O2 >= 21% 时 to_reference_o2() 返回 nan（分母 <= 0，折算无物理意义），
-#     这里原样透出，不绕过、不当 0
+#     这里原样透出，不绕过、不当 0；要出站再走②编码
 
-# 最近一条**已成功入库**数据的折算值快照（含时间戳）；读接口返回副本
+# 最近一条**已成功入库**数据的传输值快照（含时间戳）；读接口返回副本
 LAST_REFERENCE: Final[dict[str, Any]] = {"ts": "", "values": {}}
 
 
@@ -348,6 +358,7 @@ def reference_values(values: dict[str, float]) -> dict[str, float]:
         折算浓度 = 标干浓度 × (21 - 基准氧含量) / (21 - 实测氧含量)
 
     ⚠️ 返回 nan 的情形：实测 O2 >= 21%（契约行为，别绕过、别当 0）。
+       要**往外传输**时必须经 transmit_reference_values() 编码，不能直接把 nan 发出去。
     ⚠️ 判定口径：**超标判的是折算值，不是标干值**（本函数不做告警判定）。
     """
     o2 = values[O2_FIELD_NAME]
@@ -357,24 +368,47 @@ def reference_values(values: dict[str, float]) -> dict[str, float]:
     }
 
 
+def transmit_reference_values(values: dict[str, float]) -> dict[str, float]:
+    """纯函数：把一条报文的折算值编码成**可传输值**（协议层，不碰库、不改状态）。
+
+    这是本工程**唯一**的折算值协议编码点：
+      - 数学层算不出来的（nan/±inf）→ 哨兵值 +9999.99（HJ 212-2025 §8.1.1 d)：
+        无法计算折算浓度时按缺省数据类型的最大值传输，不是 0、不是实测值、不是报无效）
+      - 算得出来的有限折算值 → 原样透出（不缩放、不舍入）
+
+    编码规则的真源在契约 points.to_transmit_value() / ZS_UNAVAILABLE_SENTINEL，
+    本函数只逐列调用，不自己写 if/else —— 免得协议细节在接入层再抄一份。
+
+    ⚠️ 出参键与 reference_values() 相同（TDengine 列名）；**只用于出站/日志/展示**，
+    不许拿去做达标判定或统计（哨兵值一定大于限值）。
+    """
+    return {
+        column: to_transmit_value(value)
+        for column, value in reference_values(values).items()
+    }
+
+
 def record_reference(ts: str, values: dict[str, float]) -> dict[str, float]:
-    """算一次折算值并记成"最近一条"快照；返回本次结果。
+    """算一次折算值、编码成传输值，并记成"最近一条"快照；返回本次结果。
 
     只在写入 TDengine **成功之后**调用：进不了库的数据不配当"最近一条"。
-    每条报文只调 reference_values() 一次，折算值全链路只在一处算。
+    每条报文只调 reference_values() 一次（折算值全链路只在一处算），
+    快照存的是**传输编码后**的值（下游/验证脚本看到的应与上报出去的一致）。
     """
-    snapshot = reference_values(values)
+    snapshot = transmit_reference_values(values)
     LAST_REFERENCE["values"] = snapshot
     LAST_REFERENCE["ts"] = ts
     return snapshot
 
 
 def latest_reference_values() -> dict[str, float]:
-    """取最近一条已入库数据的折算值（副本，键为 TDengine 列名 dust/so2/nox）。
+    """取最近一条已入库数据的**传输值**（副本，键为 TDengine 列名 dust/so2/nox）。
 
+    与上报出去的那一份一致：算不出来时是哨兵值 +9999.99，不是 nan。
     验证脚本或下游可以直接：
         from src.platform.subscriber_to_td import latest_reference_values
     返回副本，避免调用方改到进程内的快照。
+    ⚠️ 别拿它做达标判定/统计（哨兵值大于限值），判定请按条调用 reference_values()。
     """
     return dict(LAST_REFERENCE["values"])
 
@@ -458,9 +492,12 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
         references = record_reference(ts, values)
         if STATS["accepted"] == 1 or STATS["accepted"] % REFERENCE_LOG_EVERY == 0:
             # 抽样打 INFO 而不是每条都打（首条也打：重启后立刻能看到折算出口是活的）
+            # 打的是**传输值**：O2 >= 21% 时应当看到哨兵值，而不是 nan
             LOGGER.info(
-                "折算值抽样（第 %d 条）: 标干 ts=%s O2=%.4f -> %s",
+                "折算值抽样（第 %d 条，出站已按 HJ 212-2025 §8.1.1 d) 编码，"
+                "无法折算时传哨兵值 %.2f）: 标干 ts=%s O2=%.4f -> %s",
                 STATS["accepted"],
+                ZS_UNAVAILABLE_SENTINEL,
                 ts,
                 values[O2_FIELD_NAME],
                 " ".join(f"{column}={references[column]:.4f}" for column in ZS_TARGETS),
