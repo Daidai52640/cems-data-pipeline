@@ -1,0 +1,93 @@
+{
+  "tag": "slowpath_before",
+  "minutes": 10.0,
+  "poll_interval_s": 0.25,
+  "rows_in_db_window": 116,
+  "rows_seen_by_probe": 116,
+  "class_counts": {
+    "direct": 97,
+    "resend": 19,
+    "no-probe": 0
+  },
+  "clock_jump_events": 40,
+  "rows_excluded_for_clock_jump": 0,
+  "probe_arrivals_without_db_row": [],
+  "lat_visible_corrected_all": {
+    "n": 116,
+    "min": 0.046,
+    "p50": 0.791,
+    "p95": 31.85475,
+    "max": 32.156,
+    "mean": 5.794629310344828,
+    "stdev": 11.540056708872925
+  },
+  "lat_visible_corrected_direct": {
+    "n": 97,
+    "min": 0.046,
+    "p50": 0.717,
+    "p95": 1.0975999999999997,
+    "max": 1.218,
+    "mean": 0.710639175257732,
+    "stdev": 0.2684304761621639
+  },
+  "lat_visible_corrected_resend": {
+    "n": 19,
+    "min": 31.147,
+    "p50": 31.775,
+    "p95": 32.0912,
+    "max": 32.156,
+    "mean": 31.749736842105264,
+    "stdev": 0.25033418599616497
+  },
+  "lat_arrival_corrected_direct": {
+    "n": 97,
+    "min": 0.013,
+    "p50": 0.585,
+    "p95": 0.9853999999999999,
+    "max": 1.008,
+    "mean": 0.5874432989690721,
+    "stdev": 0.25564554599875866
+  },
+  "delta2_direct": {
+    "n": 97,
+    "min": 0.002,
+    "p50": 0.115,
+    "p95": 0.23859999999999995,
+    "max": 0.251,
+    "mean": 0.12319587628865979,
+    "stdev": 0.0737804512240056
+  },
+  "delta2_direct_poll_debiased": {
+    "n": 97,
+    "min": -0.123,
+    "p50": -0.009999999999999995,
+    "p95": 0.11359999999999995,
+    "max": 0.126,
+    "mean": -0.0018041237113402054,
+    "stdev": 0.0737804512240056
+  },
+  "direct_fixed_segment_s": 0.132,
+  "direct_fixed_segment_stderr_s": 0.01020408163265306,
+  "direct_upper_bound_s": 0.046,
+  "device_to_broker_upper_bound_s": 0.013,
+  "device_to_broker_fixed_segment_s": 0.010499999999999954,
+  "device_to_broker_stderr_s": 0.01020408163265306,
+  "clock_offset_ms": {
+    "n": 2394,
+    "min": -0.5339555740356445,
+    "p50": 0.059961915016174316,
+    "p95": 0.5170360088348388,
+    "max": 0.5879867076873779,
+    "mean": 0.0623483473595322,
+    "stdev": 0.2932814519212707
+  },
+  "rest_rtt_ms": {
+    "min": 2.8162002563476562,
+    "p50": 4.0863752365112305,
+    "p95": 25.513041019439697,
+    "max": 33.94627571105957,
+    "mean": 8.078805386472366,
+    "stdev": 7.678293053610686
+  },
+  "quantization_note": "ts 只到秒：lat_visible_corrected = 真实延迟 + U(0,1)。逐样本仍有 ±0.5 s 量化偏差；直接引用 P50/P95 偏保守 0.5 s，去偏估计 = 观测值 - 0.5 s。"
+}

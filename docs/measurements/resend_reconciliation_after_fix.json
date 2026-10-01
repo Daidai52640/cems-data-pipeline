@@ -1,0 +1,143 @@
+{
+  "tag": "after_fix",
+  "outage_target_s": 180.0,
+  "events": {
+    "emqx_stopped_at": "2026-10-01 15:48:52",
+    "snapshot_at": "2026-10-01 15:51:52",
+    "emqx_started_at": "2026-10-01 15:51:52",
+    "emqx_healthy_at": "2026-10-01 15:52:05",
+    "drained_at": "2026-10-01 15:53:41",
+    "drain_seconds": 109.9
+  },
+  "baseline": {
+    "at": "2026-10-01 15:48:50",
+    "max_ts": "2026-10-01 15:48:48",
+    "rows": 4003,
+    "cache_bytes": 0,
+    "cache_lines": 0
+  },
+  "snapshot": {
+    "file_lines": 35,
+    "malformed_lines": 0,
+    "unique_ts": 35,
+    "first_ts": "2026-10-01 15:48:54",
+    "last_ts": "2026-10-01 15:51:49",
+    "evidence_file": "docs\\measurements\\resend_snapshot_after_fix.txt"
+  },
+  "reconciliation": {
+    "should_resend": 35,
+    "snapshot_rows_at_or_before_baseline": 0,
+    "drain_ok": true,
+    "leftover_lines": 0,
+    "live_rows_after_recovery": [
+      "2026-10-01 15:51:54",
+      "2026-10-01 15:52:00",
+      "2026-10-01 15:52:05",
+      "2026-10-01 15:52:10",
+      "2026-10-01 15:52:15",
+      "2026-10-01 15:52:20",
+      "2026-10-01 15:52:25",
+      "2026-10-01 15:52:31",
+      "2026-10-01 15:52:36",
+      "2026-10-01 15:52:41",
+      "2026-10-01 15:52:46",
+      "2026-10-01 15:52:51",
+      "2026-10-01 15:52:56",
+      "2026-10-01 15:53:02",
+      "2026-10-01 15:53:07",
+      "2026-10-01 15:53:12",
+      "2026-10-01 15:53:18",
+      "2026-10-01 15:53:23",
+      "2026-10-01 15:53:28",
+      "2026-10-01 15:53:33",
+      "2026-10-01 15:53:38",
+      "2026-10-01 15:53:43"
+    ],
+    "delivered": 35,
+    "missing": 0,
+    "success_rate": 1.0,
+    "missing_ts": [],
+    "live_rows_after_recovery_count": 22
+  },
+  "states_after_recovery": {
+    "emqx": [
+      "running",
+      "healthy"
+    ],
+    "tdengine": [
+      "running",
+      "healthy"
+    ],
+    "cems-device": [
+      "running",
+      "healthy"
+    ],
+    "cems-gateway": [
+      "running",
+      "healthy"
+    ],
+    "cems-subscriber": [
+      "running",
+      "unhealthy"
+    ],
+    "cems-web": [
+      "running",
+      "healthy"
+    ]
+  },
+  "recovery_count_check": {
+    "counts": [
+      4003,
+      4059
+    ],
+    "increasing": true,
+    "subscriber_state_at_check": [
+      "running",
+      "healthy"
+    ]
+  },
+  "after": {
+    "at": "2026-10-01 15:53:46",
+    "rows": 4060,
+    "cache_lines": 0
+  },
+  "ledger": {
+    "断开前库内基线(条)": 4003,
+    "断开前库内 MAX(ts)": "2026-10-01 15:48:48",
+    "断开时长(s)": 180.0,
+    "断开期间理论产生(条, 时长/5.0)": 36.0,
+    "断开期间实际产生=该补条数 N(条)": 35,
+    "恢复后队列剩余(行)": 0,
+    "恢复后补上 M(条)": 35,
+    "快照之后新产生并最终入库(条)": 22,
+    "库内新增(条)": 57,
+    "恒等式 基线+N+新产生-剩余=新增": true,
+    "补传成功率 M/N": 1.0
+  },
+  "final_states": {
+    "emqx": [
+      "running",
+      "healthy"
+    ],
+    "tdengine": [
+      "running",
+      "healthy"
+    ],
+    "cems-device": [
+      "running",
+      "healthy"
+    ],
+    "cems-gateway": [
+      "running",
+      "healthy"
+    ],
+    "cems-subscriber": [
+      "running",
+      "healthy"
+    ],
+    "cems-web": [
+      "running",
+      "healthy"
+    ]
+  }
+}
