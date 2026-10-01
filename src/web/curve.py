@@ -4,6 +4,9 @@
 为什么不能靠调大 QUERY_MINUTES：/api/data 是 `ORDER BY ts DESC LIMIT n` 的原始点查询，
 窗口一放大就会被静默截断成"最新 n 个点"，前端看起来像前面那段没数据，且不报错。
 所以自由区间走这个接口，长区间在 TDengine 侧按 1 分钟/1 小时/1 天聚合。
+
+聚合粒度下，响应里额外带 report.py 算好的 `coverage` 汇总（见 src/web/report.py 头部），
+本模块不重算覆盖率，也不新增窗口语义 —— 覆盖率只有一份口径。
 """
 
 from __future__ import annotations
@@ -94,6 +97,8 @@ def build_curve(start_text: Optional[str], end_text: Optional[str]) -> dict[str,
     """取一段区间的曲线数据（列式）+ 粒度元信息。
 
     参数解析、上界收窄、聚合口径全部复用 report.py，曲线路径不另写一套 SQL 口径。
+    聚合粒度下额外带上 report.py 算好的覆盖率汇总（`coverage`）；
+    原始点粒度没有"窗口"这个概念，**不加**该字段（字段只加不删，不硬塞 null 占位）。
     """
     now = datetime.now()
     start = report.parse_time(start_text, "start", now - timedelta(hours=1))
@@ -102,6 +107,7 @@ def build_curve(start_text: Optional[str], end_text: Optional[str]) -> dict[str,
         raise CurveParamError("start 必须早于 end")
 
     unit = pick_unit(end - start)
+    coverage: Optional[dict[str, Any]] = None
     if unit == UNIT_RAW:
         # 原始点区间可能覆盖"当前秒"（跨度 ≤ CURVE_RAW_MAX_HOURS 的默认区间就包含当下），
         # 明确声明不可缓存：kind=None 会让 aggregate/query_raw 走无缓存出口。
@@ -115,6 +121,7 @@ def build_curve(start_text: Optional[str], end_text: Optional[str]) -> dict[str,
         start, end = report.parse_time(series["start"], "start", start), \
             report.parse_time(series["end"], "end", end)
         payload = columns_from_points(series["points"])
+        coverage = series["coverage"]
 
     payload.update({
         "unit": unit,
@@ -124,6 +131,8 @@ def build_curve(start_text: Optional[str], end_text: Optional[str]) -> dict[str,
         "start": start.strftime(report.TS_FORMAT),
         "end": end.strftime(report.TS_FORMAT),
     })
+    if coverage is not None:
+        payload["coverage"] = coverage
     LOGGER.debug(
         "曲线 %s ~ %s 粒度=%s 点数=%d", payload["start"], payload["end"], unit, payload["points"],
     )
