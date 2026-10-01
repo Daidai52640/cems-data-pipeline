@@ -1,0 +1,30 @@
+{
+  "tag": "current_run",
+  "log_window": {
+    "first_cache_event": "2026-10-01 13:26:17",
+    "last_cache_event": "2026-10-01 14:20:08",
+    "resend_cycles": 106,
+    "cached_rows": 106
+  },
+  "cache_reasons": {
+    "补传中": 106
+  },
+  "resend_batch_sizes": [
+    1
+  ],
+  "lag_s": {
+    "n": 105,
+    "min": 30.0,
+    "p50": 31.0,
+    "p95": 31.0,
+    "max": 32.0,
+    "mean": 30.771428571428572
+  },
+  "resend_path_ratio": 0.16798732171156894,
+  "ratio_window": {
+    "first": "2026-10-01 13:26:17",
+    "last": "2026-10-01 14:20:08",
+    "db_rows": 631,
+    "cached_rows": 106
+  }
+}

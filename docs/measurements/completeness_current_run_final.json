@@ -1,0 +1,65 @@
+{
+  "tag": "current_run_final",
+  "since": "2026-10-01 13:26:16",
+  "until": "2026-10-01 15:10:27",
+  "interval_s": 5.0,
+  "gap_factor": 3.0,
+  "scan_all": {
+    "start": "2026-10-01 13:26:17",
+    "end": "2026-10-01 15:10:26",
+    "duration_s": 6249.0,
+    "rows": 1216,
+    "delta_s": {
+      "min": 4.0,
+      "p50": 5.0,
+      "p95": 6.0,
+      "max": 6.0,
+      "mean": 5.14320987654321
+    },
+    "gap_threshold_s": 15.0,
+    "gaps": [],
+    "missing_rows_inferred": 0,
+    "expected_nominal": 1250.8,
+    "expected_by_observed_rhythm": 1250.8,
+    "completeness_nominal": 0.9721778062040295,
+    "completeness_by_rhythm": 0.9721778062040295,
+    "completeness_effective": 1.0,
+    "rows_per_hour": 700.5280844935189
+  },
+  "chosen_window": {
+    "start": "2026-10-01 13:26:17",
+    "end": "2026-10-01 15:10:26",
+    "duration_s": 6249.0,
+    "rows": 1216,
+    "delta_s": {
+      "min": 4.0,
+      "p50": 5.0,
+      "p95": 6.0,
+      "max": 6.0,
+      "mean": 5.14320987654321
+    },
+    "gap_threshold_s": 15.0,
+    "gaps": [],
+    "missing_rows_inferred": 0,
+    "expected_nominal": 1250.8,
+    "expected_by_observed_rhythm": 1250.8,
+    "completeness_nominal": 0.9721778062040295,
+    "completeness_by_rhythm": 0.9721778062040295,
+    "completeness_effective": 1.0,
+    "rows_per_hour": 700.5280844935189
+  },
+  "per_hour_all": [
+    {
+      "hour": "2026-10-01 13:00",
+      "rows": 396
+    },
+    {
+      "hour": "2026-10-01 14:00",
+      "rows": 698
+    },
+    {
+      "hour": "2026-10-01 15:00",
+      "rows": 122
+    }
+  ]
+}
