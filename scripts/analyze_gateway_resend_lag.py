@@ -74,7 +74,7 @@ def main() -> int:
     parser.add_argument("--since", default=None, help="只分析该本地时间之后的行（如 2026-10-01 13:26:00）")
     parser.add_argument("--tag", default="resend_lag")
     parser.add_argument(
-        "--out-prefix", default=str(PROJECT_ROOT / "docs" / "measurements" / "gateway_resend")
+        "--out-prefix", default=str(PROJECT_ROOT / "docs" / "evidence" / "drill" / "gateway_resend")
     )
     args = parser.parse_args()
 

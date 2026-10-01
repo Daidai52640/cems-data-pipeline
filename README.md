@@ -2,7 +2,7 @@
 
 模拟环保 CEMS 烟气在线监测数据采集全链路：仿真设备 → 网关 → MQTT Broker → 平台接入 → 时序库 → Web 实时大屏。
 
-![CEMS 数据采集链路架构](docs/cems-pipeline-architecture.visual-check.2048x1320.dark.png)
+![CEMS 数据采集链路架构](docs/diagrams/cems-pipeline-architecture.visual-check.2048x1320.dark.png)
 
 ## 技术栈
 
@@ -16,17 +16,21 @@
 
 ### 1. 设备层 `src/device/modbus_server.py`
 - 功能：模拟 CEMS 分析仪，Modbus TCP 服务端
-- 寄存器（均放大10倍存整数）：地址0=SO2、地址1=NOx、地址2=Flow、地址3=颗粒物Dust、地址4=O2、地址5=温度Temp、地址6=湿度Humidity、地址7=压力Pressure
+- 寄存器（**按测点各自的比例系数**放大存整数，系数见 `src/common/points.py` 的 `Point.scale`）：
+  地址0=Flow、地址1=Dust、地址2=SO2、地址3=NOx、地址4=O2、地址5=Velocity、地址6=Temp、地址7=Humidity、地址8=Pressure
+  ⚠️ 顺序即 HJ 212 上传值序；系数不是全局统一值（大数测点用更小的系数，避免 16 位寄存器溢出）
 - 监听端口：5020
 
 ### 2. 网关层 `src/gateway/gateway.py`
-- 功能：轮询读设备寄存器 → 换算真实值（÷10）→ 加时间戳 → MQTT 发布
+- 功能：轮询读设备寄存器 → 按各测点系数换算真实值 → 加时间戳 → MQTT 发布
 - 发布主题：`cems/plant1/data`
 - QoS：1
 - 断网续传：本地 JSONL 缓存，重连后自动补传。缓存分两个文件、各有一个写者：
   - `data/cache.jsonl`——采集主循环追加写，放新数据
   - `data/cache.jsonl.sending`——补传线程持有，放在途批次
   两者用原子改名交接，所以补传期间新采的数据不会被覆盖；进程中途被杀也能接着补。
+  ⚠️ **保护范围只覆盖"已进入网关的数据"**；网关读不到设备（上游断）时源头无缓冲，那一段会真丢
+  （实测与边界见 `docs/reference/` 与 `docs/runbooks/故障台账.md`）
 - 送达判定：QoS=1 必须等到 broker 的 **PUBACK** 才算送达（`publish()` 返回 `rc=0`
   只代表进了本机发送队列）。没等到 PUBACK 的数据一律转存缓存重试，不会静默丢弃。
 - 补传节奏可用环境变量调：`PUBLISH_ACK_TIMEOUT`（单条确认超时）、
@@ -45,7 +49,7 @@
   - broker 侧上限（EMQX 默认值）：会话保留 `session_expiry_interval=2h`、离线队列 `max_mqueue_len=1000` 条，
     超出即丢最旧的；需要更长的断线容忍时间要改 EMQX 配置
   - 把 `MQTT_CLEAN_SESSION` 置 1 可退回"离线即丢"，仅用于对比演示
-- TDengine 超级表：`cems.cems_data`（ts, so2, nox, flow, dust, o2, temp, humidity, pressure）
+- TDengine 超级表：`cems.cems_data`（ts, flow, dust, so2, nox, o2, velocity, temp, humidity, pressure + TAG plant/device）
 - 老库自动升级：启动时 DESCRIBE 超级表，缺哪列用 ALTER STABLE 补哪列
 - 子表命名：`{厂区}_{设备}`（如 `plant1_device1`）。TDengine 对**已存在**的子表会沿用
   第一次写入的 TAGS 且不报错，若拿厂区名当子表名，接入第二台设备时数据会被静默
@@ -53,14 +57,14 @@
   （子表名统一转小写后比对：TDengine 表名不区分大小写，不归一化就会查不到行、静默跳过检查）
 - 数值校验：每个测点先过 `math.isfinite()`（挡 NaN/inf）再过量程白名单
   （`POINT_RANGES`，挡负数和超量程）。任一测点不合格就整条拒收 —— 因为 NaN/inf 会让
-  TDengine 报 syntax error，整行连其余 7 个正常测点一起丢，不如提前拦下。
+  TDengine 报 syntax error，整行连其余 8 个正常测点一起丢，不如提前拦下。
   拒收条数会累计在日志里（`报文已拒收（累计 N 条）`）
 - 启动自检：库名/表名/标签做标识符白名单校验（这些值会拼进 SQL），不合法直接拒绝启动
 - 标签：plant, device
 - 依赖：paho-mqtt、taospy
 
 ### 4. 展示层 `src/web/web_dashboard.py`
-- 功能：Flask 后端 + ECharts 前端实时曲线（8 测点 / 3 组 Y 轴）
+- 功能：Flask 后端 + ECharts 前端实时曲线（9 测点 / 4 组 Y 轴）
 - 接口：`GET /api/data` 返回最近 10 分钟数据（JSON）
 - 健康检查：`GET /api/health` 返回 Web 与 TDengine 是否都通
 - 刷新：前端每 5 秒自动拉取

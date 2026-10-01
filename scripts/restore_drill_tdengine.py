@@ -27,7 +27,7 @@
 # 3) ⚠️ 校验窗口是 manifest 里 `window.pre_min_ms .. window.pre_max_ms`，
 #    不是"库里当前的全部数据"。原因：备份是在线做的，源库在 dump 之后还在长；
 #    用 dump **前**的窗口做比较，可以保证这个窗口完整地落在备份里，
-#    源端继续写入不会污染结论（详见 docs/数据可靠性.md §2.4）。
+#    源端继续写入不会污染结论（详见 docs/runbooks/恢复演练与对账口径.md §1.4）。
 #    ⚠️ 只比总数会掩盖问题（丢了 A 段、多了 B 段，总数可能一样），
 #    所以校验是**分段**的：按小时 + 按天，逐桶比条数、逐列比 SUM、比桶内首末 ts。
 #
@@ -83,7 +83,7 @@ DRILL_CONTAINER = "cems-tdengine-drill"
 DRILL_VOLUME = "cems-tdengine-drill-data"
 RENAME_DB = "cems_drill_restore"
 TARGET_IMAGE = "tdengine/tdengine:latest"
-MEASURE_DIR = PROJECT_ROOT / "docs" / "measurements"
+MEASURE_DIR = PROJECT_ROOT / "docs" / "evidence" / "drill"
 
 # 逐列 SUM 的浮点比较容差：同一批值聚合，正常应逐位相等；
 # 留一个相对容差只是为了不把"聚合顺序差异"误报成"数据不一致"。
@@ -446,7 +446,7 @@ def mode_physical(args: argparse.Namespace, backup_dir: Path) -> dict:
 
 # --------------------------------------------------------------------------- #
 def build_summary() -> dict:
-    """把 docs/measurements/tdengine_restore_drill_*.json 汇总成一张表。
+    """把 docs/evidence/drill/tdengine_restore_drill_*.json 汇总成一张表。
 
     汇总口径：同一 mode 的多次独立演练，给 min / P50 / max —— 只做一次给不出重复性。
     """

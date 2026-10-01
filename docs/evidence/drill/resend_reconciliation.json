@@ -22,7 +22,7 @@
     "unique_ts": 36,
     "first_ts": "2026-10-01 14:49:01",
     "last_ts": "2026-10-01 14:52:27",
-    "evidence_file": "docs\\measurements\\resend_snapshot_drill1.txt"
+    "evidence_file": "docs\\evidence\\drill\\resend_snapshot_drill1.txt"
   },
   "reconciliation": {
     "should_resend": 35,

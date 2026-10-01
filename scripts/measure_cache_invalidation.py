@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DOCS_DIR = PROJECT_ROOT / "docs" / "measurements"
+DOCS_DIR = PROJECT_ROOT / "docs" / "evidence" / "cache"
 
 NGINX_BASE = "http://127.0.0.1:80"
 DIRECT_BASE = "http://127.0.0.1:5001"
@@ -150,7 +150,7 @@ def read_rows(start: str, end: str) -> list[dict[str, Any]]:
     这里必须显式转成容器时区（Asia/Shanghai）再交给调用方。
     早先版本直接截断那串 UTC 文本当"本地时间"用，后果是：
     DELETE 之后把 12 行又写回了 **10 小时前的时刻** —— 既丢了本来那一分钟，
-    又在库里凭空造出一段错位数据。实测发生了两次，靠 docs/measurements/_fix_drill_rows*.py 修回。
+    又在库里凭空造出一段错位数据。实测发生了两次，靠 docs/evidence/cache/_fix_drill_rows*.py 修回。
     """
     columns = ", ".join(("ts", *COLUMNS))
     payload = tc_rest(

@@ -15,7 +15,7 @@
 # 4) 在线备份：tdengine 不停机。因此 dump 期间仍在新写入库，备份是一个
 #    "窗口"而不是一个瞬间。manifest 记下 dump 前/后的 COUNT 与首末 ts，
 #    校验时用 **dump 前** 的首末 ts 作为比较窗口（该窗口必然完整落在 dump 内），
-#    这样"源端还在长"不会污染恢复校验。详见 docs/数据可靠性.md §2.4。
+#    这样"源端还在长"不会污染恢复校验。详见 docs/runbooks/恢复演练与对账口径.md §1.4。
 # 5) --physical 会额外做一次**卷级**拷贝（只读挂载卷 + tar）。
 #    ⚠️ 它是**崩溃一致性**副本，不是事务一致性副本：taosd 不停机，拷贝过程中
 #    文件可能处于半写状态。它只是逻辑备份的应急补充，验收口径以 taosdump 为准。
@@ -27,7 +27,7 @@
 #   python scripts/backup_tdengine.py --prune             # 按保留策略清理旧备份
 #   python scripts/backup_tdengine.py --list              # 列出已有备份
 #   python scripts/backup_tdengine.py --out D:\cemsbak    # 换落点
-#   # 时间窗差量导出（增量路径，见 docs/数据可靠性.md §1.2 的论证与阈值）：
+#   # 时间窗差量导出（增量路径，见 docs/adr/0005-备份策略与保留期.md §1.2 的论证与阈值）：
 #   python scripts/backup_tdengine.py --since "2026-10-01 20:00:00" --until "2026-10-01 21:00:00"
 #
 # 保留层与目录：
@@ -79,7 +79,7 @@ BACKUP_NAME_RE = re.compile(r"^cems_full_(\d{8}_\d{6})$")
 TIERS = ("hourly", "daily", "monthly", "manual")
 
 # 保留期（默认值，可被命令行覆盖）。
-# 依据见 docs/数据可靠性.md §1.4。取值刻意**偏少**，因为"多份全量 × 长保留"的体积
+# 依据见 docs/adr/0005-备份策略与保留期.md §1.4。取值刻意**偏少**，因为"多份全量 × 长保留"的体积
 # 是 O(份数 × 当前数据量)：本机当前 184 KiB 无所谓，但 5 年后库里约 736 MiB，
 # 每多留一份 hourly 就多 736 MiB。份数按"要覆盖哪种事故"定，不按"能留多少"定：
 #   - hourly  24  = 1 天    → 覆盖"当天误操作/误删卷"
@@ -457,7 +457,7 @@ def prune_backups(args: argparse.Namespace) -> int:
     log(f"删除 {len(removed)} 个，保留 {len(kept)} 个")
     log(f"差量层 incremental/ 有 {inc_count} 份，**不参与自动清理**："
         f"删掉链上任意一份会让它之后的差量全部无法单独恢复，"
-        f"要清理必须先做链完整性核对（本轮未实现，见 docs/数据可靠性.md §1.5）")
+        f"要清理必须先做链完整性核对（本轮未实现，见 docs/adr/0005-备份策略与保留期.md §1.5）")
     return 0
 
 

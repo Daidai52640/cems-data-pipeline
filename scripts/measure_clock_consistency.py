@@ -284,7 +284,7 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=1.0, help="B/C 部分采样间隔")
     parser.add_argument(
         "--out",
-        default=str(PROJECT_ROOT / "docs" / "measurements" / "clock_consistency.json"),
+        default=str(PROJECT_ROOT / "docs" / "evidence" / "perf" / "clock_consistency.json"),
     )
     args = parser.parse_args()
 

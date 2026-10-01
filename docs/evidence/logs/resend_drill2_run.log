@@ -1,0 +1,71 @@
+=== 前置检查 ===
+  emqx             ('running', 'healthy')
+  tdengine         ('running', 'healthy')
+  cems-device      ('running', 'healthy')
+  cems-gateway     ('running', 'healthy')
+  cems-subscriber  ('running', 'healthy')
+  cems-web         ('running', 'healthy')
+  基线: 库内 3388 条，MAX(ts)=2026-10-01 14:54:42，缓存 0 行
+
+=== 断开 MQTT：docker stop emqx（静置 180 s）===
+  emqx 已停于 2026-10-01 14:54:46
+  +   15s 缓存    384 B /   3 行
+  +   30s 缓存    768 B /   6 行
+  +   45s 缓存   1152 B /   9 行
+  +   60s 缓存   1536 B /  12 行
+  +   75s 缓存   1920 B /  15 行
+  +   90s 缓存   2304 B /  18 行
+  +  105s 缓存   2688 B /  21 行
+  +  120s 缓存   3072 B /  24 行
+  +  135s 缓存   3456 B /  27 行
+  +  150s 缓存   3840 B /  30 行
+  +  165s 缓存   4096 B /  32 行
+  +  180s 缓存   4480 B /  35 行
+  快照（2026-10-01 14:57:46）: 文件 35 行 / 去重后 35 条报文
+  该补条数 N = 35（快照里 ≤ 基线的 0 条不计入）
+
+=== 恢复 MQTT：docker start emqx ===
+  emqx healthy=True @ 2026-10-01 14:57:59
+
+--- 恢复确认：六服务状态 ---
+  emqx             ('running', 'healthy')
+  tdengine         ('running', 'healthy')
+  cems-device      ('running', 'healthy')
+  cems-gateway     ('running', 'healthy')
+  cems-subscriber  ('running', 'unhealthy')
+  cems-web         ('running', 'healthy')
+--- 恢复确认：连续两次 COUNT 必须递增 ---
+  第 1 次 COUNT(*) = 3388 @ 2026-10-01 14:57:59
+  第 2 次 COUNT(*) = 3442 @ 2026-10-01 14:59:23
+  数据在流: True（等待上限 150 s；恢复瞬间接入层刚重连，COUNT 会先平后涨）
+  排空完成，耗时 96.9 s，残留 0 行
+
+===== 对账台账 =====
+  断开前库内基线(条)                        : 3388
+  断开前库内 MAX(ts)                     : 2026-10-01 14:54:42
+  断开时长(s)                           : 181.0
+  断开期间理论产生(条, 时长/5.0)               : 36.2
+  断开期间实际产生=该补条数 N(条)                : 35
+  恢复后队列剩余(行)                        : 0
+  恢复后补上 M(条)                        : 35
+  恢复后新产生并直发入库(条)                    : 20
+  库内新增(条)                           : 55
+  恒等式 基线+N+新产生-剩余=新增                : True
+  补传成功率 M/N                         : 1.0
+
+===== 补传对账 =====
+  该补条数 N            : 35
+  恢复后补上 M          : 35
+  补传成功率 M/N        : 100.00%
+  未补上的条数          : 0
+  恢复后新产生并入库    : 20 条（恢复期间实时直发的行）
+  库内计数 3388 → 3443（增加 55）
+[finally] 结束前确认六服务状态：
+  emqx             ('running', 'healthy')
+  tdengine         ('running', 'healthy')
+  cems-device      ('running', 'healthy')
+  cems-gateway     ('running', 'healthy')
+  cems-subscriber  ('running', 'healthy')
+  cems-web         ('running', 'healthy')
+
+[out] docs\measurements\resend_reconciliation_drill2.json
