@@ -1,0 +1,156 @@
+{
+  "mode": "rename",
+  "backup_kind": "taosdump-logical-full",
+  "backup_dir": "F:\\cems-backup\\monthly\\cems_full_20261001_210527",
+  "backup_stamp": "20261001_210527",
+  "backup_dump": {
+    "reported_rows": 7652,
+    "self_check": "ok",
+    "expected_window_rows": null,
+    "output_tail": "\nConnect mode is : Native\n\n==============================\n========== arguments config =========\nTDengine Community Edition\ntaosdump version: 3.3.6.13\ngit: 1a3a182ba16ee188c0677fb6cd637b34c52f6bd7\nbuild: Linux-x64 2025-06-28 22:48:07 +0800\nhost: (null)\nuser: root\nport: 0\noutpath: /tmp/cems-backup-20261001_210527/\ninpath: \nresultFile: ./dump_result.txt\nall_databases: false\ndatabases: true\ndatabasesSeq: cems\nschemaonly: false\nwith_property: true\navro codec: snappy\ndata_batch: 16383\nthread_num: 4\nallow_sys: false\nescape_char: true\nloose_mode: false\nisDumpIn: false\narg_list_len: 0\nstart time: 2026-10-01 21:05:29\nINFO: Getting table(s) count of db (cems) ...\nINFO: Start to dump out database: cems\nINFO: start dump out super table data (cems_data) ...\nINFO: start dump super table meta (cems_data) col:10 tags:2 ...\nINFO: Get super table (cems_data) child tables (1) ok\nINFO: The number of tables of cems_data is 1!\nINFO: connection: 0x49552f0 is dumping out schema of sub-table(s) of cems_data \nINFO: connection 0x49552f0 is dumping out schema: 1 from cems_data.plant1_device1\nINFO: create 1 thread(s) to export data ...\n.INFO: cems.cems_data [1/1] write avro 100% of plant1_device1\nINFO: super table (cems_data) dump 1 child data ok. close taos connections...\nend time: 2026-10-01 21:05:29\n\n\u001b[32mOK: Database: cems exists\n\u001b[0m\u001b[32mOK: total 1 table(s) of stable: cems_data schema dumped.\n\u001b[0m\u001b[32mOK: Database cems dumped\n\u001b[0m\u001b[32mOK: 7652 row(s) dumped out!\n\u001b[0m"
+  },
+  "backup_window": {
+    "mode": "full",
+    "requested_lo_ms": null,
+    "requested_hi_ms": null,
+    "requested_lo": null,
+    "requested_hi": null,
+    "pre_count": 7652,
+    "post_count": 7652,
+    "pre_min_ms": 1790785691000,
+    "pre_max_ms": 1790859926000,
+    "post_min_ms": 1790785691000,
+    "post_max_ms": 1790859931000,
+    "pre_min": "2026-10-01 00:28:11",
+    "pre_max": "2026-10-01 21:05:26",
+    "post_min": "2026-10-01 00:28:11",
+    "post_max": "2026-10-01 21:05:31"
+  },
+  "started_at": "2026-10-01 21:06:13",
+  "verification": {
+    "window_ms": [
+      1790785691000,
+      1790859926000
+    ],
+    "window_local": [
+      "2026-10-01 00:28:11",
+      "2026-10-01 21:05:26"
+    ],
+    "count": {
+      "src": 7652,
+      "dst": 7652,
+      "ok": true
+    },
+    "restored_bounds": {
+      "min_ms": 1790785691000,
+      "max_ms": 1790859926000,
+      "min": "2026-10-01 00:28:11",
+      "max": "2026-10-01 21:05:26"
+    },
+    "segments_1h": {
+      "unit": "1h",
+      "ok": true,
+      "n_windows_src": 13,
+      "n_windows_dst": 13,
+      "total_rows_src": 7652,
+      "total_rows_dst": 7652,
+      "matched": 13,
+      "windows_only_in_src": [],
+      "windows_only_in_dst": [],
+      "windows_with_count_diff": [],
+      "windows_with_sum_diff": [],
+      "windows_with_bounds_diff": [],
+      "samples": []
+    },
+    "segments_1d": {
+      "unit": "1d",
+      "ok": true,
+      "n_windows_src": 1,
+      "n_windows_dst": 1,
+      "total_rows_src": 7652,
+      "total_rows_dst": 7652,
+      "matched": 1,
+      "windows_only_in_src": [],
+      "windows_only_in_dst": [],
+      "windows_with_count_diff": [],
+      "windows_with_sum_diff": [],
+      "windows_with_bounds_diff": [],
+      "samples": []
+    },
+    "db_properties": {
+      "src": {
+        "name": "cems",
+        "vgroups": "2",
+        "replica": "1",
+        "duration": "30d",
+        "keep": "365d,365d,365d",
+        "minrows": "100",
+        "maxrows": "4096",
+        "comp": "2",
+        "precision": "ms",
+        "strict": "on",
+        "wal_level": "1"
+      },
+      "dst": {
+        "name": "cems_drill_restore",
+        "vgroups": "2",
+        "replica": "1",
+        "duration": "30d",
+        "keep": "365d,365d,365d",
+        "minrows": "100",
+        "maxrows": "4096",
+        "comp": "2",
+        "precision": "ms",
+        "strict": "on",
+        "wal_level": "1"
+      },
+      "expected_diff": [
+        "name"
+      ],
+      "diff": {},
+      "ok": true,
+      "vgroup_note": "若差异只有 vgroups，属正常：taosdump 的 dbs.sql 不含 VGROUPS，恢复时按目标实例默认值建库；条数与分段不受影响。",
+      "vgroup_diff": false
+    },
+    "schema": {
+      "ok": true,
+      "src_cols": 12,
+      "dst_cols": 12
+    },
+    "tags": {
+      "ok": true,
+      "src": [
+        [
+          "plant1",
+          "device1"
+        ]
+      ],
+      "dst": [
+        [
+          "plant1",
+          "device1"
+        ]
+      ]
+    },
+    "ok": true
+  },
+  "rto": {
+    "definition": "RTO = t_seg − t0，即从发出「开始恢复」到「数据可查且条数与分段校验通过」",
+    "clock": "time.perf_counter()（宿主机单调时钟，不受容器时钟漂移影响）",
+    "RTO_seconds": 6.667,
+    "t_up_ready_s": 0.309,
+    "t_copy_done_s": 0.454,
+    "t_data_restored_s": 2.049,
+    "t_count_verified_s": 2.968,
+    "breakdown": {
+      "目标环境就绪": 0.309,
+      "备份传入目标": 0.145,
+      "数据导入落盘": 1.595,
+      "校验": 4.617
+    }
+  },
+  "cleanup": null,
+  "ok": true,
+  "restore_output_tail": "orkThreads() dump in avro-tbtags files ...\nINFO: [0]: Restoring from cems.4A638C69.avro-tbtags ...\nINFO:  ------- rename DB Name cems to cems_drill_restore ------\nINFO: stb:cems_data schema no changed. server col:10 tag:2\nINFO: [0]:100%\nINFO: dumpInAvroWorkThreads() dump in avro-ntb files ...\nINFO: dumpInAvroWorkThreads() dump in avro files ...\nINFO: dumpInAvroWorkThreads() dump in avro files ...\nINFO: [0]: Restoring from cems.3581719858402.0.avro ...\nINFO:  ------- rename DB Name cems to cems_drill_restore ------\n.INFO: [0]:100%\nend time: 2026-10-01 21:06:14\n\n\u001b[32mOK: [0] 1table(s) belong stb from the file(cems.4A638C69.avro-tbtags) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [0] 7652 row(s) of file(cems.3581719858402.0.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: 7652 row(s) dumped in!\n\u001b[0m",
+  "finished_at": "2026-10-01 21:06:20"
+}

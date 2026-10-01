@@ -1,0 +1,267 @@
+{
+  "generated_at": "2026-10-01 21:08:17",
+  "note": "RTO = 从发出「开始恢复」到「数据可查且条数与分段校验通过」；含校验工装自身开销（每次 docker exec 调 taos 约 0.6 s，6 次判定约 4.6 s）。data_available_seconds = 数据真正可查的时刻（不含校验）。",
+  "by_mode": {
+    "instance/taosdump-logical-full": {
+      "mode": "instance",
+      "backup_kind": "taosdump-logical-full",
+      "n_runs": 3,
+      "all_ok": true,
+      "RTO_seconds": {
+        "min": 9.754,
+        "p50": 9.799,
+        "max": 9.857,
+        "spread": 0.103
+      },
+      "data_available_seconds": {
+        "min": 5.19,
+        "max": 5.247
+      }
+    },
+    "physical/taosdump-logical-full": {
+      "mode": "physical",
+      "backup_kind": "taosdump-logical-full",
+      "n_runs": 2,
+      "all_ok": true,
+      "RTO_seconds": {
+        "min": 6.326,
+        "p50": 6.403,
+        "max": 6.481,
+        "spread": 0.155
+      },
+      "data_available_seconds": {
+        "min": 1.739,
+        "max": 1.888
+      }
+    },
+    "rename/taosdump-logical-full": {
+      "mode": "rename",
+      "backup_kind": "taosdump-logical-full",
+      "n_runs": 2,
+      "all_ok": true,
+      "RTO_seconds": {
+        "min": 6.597,
+        "p50": 6.632,
+        "max": 6.667,
+        "spread": 0.07
+      },
+      "data_available_seconds": {
+        "min": 2.029,
+        "max": 2.049
+      }
+    },
+    "rename/taosdump-logical-window": {
+      "mode": "rename",
+      "backup_kind": "taosdump-logical-window",
+      "n_runs": 1,
+      "all_ok": true,
+      "RTO_seconds": {
+        "min": 6.642,
+        "p50": 6.642,
+        "max": 6.642,
+        "spread": 0.0
+      },
+      "data_available_seconds": {
+        "min": 2.057,
+        "max": 2.057
+      }
+    }
+  },
+  "runs": [
+    {
+      "file": "tdengine_restore_drill_incremental.json",
+      "mode": "rename",
+      "backup_kind": "taosdump-logical-window",
+      "tag": "20261001_210030",
+      "backup_dir": "F:\\cems-backup\\incremental\\cems_inc_20261001_210030",
+      "rows_in_backup": 359,
+      "window": [
+        "2026-10-01 20:00:00",
+        "2026-10-01 20:30:00"
+      ],
+      "ok": true,
+      "rto_seconds": 6.642,
+      "t_up_ready_s": 0.311,
+      "t_data_restored_s": 2.057,
+      "t_count_verified_s": 2.975,
+      "breakdown": {
+        "目标环境就绪": 0.311,
+        "备份传入目标": 0.137,
+        "数据导入落盘": 1.61,
+        "校验": 4.585
+      },
+      "cleanup_leftovers": null
+    },
+    {
+      "file": "tdengine_restore_drill_instance.json",
+      "mode": "instance",
+      "backup_kind": "taosdump-logical-full",
+      "tag": "20261001_210527",
+      "backup_dir": "F:\\cems-backup\\monthly\\cems_full_20261001_210527",
+      "rows_in_backup": 7652,
+      "window": [
+        "2026-10-01 00:28:11",
+        "2026-10-01 21:05:26"
+      ],
+      "ok": true,
+      "rto_seconds": 9.857,
+      "t_up_ready_s": 0.849,
+      "t_data_restored_s": 5.247,
+      "t_count_verified_s": 6.17,
+      "breakdown": {
+        "目标环境就绪": 0.849,
+        "实例 DDL 预热": 2.638,
+        "备份传入目标": 0.142,
+        "数据导入落盘": 1.618,
+        "校验": 4.61
+      },
+      "cleanup_leftovers": null
+    },
+    {
+      "file": "tdengine_restore_drill_instance_run2.json",
+      "mode": "instance",
+      "backup_kind": "taosdump-logical-full",
+      "tag": "20261001_210527",
+      "backup_dir": "F:\\cems-backup\\monthly\\cems_full_20261001_210527",
+      "rows_in_backup": 7652,
+      "window": [
+        "2026-10-01 00:28:11",
+        "2026-10-01 21:05:26"
+      ],
+      "ok": true,
+      "rto_seconds": 9.754,
+      "t_up_ready_s": 0.831,
+      "t_data_restored_s": 5.19,
+      "t_count_verified_s": 6.108,
+      "breakdown": {
+        "目标环境就绪": 0.831,
+        "实例 DDL 预热": 2.645,
+        "备份传入目标": 0.14,
+        "数据导入落盘": 1.574,
+        "校验": 4.564
+      },
+      "cleanup_leftovers": null
+    },
+    {
+      "file": "tdengine_restore_drill_instance_run3.json",
+      "mode": "instance",
+      "backup_kind": "taosdump-logical-full",
+      "tag": "20261001_210527",
+      "backup_dir": "F:\\cems-backup\\monthly\\cems_full_20261001_210527",
+      "rows_in_backup": 7652,
+      "window": [
+        "2026-10-01 00:28:11",
+        "2026-10-01 21:05:26"
+      ],
+      "ok": true,
+      "rto_seconds": 9.799,
+      "t_up_ready_s": 0.853,
+      "t_data_restored_s": 5.202,
+      "t_count_verified_s": 6.121,
+      "breakdown": {
+        "目标环境就绪": 0.853,
+        "实例 DDL 预热": 2.621,
+        "备份传入目标": 0.139,
+        "数据导入落盘": 1.589,
+        "校验": 4.596
+      },
+      "cleanup_leftovers": null
+    },
+    {
+      "file": "tdengine_restore_drill_physical.json",
+      "mode": "physical",
+      "backup_kind": "taosdump-logical-full",
+      "tag": "20261001_205055",
+      "backup_dir": "F:\\cems-backup\\manual\\cems_full_20261001_205055",
+      "rows_in_backup": 7478,
+      "window": [
+        "2026-10-01 00:28:11",
+        "2026-10-01 20:50:52"
+      ],
+      "ok": true,
+      "rto_seconds": 6.481,
+      "t_up_ready_s": 1.888,
+      "t_data_restored_s": 1.888,
+      "t_count_verified_s": 2.811,
+      "breakdown": {
+        "卷创建": 0.27,
+        "卷级 tar 解包": 0.715,
+        "实例启动至可查": 0.902,
+        "校验": 4.594
+      },
+      "cleanup_leftovers": null
+    },
+    {
+      "file": "tdengine_restore_drill_physical_run2.json",
+      "mode": "physical",
+      "backup_kind": "taosdump-logical-full",
+      "tag": "20261001_205055",
+      "backup_dir": "F:\\cems-backup\\manual\\cems_full_20261001_205055",
+      "rows_in_backup": 7478,
+      "window": [
+        "2026-10-01 00:28:11",
+        "2026-10-01 20:50:52"
+      ],
+      "ok": true,
+      "rto_seconds": 6.326,
+      "t_up_ready_s": 1.739,
+      "t_data_restored_s": 1.739,
+      "t_count_verified_s": 2.658,
+      "breakdown": {
+        "卷创建": 0.265,
+        "卷级 tar 解包": 0.718,
+        "实例启动至可查": 0.755,
+        "校验": 4.588
+      },
+      "cleanup_leftovers": null
+    },
+    {
+      "file": "tdengine_restore_drill_rename.json",
+      "mode": "rename",
+      "backup_kind": "taosdump-logical-full",
+      "tag": "20261001_210527",
+      "backup_dir": "F:\\cems-backup\\monthly\\cems_full_20261001_210527",
+      "rows_in_backup": 7652,
+      "window": [
+        "2026-10-01 00:28:11",
+        "2026-10-01 21:05:26"
+      ],
+      "ok": true,
+      "rto_seconds": 6.667,
+      "t_up_ready_s": 0.309,
+      "t_data_restored_s": 2.049,
+      "t_count_verified_s": 2.968,
+      "breakdown": {
+        "目标环境就绪": 0.309,
+        "备份传入目标": 0.145,
+        "数据导入落盘": 1.595,
+        "校验": 4.617
+      },
+      "cleanup_leftovers": null
+    },
+    {
+      "file": "tdengine_restore_drill_rename_run2.json",
+      "mode": "rename",
+      "backup_kind": "taosdump-logical-full",
+      "tag": "20261001_210527",
+      "backup_dir": "F:\\cems-backup\\monthly\\cems_full_20261001_210527",
+      "rows_in_backup": 7652,
+      "window": [
+        "2026-10-01 00:28:11",
+        "2026-10-01 21:05:26"
+      ],
+      "ok": true,
+      "rto_seconds": 6.597,
+      "t_up_ready_s": 0.306,
+      "t_data_restored_s": 2.029,
+      "t_count_verified_s": 2.942,
+      "breakdown": {
+        "目标环境就绪": 0.306,
+        "备份传入目标": 0.145,
+        "数据导入落盘": 1.578,
+        "校验": 4.569
+      },
+      "cleanup_leftovers": null
+    }
+  ]
+}
