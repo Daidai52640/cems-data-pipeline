@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Final
 from urllib.parse import quote
@@ -25,6 +26,7 @@ from src.common.points import COLUMNS   # noqa: E402
 from src.common.points import POINTS as CONTRACT_POINTS   # noqa: E402
 from src.web import report   # noqa: E402
 from src.web import report_export   # noqa: E402
+from src.web import cache   # noqa: E402
 from src.web import curve   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
@@ -169,7 +171,15 @@ app = Flask(__name__)
 
 @app.route("/api/data")
 def api_data() -> tuple[Response, int] | Response:
-    """接口1：返回最近数据（JSON），前端每 REFRESH_SECONDS 秒调用一次。"""
+    """接口1：返回最近数据（JSON），前端每 REFRESH_SECONDS 秒调用一次。
+
+    这个接口**没有缓存**（它按定义包含"当前秒"）。它对缓存层的唯一作用是
+    **顺带喂两个水位**（见 src/web/cache.py §6）：
+      - data_ts：最新数据时间戳 → 判断"一个历史窗口是不是已经写完了"
+      - 分钟最大值：每个分钟里观测到的最晚一条 → 判断"哪个窗口的内容变过"，
+        变了就把对应缓存条目作废（这就是"数据更新后缓存多久刷新"的机制）
+    两者都来自刚读出来的真实行，不额外查库、不依赖容器墙钟。
+    """
     try:
         rows = query_recent()
     except TdQueryError as exc:
@@ -178,6 +188,16 @@ def api_data() -> tuple[Response, int] | Response:
         empty: dict[str, Any] = {"ts": [], **body}
         empty.update({name: [] for name in POINTS})
         return jsonify(empty), 503
+
+    if rows:
+        timestamps = [cache.ts_text(row[0]) for row in rows]
+        cache.note_data_ts(max(timestamps))
+        # ⚠️ 这里**不能**先按"是否比边界旧"过滤：分钟最大值必须覆盖**每一个**观测到的分钟。
+        # 先前加了这道过滤，后果是"窗口里新来的那条恰好比边界新"就被丢掉，
+        # 该分钟的最大值不变 → 缓存不失效（实测 200 s 内测不到刷新）。
+        # 不做过滤也不会误杀：比边界新的分钟本来就不满足"窗口已闭合"，
+        # 压根不会进缓存，它的最大值怎么变都无所谓（见 _closure）。
+        cache.note_minute_max(timestamps)
 
     payload: dict[str, Any] = {"ts": [str(row[0]) for row in rows]}   # 时间轴
     for index, name in enumerate(POINTS, start=1):                    # 各测点序列
@@ -194,6 +214,22 @@ def api_health() -> tuple[Response, int] | Response:
         body, _ = safe_error(exc, "GET /api/health")
         return jsonify({"ok": False, "td": "down", **body}), 503
     return jsonify({"ok": True, "td": "up", "rows_last_1min": len(rows)})
+
+
+@app.route("/api/cache/stats")
+def api_cache_stats() -> Response:
+    """接口2b：缓存统计（命中率 / 查库次数 / 水位）—— 仅供测量与排障。
+
+    ⚠️ 默认 nginx 配置把 `/api/cache/` 整个路径 return 403，不对公网暴露内部计数。
+    测量脚本直连 web 容器端口取数。
+    """
+    return jsonify(cache.stats())
+
+
+@app.route("/api/cache/clear", methods=["POST"])
+def api_cache_clear() -> Response:
+    """接口2c：清空全部查询缓存（演练/排障用）。返回删除条数。"""
+    return jsonify(cache.clear())
 
 
 @app.route("/")

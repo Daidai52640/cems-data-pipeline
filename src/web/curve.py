@@ -103,11 +103,14 @@ def build_curve(start_text: Optional[str], end_text: Optional[str]) -> dict[str,
 
     unit = pick_unit(end - start)
     if unit == UNIT_RAW:
+        # 原始点区间可能覆盖"当前秒"（跨度 ≤ CURVE_RAW_MAX_HOURS 的默认区间就包含当下），
+        # 明确声明不可缓存：kind=None 会让 aggregate/query_raw 走无缓存出口。
         payload = columns_from_raw(report.query_raw(start, end, CURVE_MAX_POINTS))
     else:
         series = report.aggregate_series(
             start, end, unit, WINDOW_BY_UNIT[unit],
             label="曲线", pad_grid=True, max_points=CURVE_MAX_POINTS,
+            kind="curve",
         )
         start, end = report.parse_time(series["start"], "start", start), \
             report.parse_time(series["end"], "end", end)

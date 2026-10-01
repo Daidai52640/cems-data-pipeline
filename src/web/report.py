@@ -25,6 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common.points import COLUMNS   # noqa: E402
+from src.web import cache   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 
@@ -57,6 +58,12 @@ TS_INPUT_FORMATS: Final[tuple[str, ...]] = (
     "%Y-%m-%dT%H:%M",
 )
 ROUND_DIGITS: Final[int] = 2      # 聚合值保留几位小数
+
+# ---- Redis 缓存 ----
+# 只作用于 **已闭合时间窗** 的查询；判据与安全边界见 src/web/cache.py 顶部说明。
+# 开关与环境变量解析的唯一真源在 cache.py（CACHE_ENABLED=0 即整层停用，
+# 行为回到"每次都查库"，用于前后对照测量），这里只是引用，不再解析一遍。
+CACHE_ENABLED: Final[bool] = cache.CACHE_FLAG
 
 # ---- 日志 ----
 LOG_LEVEL: Final[int] = logging.INFO
@@ -156,6 +163,7 @@ def query_aggregate(
     window: str,
     *,
     fill_null: bool = False,
+    kind: str = "aggregate",
 ) -> list[tuple[Any, ...]]:
     """按窗口聚合求均值；聚合在 TDengine 侧用 INTERVAL + AVG 完成，不把原始点拉回 Python。
 
@@ -163,6 +171,9 @@ def query_aggregate(
     列名来自测点契约白名单 —— 没有任何一处拼接原始用户输入。
     区间统一用半开写法 [start, end)：调用方（aggregate_series）已把范围向内对齐到窗口边界，
     所以每个窗口都是完整的，不会出现"半个窗口被当成整窗均值"。
+
+    缓存：`kind` 进缓存键（分钟报表/日报表/曲线各自独立），
+    是否真的命中由 cache.query_cached 按"窗口是否已闭合"决定。
     """
     avg_columns = ", ".join(f"AVG({column})" for column in COLUMNS)
     sql = (
@@ -175,11 +186,15 @@ def query_aggregate(
         # FILL(0) 在 TDengine 3.x 会报 syntax error，别用。
         sql += " FILL(NULL)"
     # 没有数据的区间会返回 0 行且不报错，这里原样返回空列表，由上层组装成空/NULL 序列
-    return _execute(f"{sql} ORDER BY _wstart ASC")
+    return _execute_cached(
+        f"{sql} ORDER BY _wstart ASC",
+        where=f"aggregate/{kind}",
+        context=cache.prepare(kind, window, start, end),
+    )
 
 
 def _execute(sql: str) -> list[tuple[Any, ...]]:
-    """执行查询；任何跨系统异常都包装成 ReportQueryError，不让第三方异常外泄。"""
+    """执行查询（不走缓存）；任何跨系统异常都包装成 ReportQueryError。"""
     conn: Any = None
     try:
         conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
@@ -195,6 +210,21 @@ def _execute(sql: str) -> list[tuple[Any, ...]]:
                 conn.close()
             except Exception as exc:
                 LOGGER.debug("关闭 TDengine 连接时出错（忽略）: %s", exc)
+
+
+def _execute_cached(
+    sql: str,
+    where: str,
+    context: Optional[dict[str, Any]],
+) -> list[tuple[Any, ...]]:
+    """带缓存的查询出口：上下文为空或缓存关闭时退化为 `_execute`。
+
+    `context is None` 是**有语义的**：调用方明确表示"这次查询不能缓存"（例如覆盖当前秒的原始点），
+    这种查询连"试着读缓存"都不做。
+    """
+    if context is None or not CACHE_ENABLED:
+        return _execute(sql)
+    return cache.query_cached(context, where, lambda: _execute(sql))
 
 
 def format_ts(value: Any) -> str:
@@ -269,6 +299,9 @@ def query_raw(start: datetime, end: datetime, limit: int) -> list[tuple[Any, ...
     """原始点查询（曲线的短区间用）：不聚合，直接取原始行。
 
     列名来自测点契约白名单，时间来自已解析的 datetime，没有任何原始输入拼接进 SQL。
+
+    ⚠️ **明确不缓存**：原始点区间按定义可能覆盖"当前秒"（短区间默认就含当下），
+    缓存它等于把当前数据冻住。这里直接调 `_execute`，连读缓存都不做。
     """
     columns = ", ".join(("ts", *COLUMNS))
     sql = (
@@ -288,18 +321,21 @@ def aggregate_series(
     label: str,
     pad_grid: bool,
     max_points: Optional[int] = None,
+    kind: str = "aggregate",
 ) -> dict[str, Any]:
     """把一段区间聚合成均值序列 —— 报表页、Excel 导出、曲线三处共用这一份口径。
 
     做三件事：范围向内对齐到窗口边界（只统计完整窗口）、在库侧用 INTERVAL + AVG 聚合、
     可选地按窗口网格补 null（整段无数据时也返回完整网格而不是空数组）。
+
+    `kind` 只影响缓存键，不改变任何计算结果与返回结构。
     """
     aligned_start, aligned_end = align_range(start, end, window)
     if aligned_start >= aligned_end:            # 不足一个完整窗口
         return envelope(unit, aligned_start, aligned_end, [])
     check_span(aligned_start, aligned_end, window, label, max_points)
 
-    rows = query_aggregate(aligned_start, aligned_end, unit, fill_null=pad_grid)
+    rows = query_aggregate(aligned_start, aligned_end, unit, fill_null=pad_grid, kind=kind)
     if pad_grid:
         count = int((aligned_end - aligned_start) / window)
         grid = [aligned_start + index * window for index in range(count)]
@@ -318,6 +354,7 @@ def minute_report(start_text: Optional[str], end_text: Optional[str]) -> dict[st
     end = clamp_to_now(parse_time(end_text, "end", now), now)
     return aggregate_series(
         start, end, UNIT_MINUTE, WINDOW_MINUTE, label="分钟报表", pad_grid=False,
+        kind="minute",
     )
 
 
@@ -329,6 +366,7 @@ def day_report(date_text: Optional[str]) -> dict[str, Any]:
     # 用半开区间 [当天 00:00, 次日 00:00)，否则跨到次日会产生第 25 个窗口
     return aggregate_series(
         first, next_day, UNIT_HOUR, WINDOW_HOUR, label="日报表", pad_grid=True,
+        kind="day",
     )
 
 
@@ -342,6 +380,7 @@ def month_report(year_text: Optional[str], month_text: Optional[str]) -> dict[st
     next_month = first + timedelta(days=days)
     return aggregate_series(
         first, next_month, UNIT_DAY, WINDOW_DAY, label="月报表", pad_grid=True,
+        kind="month",
     )
 
 
@@ -360,4 +399,5 @@ def custom_report(start_text: Optional[str], end_text: Optional[str]) -> dict[st
         )
     return aggregate_series(
         start, end, UNIT_HOUR, WINDOW_HOUR, label="自由报表", pad_grid=True,
+        kind="custom",
     )
