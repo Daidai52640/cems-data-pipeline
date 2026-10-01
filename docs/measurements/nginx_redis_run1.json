@@ -1,0 +1,943 @@
+{
+  "measured_at": "2026-10-01 19:01:27",
+  "nginx_base": "http://127.0.0.1:80",
+  "direct_base": "http://127.0.0.1:5001",
+  "clock_note": "耗时全部为宿主机单时钟内的 perf_counter 差；不跨容器相减",
+  "routes": {
+    "/": {
+      "status": 200,
+      "bytes": 12953,
+      "ms": 20.88
+    },
+    "/report": {
+      "status": 200,
+      "bytes": 11549,
+      "ms": 1.9
+    },
+    "/api/health": {
+      "status": 200,
+      "bytes": 42,
+      "ms": 6.08
+    },
+    "/api/data": {
+      "status": 200,
+      "bytes": 7977,
+      "ms": 6.43
+    },
+    "/static/echarts.min.js": {
+      "status": 200,
+      "bytes": 1024740,
+      "ms": 12.06
+    },
+    "/healthz": {
+      "status": 200,
+      "bytes": 3,
+      "ms": 1.34
+    }
+  },
+  "overhead": {
+    "/": {
+      "direct_5001": {
+        "n": 40,
+        "statuses": {
+          "200": 40
+        },
+        "bytes": {
+          "min": 12953,
+          "max": 12953
+        },
+        "body_variants": 1,
+        "ms": {
+          "min": 1.07,
+          "p50": 1.66,
+          "p95": 19.17,
+          "max": 23.73,
+          "mean": 6.19
+        },
+        "samples_ms": [
+          19.17,
+          1.36,
+          1.41,
+          1.31,
+          1.15,
+          1.96,
+          23.73,
+          15.75,
+          1.65,
+          1.38,
+          1.62,
+          1.27,
+          23.6,
+          1.46,
+          1.57,
+          1.25,
+          1.72,
+          1.54,
+          1.42,
+          1.61,
+          1.33,
+          1.68,
+          1.48,
+          1.24,
+          1.58,
+          1.24,
+          1.07,
+          4.48,
+          1.85,
+          18.87,
+          15.89,
+          1.67,
+          12.73,
+          15.49,
+          1.71,
+          13.44,
+          15.57,
+          15.28,
+          1.85,
+          13.41
+        ]
+      },
+      "nginx_80": {
+        "n": 40,
+        "statuses": {
+          "200": 40
+        },
+        "bytes": {
+          "min": 12953,
+          "max": 12953
+        },
+        "body_variants": 1,
+        "ms": {
+          "min": 1.66,
+          "p50": 2.62,
+          "p95": 21.5,
+          "max": 25.57,
+          "mean": 8.42
+        },
+        "samples_ms": [
+          2.52,
+          12.76,
+          14.76,
+          15.46,
+          15.38,
+          2.56,
+          2.62,
+          2.55,
+          22.47,
+          2.33,
+          2.31,
+          1.84,
+          2.17,
+          21.5,
+          2.73,
+          13.26,
+          2.01,
+          12.74,
+          2.17,
+          12.6,
+          2.3,
+          1.98,
+          25.57,
+          15.19,
+          2.25,
+          12.79,
+          16.1,
+          2.62,
+          2.43,
+          1.66,
+          1.71,
+          1.88,
+          1.81,
+          17.94,
+          2.36,
+          12.57,
+          15.97,
+          14.72,
+          16.13,
+          2.26
+        ]
+      },
+      "delta_p50_ms": 0.96
+    },
+    "/api/data": {
+      "direct_5001": {
+        "n": 40,
+        "statuses": {
+          "200": 40
+        },
+        "bytes": {
+          "min": 7977,
+          "max": 7977
+        },
+        "body_variants": 1,
+        "ms": {
+          "min": 5.97,
+          "p50": 7.01,
+          "p95": 31.13,
+          "max": 31.33,
+          "mean": 15.03
+        },
+        "samples_ms": [
+          7.06,
+          25.75,
+          6.53,
+          24.58,
+          30.83,
+          30.53,
+          31.33,
+          6.35,
+          6.96,
+          6.08,
+          26.79,
+          5.97,
+          6.19,
+          6.73,
+          27.42,
+          30.37,
+          30.51,
+          6.02,
+          6.84,
+          7.49,
+          6.3,
+          19.53,
+          6.29,
+          24.28,
+          31.0,
+          31.13,
+          6.48,
+          6.35,
+          17.74,
+          6.48,
+          6.24,
+          7.39,
+          6.47,
+          19.33,
+          31.18,
+          6.38,
+          6.68,
+          6.66,
+          6.84,
+          18.0
+        ]
+      },
+      "nginx_80": {
+        "n": 40,
+        "statuses": {
+          "200": 40
+        },
+        "bytes": {
+          "min": 7977,
+          "max": 7977
+        },
+        "body_variants": 1,
+        "ms": {
+          "min": 5.81,
+          "p50": 6.78,
+          "p95": 27.77,
+          "max": 31.79,
+          "mean": 9.58
+        },
+        "samples_ms": [
+          6.78,
+          6.48,
+          6.98,
+          6.54,
+          6.84,
+          6.49,
+          6.96,
+          6.36,
+          6.73,
+          6.83,
+          6.14,
+          6.94,
+          6.6,
+          6.91,
+          6.72,
+          23.15,
+          6.63,
+          6.86,
+          31.79,
+          31.35,
+          6.16,
+          6.2,
+          7.36,
+          27.77,
+          6.58,
+          6.41,
+          17.96,
+          7.01,
+          6.65,
+          7.15,
+          24.39,
+          6.46,
+          6.44,
+          7.04,
+          6.88,
+          6.31,
+          5.81,
+          7.22,
+          6.55,
+          6.79
+        ]
+      },
+      "delta_p50_ms": -0.23
+    },
+    "/static/echarts.min.js": {
+      "direct_5001": {
+        "n": 40,
+        "statuses": {
+          "200": 40
+        },
+        "bytes": {
+          "min": 1024740,
+          "max": 1024740
+        },
+        "body_variants": 1,
+        "ms": {
+          "min": 4.48,
+          "p50": 5.6,
+          "p95": 29.84,
+          "max": 34.63,
+          "mean": 10.43
+        },
+        "samples_ms": [
+          34.63,
+          4.72,
+          5.06,
+          7.68,
+          4.93,
+          4.79,
+          29.84,
+          5.37,
+          5.55,
+          8.66,
+          5.12,
+          6.08,
+          26.44,
+          5.36,
+          6.2,
+          8.11,
+          23.11,
+          5.54,
+          7.81,
+          5.44,
+          4.95,
+          7.78,
+          25.39,
+          4.86,
+          29.21,
+          5.09,
+          5.46,
+          7.86,
+          5.7,
+          4.48,
+          29.77,
+          4.6,
+          5.64,
+          7.69,
+          5.09,
+          5.4,
+          29.92,
+          4.81,
+          5.3,
+          7.88
+        ]
+      },
+      "nginx_80": {
+        "n": 40,
+        "statuses": {
+          "200": 40
+        },
+        "bytes": {
+          "min": 1024740,
+          "max": 1024740
+        },
+        "body_variants": 1,
+        "ms": {
+          "min": 7.62,
+          "p50": 9.04,
+          "p95": 29.89,
+          "max": 32.83,
+          "mean": 12.88
+        },
+        "samples_ms": [
+          8.97,
+          8.26,
+          11.47,
+          26.64,
+          8.02,
+          11.27,
+          8.8,
+          10.3,
+          8.18,
+          8.64,
+          10.4,
+          8.2,
+          8.45,
+          10.44,
+          8.7,
+          29.89,
+          9.88,
+          7.62,
+          8.19,
+          21.29,
+          9.01,
+          8.28,
+          11.25,
+          8.27,
+          19.15,
+          12.18,
+          7.83,
+          9.02,
+          9.05,
+          7.69,
+          30.93,
+          8.39,
+          19.54,
+          12.0,
+          32.83,
+          8.42,
+          10.58,
+          27.21,
+          8.5,
+          21.5
+        ]
+      },
+      "delta_p50_ms": 3.44
+    }
+  },
+  "rounds": {
+    "cache_off": {
+      "label": "cache_off",
+      "cache_enabled": false,
+      "clear_before_round": {
+        "deleted": 0,
+        "enabled": true
+      },
+      "cache_config": {
+        "margin_seconds": 60,
+        "max_value_bytes": 1048576,
+        "ttl_seconds": 300,
+        "version": "v1"
+      },
+      "watermarks_before": {
+        "data_ts": null,
+        "last_query": null
+      },
+      "watermarks_after": {
+        "data_ts": null,
+        "last_query": null
+      },
+      "counters_before": {
+        "bypass_future": 0,
+        "dirty": 0,
+        "hit": 0,
+        "miss": 0,
+        "query": 0,
+        "stale": 0,
+        "unverifiable": 0
+      },
+      "counters_after": {
+        "bypass_future": 0,
+        "dirty": 0,
+        "hit": 0,
+        "miss": 0,
+        "query": 0,
+        "stale": 0,
+        "unverifiable": 0
+      },
+      "counters_delta": {
+        "bypass_future": 0,
+        "dirty": 0,
+        "hit": 0,
+        "miss": 0,
+        "query": 0,
+        "stale": 0,
+        "unverifiable": 0
+      },
+      "lookups": 0,
+      "http_requests_total": 220,
+      "tdengine_queries_during_round": 0,
+      "results": {
+        "minute_report_closed_1h": {
+          "n": 60,
+          "statuses": {
+            "200": 60
+          },
+          "bytes": {
+            "min": 9606,
+            "max": 9606
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 7.07,
+            "p50": 8.24,
+            "p95": 30.37,
+            "max": 31.65,
+            "mean": 13.47
+          },
+          "desc": "分钟报表·已闭合 1 小时窗口（高频刷新的主场景）",
+          "path": "/api/report/minute?start=2026-10-01+17%3A00%3A00&end=2026-10-01+18%3A00%3A00",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 0,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "minute_report_default_open": {
+          "n": 30,
+          "statuses": {
+            "200": 30
+          },
+          "bytes": {
+            "min": 8951,
+            "max": 8951
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 6.89,
+            "p50": 8.39,
+            "p95": 30.41,
+            "max": 32.97,
+            "mean": 14.83
+          },
+          "desc": "分钟报表·默认口径（上界=now，**按设计不缓存**，用于对照）",
+          "path": "/api/report/minute",
+          "cacheable": false,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 0,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "day_report_yesterday": {
+          "n": 30,
+          "statuses": {
+            "200": 30
+          },
+          "bytes": {
+            "min": 3707,
+            "max": 3707
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 5.97,
+            "p50": 6.46,
+            "p95": 27.54,
+            "max": 31.3,
+            "mean": 9.1
+          },
+          "desc": "日报表·昨天（24 个整点，已闭合；在 50 h 观测覆盖内）",
+          "path": "/api/report/day?date=2026-09-30",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 0,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "custom_report_closed": {
+          "n": 30,
+          "statuses": {
+            "200": 30
+          },
+          "bytes": {
+            "min": 885,
+            "max": 885
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 6.1,
+            "p50": 7.16,
+            "p95": 27.36,
+            "max": 28.12,
+            "mean": 9.55
+          },
+          "desc": "自由报表·已闭合 6 小时窗口（按小时聚合）",
+          "path": "/api/report/custom?start=2026-10-01+11%3A00%3A49&end=2026-10-01+17%3A30%3A00",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 0,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "curve_hourly_30d": {
+          "n": 20,
+          "statuses": {
+            "200": 20
+          },
+          "bytes": {
+            "min": 48432,
+            "max": 48432
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 14.39,
+            "p50": 15.98,
+            "p95": 34.24,
+            "max": 39.64,
+            "mean": 19.25
+          },
+          "desc": "自由区间曲线·30 天 1 小时粒度（最重的一条聚合查询）",
+          "path": "/api/curve?start=2026-09-01+19%3A00&end=2026-10-01+17%3A30",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 0,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "month_report_last_month": {
+          "n": 20,
+          "statuses": {
+            "200": 20
+          },
+          "bytes": {
+            "min": 4613,
+            "max": 4613
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 5.52,
+            "p50": 6.54,
+            "p95": 27.38,
+            "max": 31.15,
+            "mean": 11.98
+          },
+          "desc": "月报表·上月（2026-09，按天补齐）",
+          "path": "/api/report/month?year=2026&month=9",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 0,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "live_api_data_control": {
+          "n": 30,
+          "statuses": {
+            "200": 30
+          },
+          "bytes": {
+            "min": 7980,
+            "max": 7980
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 6.7,
+            "p50": 7.2,
+            "p95": 23.69,
+            "max": 29.37,
+            "mean": 9.56
+          },
+          "desc": "对照组：/api/data 实时接口（含当前秒，**按设计不进缓存**）",
+          "path": "/api/data",
+          "cacheable": false,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 0,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        }
+      }
+    },
+    "cache_on": {
+      "label": "cache_on",
+      "cache_enabled": true,
+      "clear_before_round": {
+        "deleted": 0,
+        "enabled": true
+      },
+      "cache_config": {
+        "margin_seconds": 60,
+        "max_value_bytes": 1048576,
+        "ttl_seconds": 300,
+        "version": "v1"
+      },
+      "watermarks_before": {
+        "data_ts": "2026-10-01 19:01:26",
+        "last_query": null
+      },
+      "watermarks_after": {
+        "data_ts": "2026-10-01 19:01:36",
+        "last_query": "aggregate/month|2026-09-01 00:00:00|2026-10-01 00:00:00"
+      },
+      "counters_before": {
+        "bypass_future": 0,
+        "dirty": 0,
+        "hit": 0,
+        "miss": 0,
+        "query": 0,
+        "stale": 0,
+        "unverifiable": 0
+      },
+      "counters_after": {
+        "bypass_future": 30,
+        "dirty": 0,
+        "hit": 155,
+        "miss": 5,
+        "query": 35,
+        "stale": 0,
+        "unverifiable": 0
+      },
+      "counters_delta": {
+        "bypass_future": 30,
+        "dirty": 0,
+        "hit": 155,
+        "miss": 5,
+        "query": 35,
+        "stale": 0,
+        "unverifiable": 0
+      },
+      "lookups": 160,
+      "http_requests_total": 220,
+      "tdengine_queries_during_round": 35,
+      "results": {
+        "minute_report_closed_1h": {
+          "n": 60,
+          "statuses": {
+            "200": 60
+          },
+          "bytes": {
+            "min": 9606,
+            "max": 9606
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 3.18,
+            "p50": 3.85,
+            "p95": 21.5,
+            "max": 28.72,
+            "mean": 5.74
+          },
+          "desc": "分钟报表·已闭合 1 小时窗口（高频刷新的主场景）",
+          "path": "/api/report/minute?start=2026-10-01+17%3A00%3A00&end=2026-10-01+18%3A00%3A00",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 59,
+            "miss": 1,
+            "query": 1,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "minute_report_default_open": {
+          "n": 30,
+          "statuses": {
+            "200": 30
+          },
+          "bytes": {
+            "min": 8951,
+            "max": 8951
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 7.67,
+            "p50": 8.87,
+            "p95": 27.83,
+            "max": 33.26,
+            "mean": 11.7
+          },
+          "desc": "分钟报表·默认口径（上界=now，**按设计不缓存**，用于对照）",
+          "path": "/api/report/minute",
+          "cacheable": false,
+          "counters_delta": {
+            "bypass_future": 30,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 30,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "day_report_yesterday": {
+          "n": 30,
+          "statuses": {
+            "200": 30
+          },
+          "bytes": {
+            "min": 3707,
+            "max": 3707
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 2.71,
+            "p50": 3.39,
+            "p95": 22.46,
+            "max": 26.61,
+            "mean": 7.0
+          },
+          "desc": "日报表·昨天（24 个整点，已闭合；在 50 h 观测覆盖内）",
+          "path": "/api/report/day?date=2026-09-30",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 29,
+            "miss": 1,
+            "query": 1,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "custom_report_closed": {
+          "n": 30,
+          "statuses": {
+            "200": 30
+          },
+          "bytes": {
+            "min": 885,
+            "max": 885
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 2.91,
+            "p50": 3.57,
+            "p95": 20.28,
+            "max": 27.26,
+            "mean": 7.26
+          },
+          "desc": "自由报表·已闭合 6 小时窗口（按小时聚合）",
+          "path": "/api/report/custom?start=2026-10-01+11%3A01%3A27&end=2026-10-01+17%3A31%3A00",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 29,
+            "miss": 1,
+            "query": 1,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "curve_hourly_30d": {
+          "n": 20,
+          "statuses": {
+            "200": 20
+          },
+          "bytes": {
+            "min": 48365,
+            "max": 48365
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 5.12,
+            "p50": 5.96,
+            "p95": 18.22,
+            "max": 27.73,
+            "mean": 8.19
+          },
+          "desc": "自由区间曲线·30 天 1 小时粒度（最重的一条聚合查询）",
+          "path": "/api/curve?start=2026-09-01+19%3A01&end=2026-10-01+17%3A31",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 19,
+            "miss": 1,
+            "query": 1,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "month_report_last_month": {
+          "n": 20,
+          "statuses": {
+            "200": 20
+          },
+          "bytes": {
+            "min": 4613,
+            "max": 4613
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 2.8,
+            "p50": 3.54,
+            "p95": 18.84,
+            "max": 20.91,
+            "mean": 5.8
+          },
+          "desc": "月报表·上月（2026-09，按天补齐）",
+          "path": "/api/report/month?year=2026&month=9",
+          "cacheable": true,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 19,
+            "miss": 1,
+            "query": 1,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        },
+        "live_api_data_control": {
+          "n": 30,
+          "statuses": {
+            "200": 30
+          },
+          "bytes": {
+            "min": 7992,
+            "max": 7992
+          },
+          "body_variants": 1,
+          "ms": {
+            "min": 7.15,
+            "p50": 8.06,
+            "p95": 18.11,
+            "max": 27.65,
+            "mean": 9.72
+          },
+          "desc": "对照组：/api/data 实时接口（含当前秒，**按设计不进缓存**）",
+          "path": "/api/data",
+          "cacheable": false,
+          "counters_delta": {
+            "bypass_future": 0,
+            "dirty": 0,
+            "hit": 0,
+            "miss": 0,
+            "query": 0,
+            "stale": 0,
+            "unverifiable": 0
+          }
+        }
+      }
+    }
+  },
+  "round_order": [
+    "cache_off",
+    "cache_on"
+  ]
+}

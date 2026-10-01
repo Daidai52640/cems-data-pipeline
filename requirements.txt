@@ -25,3 +25,8 @@ waitress>=3.0.0,<4.0.0
 
 # Web 层：报表导出 Excel（只写不读，用 write_only 模式流式写）
 openpyxl>=3.1,<4.0
+
+# Web 层：查询结果缓存客户端（只缓存"已闭合时间窗"的聚合结果，见 src/web/cache.py）
+# 上限锁 5.x：本项目只用 get/set/del/incr/scan，锁上限是为了让"本机运行"与"容器运行"
+# 落在同一套 API 上；Redis 服务端不可用时它会整条降级为"直连查库"，不影响功能。
+redis>=5.0,<6.0

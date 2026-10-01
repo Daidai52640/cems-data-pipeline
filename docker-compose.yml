@@ -1,8 +1,9 @@
 # =============================================================================
 # CEMS 工业数据采集链路 —— 全链路一键启动
 #
-# 一条命令启动 6 个服务：
-#   EMQX(MQTT Broker) + TDengine(时序库)
+# 一条命令启动 8 个服务：
+#   Nginx(反向代理) + Redis(查询缓存)
+#   + EMQX(MQTT Broker) + TDengine(时序库)
 #   + 设备层 + 网关层 + 平台接入层 + Web 展示层
 #
 # 用法：
@@ -12,12 +13,14 @@
 #   docker compose down              # 停止并删除容器（数据保留在卷里）
 #   docker compose down -v           # 停止并连数据一起删除
 #
-# 启动后：浏览器打开 http://localhost:5001 看实时曲线
+# 启动后：浏览器打开 http://localhost 看实时曲线（经 nginx 反代）
+#        直连后端 http://localhost:5001 仍可用（对照 nginx 层前后差异，见 §验收）
 #        管理台 http://localhost:18083 看 MQTT 连接（默认 admin/public）
 #
 # ★ 端口默认只绑定 127.0.0.1（仅本机可访问）：
 #   EMQX 1883 默认匿名可发布、TDengine 6041 用演示口令、18083 默认 admin/public，
 #   一旦绑到 0.0.0.0，同一 WiFi 下任何设备都能免登录读全量数据、甚至删库。
+#   nginx 的 80 同理走 BIND_ADDR —— 它前面就是这套展示面，绝不能默认对外。
 #   需要在局域网演示大屏时，在 .env 里设 BIND_ADDR=0.0.0.0，
 #   并且务必同时改掉 TD_PASS 与 EMQX 默认口令。
 # =============================================================================
@@ -196,6 +199,77 @@ services:
       retries: 3
       start_period: 20s
 
+  # ---------------- 基础设施：查询缓存（展示层专用） ----------------
+  # 只被 web 服务使用：缓存"已闭合时间窗"的 TDengine 聚合结果。
+  # 判据与正确性边界见 src/web/cache.py 顶部；它**不是**业务数据的真源，
+  # 所以任何时刻把它整个删掉都不影响功能，只会让查询回到直连库。
+  redis:
+    image: redis:7-alpine
+    container_name: cems-redis
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    # 淘汰策略见下方 command 注释：只存"可重建的查询结果"
+    command:
+      # 只存"可重建的查询结果"，因此：
+      #   - maxmemory-policy 必须选 allkeys-lru：写满时淘汰最旧的缓存条目，
+      #     绝不能让 Redis 因为 OOM 拒写（那会让缓存整层失效且日志噪声很大）；
+      #   - 不开 AOF/RDB 持久化：重启后缓存为空是**正确的**（水位也一起没了，
+      #     缓存会先停用直到重新观测到库内数据），比留着一堆旧值更安全。
+      - redis-server
+      - --maxmemory
+      - "128mb"
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --loglevel
+      - notice
+    # ⚠️ 不暴露端口：缓存只走 cems 内网被 web 访问。
+    #    对外暴露 Redis 等于把"能读全量报表数据"的口子开到宿主机网络上。
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    networks: [cems]
+
+  # ---------------- 基础设施：反向代理（对外唯一入口） ----------------
+  # 为什么要这一层（并发模型 / 静态资源 / TLS 终结位置）见 deploy/nginx/nginx.conf 顶部。
+  nginx:
+    image: nginx:alpine
+    container_name: cems-nginx
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      # ⚠️ 沿用 ${BIND_ADDR:-127.0.0.1}：默认只绑本机，不要图省事写 0.0.0.0
+      - "${BIND_ADDR:-127.0.0.1}:${NGINX_HOST_PORT:-80}:80"
+    volumes:
+      # 配置**落盘进仓库**（deploy/nginx/），不是 compose 里的内联字符串：
+      # 内联写法没法做语法检查（nginx -t）、没法在本地 diff、也没法单独复用。
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      # 静态资源直接挂仓库里的那一份，避免仓库里出现第二份副本（迟早不同步）
+      - ./src/web/static:/usr/share/nginx/html/static:ro
+    depends_on:
+      # condition: service_healthy 而不是 service_started：
+      # 否则 nginx 会在 web 还没监听 5000 时就起来，健康检查期间对外的请求全是 502。
+      web:
+        condition: service_healthy
+    healthcheck:
+      # 探的是**本层自己的** /healthz（不代理后端，理由见 cems.conf 里的注释）；
+      # 用 127.0.0.1 而不是 localhost，避免 ::1 解析差异。
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [cems]
+
   # ---------------- 4 展示层：Flask + ECharts 大屏 ----------------
   web:
     <<: *app
@@ -212,15 +286,34 @@ services:
       WEB_PORT: "5000"
       QUERY_MINUTES: "10"
       REFRESH_SECONDS: "5"
+      # ---- Redis 查询缓存（只缓存已闭合时间窗，见 src/web/cache.py） ----
+      REDIS_HOST: redis            # 容器内用服务名互访
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      # 一键开关：设 0 时行为完全回到"每次都查库"（用于前后对照测量）
+      CACHE_ENABLED: ${CACHE_ENABLED:-1}
+      # 安全边界：查询上界必须早于"最新数据时间戳"这么多秒才允许进缓存。
+      # 取值依据 = 网关补传慢路径实测 max 32.1 s（docs/性能与可靠性指标.md §4.2）。
+      CACHE_MARGIN_SECONDS: ${CACHE_MARGIN_SECONDS:-60}
+      # 条目 TTL：兜底失效（水位丢失 / 外部直接改库 / 超长滞后补传）
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
     ports:
       # ⚠️ 宿主机端口默认 5001 不是 5000：Windows 上 5000 常被其它进程的临时源端口占用，
       #    Docker 会报 "bind: An attempt was made to access a socket in a way forbidden by
       #    its access permissions"。原端口释放后可设 WEB_HOST_PORT=5000。
       # ⚠️ 仍沿用 BIND_ADDR（默认只绑 127.0.0.1），别为了让外网访问而把它删掉。
+      # ★ 对外入口是 nginx:80；这里保留直连端口是**有意的**：
+      #   它是"绕过反代"的对照通路，用来量 nginx 层本身的开销（验收第 2 条），
+      #   也用于缓存统计取数（/api/cache/* 默认被 nginx 挡成 403）。
       - "${BIND_ADDR:-127.0.0.1}:${WEB_HOST_PORT:-5001}:5000"   # 浏览器 http://localhost:${WEB_HOST_PORT:-5001}
     depends_on:
       tdengine:
         condition: service_healthy
+      redis:
+        # 用 service_started 而不是 service_healthy：
+        # 缓存不可用时 web 本来就能正常服务（cache.py 整层降级为直连查库），
+        # 用 healthy 会把"Redis 慢一点"升级成"大屏起不来"，是本末倒置。
+        condition: service_started
     healthcheck:
       # 探自己的 /api/health：只要 HTTP 有响应（200 或 503）就说明 Web 在正常服务；
       # 503 表示 Web 活着但查库失败，那属于依赖问题，不该判 Web 死了
