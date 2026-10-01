@@ -517,6 +517,13 @@ def main() -> None:
         while True:
             touch_heartbeat()      # 每圈刷一次：healthcheck 靠它判断循环还活着
 
+            # ★ 本迭代"触发补传之前"的在途状态快照 —— 这是本轮该不该入队的唯一依据。
+            # 必须在这里取：下面的 trigger_if_due 只是启动一个补传线程，它不该反过来
+            # 把本轮数据挤进队列。否则会形成闭环：触发 → 本轮入队 → 队列非空 →
+            # 下一个节流周期又是"触发的同时入队" → 队列永远有一行、每 6 条就有 1 条
+            # 走"缓存 30 秒再补传"的慢路径（成因见 docs/网关补传慢路径分析.md）。
+            resend_in_flight = RESEND_WORKER.running
+
             # 补传重试放在循环最开头：它只跟 broker 有关，不该被设备侧故障挡住。
             # 放在循环末尾时，下面两处 continue（设备没连上 / 读失败）会把它整段跳过，
             # 结果设备一坏、积压就再也补不出去，要等到下一次重连事件才动。
@@ -541,15 +548,19 @@ def main() -> None:
             payload = build_payload(data)
 
 
-            if mqtt_client.is_connected() and not RESEND_WORKER.running:
-                # ★ 在线且没有积压要补：直接发；没收到 PUBACK 就落盘，绝不静默丢
+            if mqtt_client.is_connected() and not resend_in_flight:
+                # ★ 在线且本轮开始前没有在途补传批次：直接发；没收到 PUBACK 就落盘，绝不静默丢
                 if not publish(mqtt_client, payload, tag=f"第{count}条 在线直发"):
                     save_to_cache(payload, reason="未收到 PUBACK")
             elif not mqtt_client.is_connected():
                 # ★ 断网：写缓存，数据不丢
                 save_to_cache(payload, reason="断网")
             else:
-                # 正在补传积压：新数据先排队，保证旧数据按序先送达
+                # 本轮开始前已有在途补传批次（那批数据比本轮旧）：新数据先排队。
+                # ⚠️ 顺序语义是"**近似时序**"，不是严格全局 FIFO：只有"本轮开始前就在途的
+                #    批次"会让本轮样本排队；被 RESEND_RETRY_INTERVAL 节流挡在队列里、
+                #    尚未取批的旧行，以及本轮自己刚触发的批次，都不会让本轮排队。
+                #    （改动前同样不满足全局 FIFO：实测 58 条逆序全部是补传行。）
                 save_to_cache(payload, reason="补传中")
 
             time.sleep(POLL_INTERVAL)
