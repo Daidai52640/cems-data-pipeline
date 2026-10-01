@@ -230,7 +230,7 @@ def main() -> int:
     parser.add_argument("--recompute", default=None, help="只从已有 CSV 重新汇总，不测")
     parser.add_argument(
         "--out",
-        default=str(PROJECT_ROOT / "docs" / "measurements" / "latency_raw.csv"),
+        default=str(PROJECT_ROOT / "docs" / "evidence" / "perf" / "latency_raw.csv"),
     )
     args = parser.parse_args()
 

@@ -15,7 +15,7 @@
   断档判据 = max(3 × 中位间隔, 中位间隔 + 10 s)；窗口"跨断档"= 该窗口区间与任一断档区间相交。
 
 只读：全部 SQL 都是 SELECT，不写库、不改缓存、不动服务。
-原始数据落到 `docs/measurements/report_coverage_<tag>.json`（测法 + 原始分布 + 结论）。
+原始数据落到 `docs/evidence/coverage/report_coverage_<tag>.json`（测法 + 原始分布 + 结论）。
 
 用法：
     python scripts/measure_report_coverage.py
@@ -129,7 +129,7 @@ def main() -> int:
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
                         help="候选门限（默认 0.75，与 docs/告警判据设计.md §3.4 同值）")
     parser.add_argument("--tag", default="calibration", help="输出文件名后缀")
-    parser.add_argument("--out-dir", default=str(PROJECT_ROOT / "docs" / "measurements"))
+    parser.add_argument("--out-dir", default=str(PROJECT_ROOT / "docs" / "evidence" / "coverage"))
     parser.add_argument("--no-write", action="store_true", help="只打印，不落盘")
     args = parser.parse_args()
 

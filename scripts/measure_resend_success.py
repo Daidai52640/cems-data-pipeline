@@ -9,7 +9,7 @@
 #    ✅ 脚本用 try/finally 保证：无论中途报错，最后一定把 emqx 起回来并等服务 healthy。
 # 2) 数据的唯一来源是**只读**：
 #    - 演练前先记库内基线（SELECT MAX(ts)）
-#    - 静置结束时把 data/cache.jsonl 与 .sending 快照到 docs/measurements/ 作证据
+#    - 静置结束时把 data/cache.jsonl 与 .sending 快照到 docs/evidence/drill/ 作证据
 #    - 恢复后等网关把队列排空（轮询文件大小归零），再查库对账
 #    脚本本身不写库、不改网关代码、不动缓存文件内容。
 # 3) 前置条件：六服务在跑；docker CLI 可用；宿主机能读项目 data/ 目录。
@@ -152,7 +152,7 @@ def main() -> int:
     parser.add_argument("--tag", default="resend")
     parser.add_argument(
         "--out",
-        default=str(PROJECT_ROOT / "docs" / "measurements" / "resend_reconciliation.json"),
+        default=str(PROJECT_ROOT / "docs" / "evidence" / "drill" / "resend_reconciliation.json"),
     )
     args = parser.parse_args()
 

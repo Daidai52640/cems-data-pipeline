@@ -1,6 +1,6 @@
 import json
 
-p = r'docs/measurements/nginx_redis_run1.json'
+p = r'docs/evidence/cache/nginx_redis_run1.json'
 d = json.load(open(p, encoding='utf-8'))
 rounds = d['rounds']
 off, on = rounds['cache_off'], rounds['cache_on']

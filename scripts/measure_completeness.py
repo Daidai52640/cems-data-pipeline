@@ -184,7 +184,7 @@ def main() -> int:
     parser.add_argument("--tag", default="window")
     parser.add_argument(
         "--out-prefix",
-        default=str(PROJECT_ROOT / "docs" / "measurements" / "completeness"),
+        default=str(PROJECT_ROOT / "docs" / "evidence" / "perf" / "completeness"),
     )
     args = parser.parse_args()
 

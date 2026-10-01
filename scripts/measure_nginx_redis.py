@@ -44,7 +44,7 @@ from typing import Any, Optional
 from urllib.parse import urlencode
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DOCS_DIR = PROJECT_ROOT / "docs" / "measurements"
+DOCS_DIR = PROJECT_ROOT / "docs" / "evidence" / "cache"
 
 NGINX_BASE = "http://127.0.0.1:80"
 DIRECT_BASE = "http://127.0.0.1:5001"
