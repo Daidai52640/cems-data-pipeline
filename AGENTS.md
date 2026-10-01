@@ -15,7 +15,8 @@
   - 展示层 `src/web/web_dashboard.py` — Flask + ECharts，`/api/data`、`/api/health`
 - Web 框架：**Flask（仅此一处）**；本项目没有 Django、DRF、FastAPI
 - 外部系统：Modbus TCP、MQTT（EMQX）、TDengine 3.x（REST 6041）
-- 数据约定：8 个测点（so2/nox/flow/dust/o2/temp/humidity/pressure），设备寄存器放大 10 倍存整数，网关负责还原
+- 数据约定：**9 个测点**（顺序即 HJ 212 上传值序：`Flow, Dust, SO2, NOx, O2, Velocity, Temp, Humidity, Pressure`），
+  单位与超标限值以 `src/common/points.py` 为唯一真源；设备寄存器**按测点各自的比例系数**放大存整数（见 `Point.scale`），网关负责还原
 - 当前项目**不存在的**能力（引入前先确认，别默认存在）：ORM / 数据库迁移层、测试框架、CI、`pyproject.toml`、类型检查配置
 
 ---
@@ -136,7 +137,32 @@
 
 ---
 
-## 9. 规范文件索引（按需加载）
+## 9. 文档结构 doc-structure
+
+**入口**：`docs/README.md`（导航；AI 与他人各走哪条路都写在那里）
+
+| 目录 | 类型 | 只写什么 |
+|---|---|---|
+| `docs/adr/` | 架构决策记录 | **决策与理由**（背景 → 备选 → 决策 → 后果含代价）。定稿后不改写，决策变了新增一份 |
+| `docs/runbooks/` | 运维手册 / 台账 | **怎么做 / 做过什么**（命令可复现；台账按 现象→排查→根因→修复→数据影响） |
+| `docs/reference/` | 事实与实测 | **约束与数字**（必须写测法、原始数据位置、误差来源） |
+| `docs/evidence/` | 机器证据 | **只读归档**原始产物，分子目录（`perf/ drill/ cache/ backup/ coverage/ logs/`），**不在此写结论** |
+| `docs/test-reports/` | 验收用例 | 测试目标 / 基线 / 通过标准 / 结论 |
+| `docs/diagrams/` | 图形产物 | 生成物与其源数据一起放，便于重生成 |
+
+**三条硬规矩**：
+
+1. **结论必须能追溯到证据**——每个数字后面给命令或 `evidence/` 文件名，不许"约为/大概"。
+2. **区分"决策"与"事实"**：选型与取舍 → `adr/`；实测数字 → `reference/`；发现的约束（如时钟会漂）→ `reference/`。
+   ⚠️ 把事实写进 ADR、或把决策写进 reference，都会让人找不到东西。
+3. **凡有实测，必单列"局限 / 没做到"一节**——不写局限的数字不可信。
+
+**新增文档的判定**：影响后续设计的选择 → 新增 ADR；摸清一条新约束 → 新增 `reference/`；
+真做了一次演练 → 往 `runbooks/故障台账.md` 追加；发现现有文档写错 → 就地修正并在提交信息里写明。
+
+---
+
+## 10. 规范文件索引（按需加载）
 
 | 主题 | 路径 | 何时加载 |
 |---|---|---|
@@ -146,5 +172,6 @@
 | 安全 | `skills/common/security.md` | 密钥、输入校验、SQL、接口 |
 | 代码评审 | `rules/code-review.md` | 评审代码 |
 | Flask | `skills/flask/SKILL.md` | 改 Web 层 |
+| **文档目录规范** | **`skills/common/folder-structure.md`** | **新增/移动 `docs/` 下任何文档** |
 
-其余文件（`skills/django/`、`skills/drf/`、`skills/fastapi/`、`skills/common/microservices.md`、`db-design.md`、`data-migrations.md`、`api-auth.md`、`observability.md`、`feature-flags.md`、`llm-patterns.md`、`ci-cd.md`、`async-patterns.md`、`dependency-management.md`、`deployment.md`、`testing.md`、`performance.md`、`folder-structure.md`、`rules/api-design.md`、`rules/git-workflow.md`）与本项目技术栈无关，**本文件不引用、默认不加载**。
+其余文件（`skills/django/`、`skills/drf/`、`skills/fastapi/`、`skills/common/microservices.md`、`db-design.md`、`data-migrations.md`、`api-auth.md`、`observability.md`、`feature-flags.md`、`llm-patterns.md`、`ci-cd.md`、`async-patterns.md`、`dependency-management.md`、`deployment.md`、`testing.md`、`performance.md`、`rules/api-design.md`、`rules/git-workflow.md`）与本项目技术栈无关，**本文件不引用、默认不加载**。
