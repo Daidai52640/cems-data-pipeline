@@ -1,0 +1,497 @@
+2026-10-01 03:23:36 [INFO] gateway: 网关启动: 设备 device:5020 → MQTT emqx:1883 主题 cems/plant1/data (QoS=1)
+2026-10-01 03:23:36 [INFO] gateway: 断网续传已启用，缓存文件: /app/data/cache.jsonl
+2026-10-01 03:23:36 [INFO] gateway: Modbus 已连接: device:5020 从站1
+2026-10-01 03:23:36 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-01 03:23:36 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:23:36 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:23:36 Flow=30185.0 Dust=3.03 SO2=33.1 NOx=32.2 O2=5.6 Velocity=11.7 Temp=183.0 Humidity=40.2 Pressure=97.6 Flag=N
+2026-10-01 03:23:36 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:24:08 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:24:08 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:24:08 Flow=30216.0 Dust=2.88 SO2=30.4 NOx=32.2 O2=5.6 Velocity=11.7 Temp=183.2 Humidity=40.3 Pressure=97.7 Flag=N
+2026-10-01 03:24:08 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:24:39 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:24:39 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:24:39 Flow=30206.0 Dust=2.88 SO2=27.6 NOx=32.2 O2=5.6 Velocity=11.8 Temp=183.2 Humidity=40.8 Pressure=97.6 Flag=N
+2026-10-01 03:24:39 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:25:11 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:25:11 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:25:11 Flow=30198.0 Dust=2.88 SO2=31.3 NOx=32.1 O2=5.6 Velocity=11.8 Temp=183.1 Humidity=40.8 Pressure=97.4 Flag=N
+2026-10-01 03:25:11 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:25:42 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:25:42 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:25:42 Flow=30265.0 Dust=2.88 SO2=32.4 NOx=32.3 O2=5.7 Velocity=11.8 Temp=183.7 Humidity=41.0 Pressure=97.4 Flag=N
+2026-10-01 03:25:42 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:26:14 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:26:14 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:26:14 Flow=30516.0 Dust=2.88 SO2=29.7 NOx=32.3 O2=5.7 Velocity=11.8 Temp=183.7 Humidity=41.2 Pressure=97.5 Flag=N
+2026-10-01 03:26:14 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:26:45 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:26:45 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:26:45 Flow=30310.0 Dust=2.88 SO2=33.3 NOx=32.3 O2=5.8 Velocity=11.7 Temp=183.6 Humidity=41.0 Pressure=97.5 Flag=N
+2026-10-01 03:26:45 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:27:17 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:27:17 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:27:17 Flow=30593.0 Dust=2.88 SO2=30.1 NOx=32.3 O2=5.7 Velocity=11.7 Temp=185.0 Humidity=41.3 Pressure=97.5 Flag=N
+2026-10-01 03:27:17 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:27:49 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:27:49 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:27:49 Flow=30470.0 Dust=2.88 SO2=26.4 NOx=32.3 O2=5.7 Velocity=11.7 Temp=184.3 Humidity=41.1 Pressure=97.5 Flag=N
+2026-10-01 03:27:49 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:28:20 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:28:20 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:28:20 Flow=30467.0 Dust=2.88 SO2=23.2 NOx=32.3 O2=5.7 Velocity=11.6 Temp=185.2 Humidity=41.4 Pressure=97.5 Flag=N
+2026-10-01 03:28:20 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:28:51 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:28:51 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:28:51 Flow=30537.0 Dust=2.88 SO2=20.0 NOx=32.3 O2=5.8 Velocity=11.5 Temp=185.1 Humidity=41.4 Pressure=97.6 Flag=N
+2026-10-01 03:28:51 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:29:23 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:29:23 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:29:23 Flow=30483.0 Dust=2.88 SO2=20.0 NOx=32.3 O2=5.7 Velocity=11.5 Temp=184.8 Humidity=41.5 Pressure=97.5 Flag=N
+2026-10-01 03:29:23 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:29:54 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:29:54 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:29:54 Flow=30345.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.7 Velocity=11.3 Temp=185.4 Humidity=41.7 Pressure=97.6 Flag=N
+2026-10-01 03:29:54 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:30:26 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:30:26 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:30:26 Flow=30340.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.6 Velocity=11.4 Temp=185.0 Humidity=41.6 Pressure=97.6 Flag=N
+2026-10-01 03:30:26 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:30:57 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:30:57 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:30:57 Flow=30537.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.7 Velocity=11.3 Temp=185.3 Humidity=41.5 Pressure=97.6 Flag=N
+2026-10-01 03:30:57 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:31:29 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:31:29 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:31:29 Flow=30574.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.6 Velocity=11.4 Temp=185.0 Humidity=41.8 Pressure=97.6 Flag=N
+2026-10-01 03:31:29 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:32:00 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:32:00 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:32:00 Flow=30482.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.5 Velocity=11.4 Temp=184.8 Humidity=41.9 Pressure=97.6 Flag=N
+2026-10-01 03:32:00 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:32:32 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:32:32 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:32:32 Flow=30612.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.6 Velocity=11.4 Temp=184.6 Humidity=41.7 Pressure=97.5 Flag=N
+2026-10-01 03:32:33 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:33:03 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:33:03 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:33:03 Flow=31198.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.4 Velocity=11.4 Temp=185.1 Humidity=42.1 Pressure=97.6 Flag=N
+2026-10-01 03:33:03 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:33:36 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:33:36 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:33:36 Flow=31216.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.4 Velocity=11.3 Temp=185.8 Humidity=41.9 Pressure=97.5 Flag=N
+2026-10-01 03:33:36 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:34:07 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:34:07 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:34:07 Flow=30851.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.4 Velocity=11.4 Temp=185.2 Humidity=41.9 Pressure=97.5 Flag=N
+2026-10-01 03:34:07 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:34:38 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:34:38 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:34:38 Flow=30673.0 Dust=2.88 SO2=20.0 NOx=32.4 O2=5.4 Velocity=11.3 Temp=185.7 Humidity=42.1 Pressure=97.5 Flag=N
+2026-10-01 03:34:38 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:35:10 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:35:10 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:35:10 Flow=30653.0 Dust=2.88 SO2=19.9 NOx=32.4 O2=5.4 Velocity=11.4 Temp=185.9 Humidity=42.2 Pressure=97.5 Flag=N
+2026-10-01 03:35:10 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:35:41 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:35:41 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:35:41 Flow=30573.0 Dust=2.88 SO2=19.9 NOx=32.4 O2=5.4 Velocity=11.3 Temp=185.0 Humidity=41.8 Pressure=97.4 Flag=N
+2026-10-01 03:35:41 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:36:13 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:36:13 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:36:13 Flow=30198.0 Dust=2.88 SO2=19.9 NOx=32.4 O2=5.4 Velocity=11.4 Temp=185.2 Humidity=42.1 Pressure=97.3 Flag=N
+2026-10-01 03:36:13 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:36:44 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:36:44 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:36:44 Flow=30350.0 Dust=2.88 SO2=19.9 NOx=32.4 O2=5.4 Velocity=11.3 Temp=185.5 Humidity=42.0 Pressure=97.4 Flag=N
+2026-10-01 03:36:44 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:37:16 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:37:16 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:37:16 Flow=30365.0 Dust=2.88 SO2=19.9 NOx=32.4 O2=5.4 Velocity=11.3 Temp=186.0 Humidity=42.0 Pressure=97.3 Flag=N
+2026-10-01 03:37:16 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:37:47 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:37:47 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:37:47 Flow=30237.0 Dust=2.88 SO2=19.9 NOx=32.4 O2=5.4 Velocity=11.5 Temp=185.4 Humidity=42.0 Pressure=97.4 Flag=N
+2026-10-01 03:37:47 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:38:19 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:38:19 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:38:19 Flow=30134.0 Dust=2.88 SO2=19.9 NOx=32.4 O2=5.4 Velocity=11.5 Temp=186.4 Humidity=41.9 Pressure=97.3 Flag=N
+2026-10-01 03:38:19 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:38:50 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:38:50 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:38:50 Flow=30402.0 Dust=2.88 SO2=19.9 NOx=32.4 O2=5.2 Velocity=11.5 Temp=185.5 Humidity=41.9 Pressure=97.4 Flag=N
+2026-10-01 03:38:50 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:39:22 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:39:22 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:39:22 Flow=30328.0 Dust=2.88 SO2=19.9 NOx=36.4 O2=5.2 Velocity=11.5 Temp=185.8 Humidity=41.6 Pressure=97.4 Flag=N
+2026-10-01 03:39:22 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:39:53 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:39:53 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:39:53 Flow=30278.0 Dust=2.88 SO2=19.9 NOx=42.9 O2=5.1 Velocity=11.5 Temp=185.9 Humidity=41.8 Pressure=97.4 Flag=N
+2026-10-01 03:39:53 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:40:25 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:40:25 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:40:25 Flow=30345.0 Dust=2.88 SO2=19.9 NOx=49.4 O2=5.0 Velocity=11.6 Temp=185.0 Humidity=41.5 Pressure=97.4 Flag=N
+2026-10-01 03:40:25 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:40:56 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:40:56 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:40:56 Flow=30216.0 Dust=2.88 SO2=19.9 NOx=55.5 O2=4.9 Velocity=11.5 Temp=184.4 Humidity=41.9 Pressure=97.4 Flag=N
+2026-10-01 03:40:56 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:41:28 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:41:28 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:41:28 Flow=30299.0 Dust=2.88 SO2=19.9 NOx=51.5 O2=4.9 Velocity=11.5 Temp=185.1 Humidity=41.9 Pressure=97.5 Flag=N
+2026-10-01 03:41:28 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:41:59 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:41:59 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:41:59 Flow=30349.0 Dust=2.88 SO2=19.9 NOx=44.9 O2=4.8 Velocity=11.5 Temp=184.4 Humidity=41.9 Pressure=97.5 Flag=N
+2026-10-01 03:41:59 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:42:31 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:42:31 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:42:31 Flow=30258.0 Dust=2.88 SO2=19.9 NOx=43.3 O2=4.9 Velocity=11.6 Temp=184.1 Humidity=41.5 Pressure=97.4 Flag=N
+2026-10-01 03:42:31 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:43:02 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:43:03 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:43:02 Flow=30186.0 Dust=2.88 SO2=19.9 NOx=49.4 O2=4.8 Velocity=11.7 Temp=184.2 Humidity=41.7 Pressure=97.5 Flag=N
+2026-10-01 03:43:03 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:43:34 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:43:34 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:43:34 Flow=29928.0 Dust=2.88 SO2=19.9 NOx=55.9 O2=4.9 Velocity=11.6 Temp=184.4 Humidity=41.4 Pressure=97.5 Flag=N
+2026-10-01 03:43:34 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:44:06 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:44:06 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:44:06 Flow=29871.0 Dust=2.88 SO2=19.9 NOx=51.0 O2=4.9 Velocity=11.5 Temp=184.5 Humidity=41.4 Pressure=97.5 Flag=N
+2026-10-01 03:44:06 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:44:37 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:44:37 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:44:37 Flow=29991.0 Dust=2.88 SO2=19.9 NOx=51.0 O2=5.0 Velocity=11.6 Temp=185.2 Humidity=41.4 Pressure=97.5 Flag=N
+2026-10-01 03:44:37 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:45:09 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:45:09 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:45:09 Flow=29821.0 Dust=2.88 SO2=19.9 NOx=56.3 O2=5.0 Velocity=11.7 Temp=185.4 Humidity=41.1 Pressure=97.5 Flag=N
+2026-10-01 03:45:09 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:45:40 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:45:40 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:45:40 Flow=29939.0 Dust=3.32 SO2=19.9 NOx=49.7 O2=5.0 Velocity=11.7 Temp=186.2 Humidity=41.4 Pressure=97.5 Flag=N
+2026-10-01 03:45:40 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:46:12 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:46:12 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:46:12 Flow=29676.0 Dust=3.91 SO2=19.8 NOx=48.5 O2=5.1 Velocity=11.7 Temp=186.6 Humidity=41.1 Pressure=97.6 Flag=N
+2026-10-01 03:46:12 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:46:43 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:46:43 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:46:43 Flow=29774.0 Dust=4.47 SO2=19.8 NOx=54.6 O2=5.1 Velocity=11.7 Temp=188.0 Humidity=41.0 Pressure=97.5 Flag=N
+2026-10-01 03:46:43 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:47:15 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:47:15 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:47:15 Flow=29644.0 Dust=5.06 SO2=19.8 NOx=52.1 O2=5.0 Velocity=11.6 Temp=188.4 Humidity=40.8 Pressure=97.5 Flag=N
+2026-10-01 03:47:15 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:47:46 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:47:46 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:47:46 Flow=29845.0 Dust=4.54 SO2=21.9 NOx=45.6 O2=5.1 Velocity=11.6 Temp=188.2 Humidity=40.8 Pressure=97.6 Flag=N
+2026-10-01 03:47:46 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:48:18 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:48:18 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:48:18 Flow=29868.0 Dust=3.95 SO2=25.5 NOx=39.1 O2=5.1 Velocity=11.6 Temp=188.8 Humidity=40.6 Pressure=97.6 Flag=N
+2026-10-01 03:48:18 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:48:49 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:48:49 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:48:49 Flow=29724.0 Dust=3.4 SO2=28.9 NOx=33.0 O2=5.1 Velocity=11.6 Temp=188.3 Humidity=40.9 Pressure=97.6 Flag=N
+2026-10-01 03:48:49 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:49:21 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:49:21 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:49:21 Flow=29735.0 Dust=2.88 SO2=32.8 NOx=32.2 O2=5.2 Velocity=11.5 Temp=188.5 Humidity=40.7 Pressure=97.6 Flag=N
+2026-10-01 03:49:21 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:49:52 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:49:52 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:49:52 Flow=29762.0 Dust=2.88 SO2=30.6 NOx=32.2 O2=5.1 Velocity=11.5 Temp=188.1 Humidity=40.9 Pressure=97.6 Flag=N
+2026-10-01 03:49:52 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:50:24 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:50:24 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:50:24 Flow=29842.0 Dust=2.88 SO2=26.9 NOx=32.2 O2=5.3 Velocity=11.5 Temp=188.9 Humidity=40.7 Pressure=97.6 Flag=N
+2026-10-01 03:50:24 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:50:55 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:50:55 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:50:55 Flow=29985.0 Dust=3.07 SO2=23.5 NOx=32.2 O2=5.3 Velocity=11.4 Temp=188.7 Humidity=40.8 Pressure=97.6 Flag=N
+2026-10-01 03:50:55 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:51:27 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:51:27 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:51:27 Flow=30007.0 Dust=3.66 SO2=21.3 NOx=32.2 O2=5.3 Velocity=11.5 Temp=188.8 Humidity=40.5 Pressure=97.6 Flag=N
+2026-10-01 03:51:27 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:51:58 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:51:58 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:51:58 Flow=29826.0 Dust=4.25 SO2=24.9 NOx=32.2 O2=5.3 Velocity=11.5 Temp=189.6 Humidity=40.9 Pressure=97.5 Flag=N
+2026-10-01 03:51:58 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:52:30 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:52:30 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:52:30 Flow=29843.0 Dust=4.84 SO2=28.5 NOx=32.2 O2=5.3 Velocity=11.5 Temp=189.7 Humidity=40.8 Pressure=97.5 Flag=N
+2026-10-01 03:52:30 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 03:53:02 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 03:53:02 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 03:53:01 Flow=29599.0 Dust=4.81 SO2=31.9 NOx=32.2 O2=5.2 Velocity=11.4 Temp=189.8 Humidity=40.5 Pressure=97.6 Flag=N
+2026-10-01 03:53:02 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:26:17 [INFO] gateway: 网关启动: 设备 device:5020 → MQTT emqx:1883 主题 cems/plant1/data (QoS=1)
+2026-10-01 13:26:17 [INFO] gateway: 断网续传已启用，缓存文件: /app/data/cache.jsonl
+2026-10-01 13:26:17 [INFO] gateway: Modbus 已连接: device:5020 从站1
+2026-10-01 13:26:17 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-01 13:26:17 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:26:17 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:26:17 Flow=31677.0 Dust=2.88 SO2=20.8 NOx=54.7 O2=5.1 Velocity=12.5 Temp=186.5 Humidity=43.6 Pressure=96.5 Flag=N
+2026-10-01 13:26:17 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:26:47 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:26:47 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:26:47 Flow=31622.0 Dust=2.88 SO2=19.9 NOx=52.6 O2=5.1 Velocity=12.6 Temp=186.8 Humidity=43.6 Pressure=96.6 Flag=N
+2026-10-01 13:26:47 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:27:18 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:27:18 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:27:18 Flow=31709.0 Dust=2.88 SO2=19.8 NOx=46.5 O2=5.0 Velocity=12.6 Temp=185.5 Humidity=43.5 Pressure=96.5 Flag=N
+2026-10-01 13:27:18 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:27:48 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:27:48 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:27:48 Flow=31548.0 Dust=2.88 SO2=19.8 NOx=40.0 O2=5.0 Velocity=12.6 Temp=186.2 Humidity=43.9 Pressure=96.5 Flag=N
+2026-10-01 13:27:48 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:28:19 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:28:19 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:28:19 Flow=31595.0 Dust=2.88 SO2=19.8 NOx=33.9 O2=4.9 Velocity=12.7 Temp=186.1 Humidity=43.6 Pressure=96.5 Flag=N
+2026-10-01 13:28:19 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:28:49 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:28:49 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:28:49 Flow=31542.0 Dust=2.88 SO2=19.8 NOx=32.3 O2=5.0 Velocity=12.9 Temp=185.3 Humidity=43.7 Pressure=96.6 Flag=N
+2026-10-01 13:28:49 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:29:20 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:29:20 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:29:20 Flow=31671.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.0 Velocity=12.9 Temp=185.8 Humidity=43.5 Pressure=96.6 Flag=N
+2026-10-01 13:29:20 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:29:50 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:29:50 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:29:50 Flow=31549.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.0 Velocity=13.0 Temp=184.5 Humidity=43.8 Pressure=96.6 Flag=N
+2026-10-01 13:29:50 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:30:21 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:30:21 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:30:21 Flow=31577.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.1 Velocity=13.1 Temp=184.6 Humidity=43.5 Pressure=96.6 Flag=N
+2026-10-01 13:30:21 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:30:51 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:30:51 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:30:51 Flow=31767.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.1 Velocity=13.1 Temp=184.2 Humidity=43.4 Pressure=96.6 Flag=N
+2026-10-01 13:30:51 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:31:22 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:31:22 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:31:22 Flow=31671.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.1 Velocity=13.2 Temp=184.9 Humidity=43.4 Pressure=96.6 Flag=N
+2026-10-01 13:31:22 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:31:53 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:31:53 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:31:53 Flow=31963.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.1 Velocity=13.7 Temp=185.1 Humidity=43.8 Pressure=96.7 Flag=N
+2026-10-01 13:31:53 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:32:23 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:32:23 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:32:23 Flow=31848.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.1 Velocity=13.6 Temp=184.6 Humidity=43.4 Pressure=96.6 Flag=N
+2026-10-01 13:32:23 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:32:54 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:32:54 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:32:54 Flow=32051.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.1 Velocity=13.7 Temp=184.6 Humidity=43.8 Pressure=96.7 Flag=N
+2026-10-01 13:32:54 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:33:24 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:33:24 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:33:24 Flow=32192.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.2 Velocity=13.6 Temp=184.0 Humidity=43.6 Pressure=96.7 Flag=N
+2026-10-01 13:33:24 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:33:55 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:33:55 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:33:55 Flow=32245.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.2 Velocity=13.6 Temp=183.9 Humidity=43.5 Pressure=96.7 Flag=N
+2026-10-01 13:33:55 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:34:26 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:34:26 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:34:26 Flow=32380.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.2 Velocity=13.5 Temp=184.5 Humidity=43.7 Pressure=96.7 Flag=N
+2026-10-01 13:34:26 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:34:56 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:34:56 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:34:56 Flow=32460.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.2 Velocity=13.4 Temp=183.7 Humidity=43.2 Pressure=96.7 Flag=N
+2026-10-01 13:34:56 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:35:27 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:35:27 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:35:27 Flow=32309.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.3 Velocity=13.4 Temp=183.4 Humidity=43.5 Pressure=96.8 Flag=N
+2026-10-01 13:35:27 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:35:57 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:35:57 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:35:57 Flow=32551.0 Dust=2.88 SO2=23.3 NOx=32.3 O2=5.4 Velocity=13.4 Temp=182.9 Humidity=43.1 Pressure=96.8 Flag=N
+2026-10-01 13:35:57 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:36:28 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:36:28 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:36:28 Flow=32550.0 Dust=2.88 SO2=26.7 NOx=32.3 O2=5.4 Velocity=13.2 Temp=182.5 Humidity=43.2 Pressure=96.8 Flag=N
+2026-10-01 13:36:28 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:36:59 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:36:59 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:36:59 Flow=32487.0 Dust=3.1 SO2=30.3 NOx=32.3 O2=5.3 Velocity=13.2 Temp=183.3 Humidity=43.3 Pressure=96.8 Flag=N
+2026-10-01 13:36:59 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:37:29 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:37:29 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:37:29 Flow=32477.0 Dust=3.66 SO2=33.3 NOx=32.2 O2=5.4 Velocity=13.2 Temp=182.9 Humidity=43.1 Pressure=96.8 Flag=N
+2026-10-01 13:37:29 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:38:00 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:38:00 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:38:00 Flow=32403.0 Dust=4.22 SO2=29.8 NOx=32.2 O2=5.4 Velocity=13.2 Temp=182.9 Humidity=43.1 Pressure=96.8 Flag=N
+2026-10-01 13:38:00 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:38:31 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:38:31 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:38:31 Flow=32545.0 Dust=4.81 SO2=26.2 NOx=32.2 O2=5.3 Velocity=13.2 Temp=183.0 Humidity=42.9 Pressure=96.8 Flag=N
+2026-10-01 13:38:31 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:39:01 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:39:01 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:39:01 Flow=32413.0 Dust=4.84 SO2=22.7 NOx=32.2 O2=5.4 Velocity=13.2 Temp=182.5 Humidity=42.9 Pressure=96.8 Flag=N
+2026-10-01 13:39:01 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:39:32 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:39:32 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:39:32 Flow=32019.0 Dust=4.29 SO2=23.4 NOx=32.2 O2=5.3 Velocity=13.2 Temp=181.0 Humidity=42.6 Pressure=96.8 Flag=N
+2026-10-01 13:39:32 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:40:03 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:40:03 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:40:03 Flow=31832.0 Dust=3.7 SO2=27.0 NOx=32.2 O2=5.4 Velocity=13.1 Temp=180.2 Humidity=42.5 Pressure=96.7 Flag=N
+2026-10-01 13:40:03 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:40:34 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:40:34 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:40:34 Flow=31535.0 Dust=3.14 SO2=30.4 NOx=32.1 O2=5.4 Velocity=13.0 Temp=179.7 Humidity=42.6 Pressure=96.8 Flag=N
+2026-10-01 13:40:34 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:41:04 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:41:04 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:41:04 Flow=31438.0 Dust=2.88 SO2=32.9 NOx=32.1 O2=5.3 Velocity=13.0 Temp=179.6 Humidity=42.6 Pressure=96.8 Flag=N
+2026-10-01 13:41:04 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:41:35 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:41:35 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:41:35 Flow=31409.0 Dust=2.88 SO2=29.3 NOx=32.1 O2=5.4 Velocity=13.0 Temp=177.7 Humidity=42.4 Pressure=96.7 Flag=N
+2026-10-01 13:41:35 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:42:06 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:42:06 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:42:06 Flow=31019.0 Dust=2.88 SO2=25.9 NOx=33.8 O2=5.4 Velocity=13.0 Temp=178.4 Humidity=42.4 Pressure=96.7 Flag=N
+2026-10-01 13:42:06 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:42:37 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:42:37 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:42:37 Flow=30870.0 Dust=2.88 SO2=22.5 NOx=39.9 O2=5.4 Velocity=13.0 Temp=177.6 Humidity=42.2 Pressure=96.7 Flag=N
+2026-10-01 13:42:37 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:43:07 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:43:07 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:43:07 Flow=30948.0 Dust=2.88 SO2=19.8 NOx=46.4 O2=5.4 Velocity=12.9 Temp=177.4 Humidity=42.4 Pressure=96.7 Flag=N
+2026-10-01 13:43:07 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:43:38 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:43:38 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:43:38 Flow=30903.0 Dust=2.88 SO2=19.8 NOx=52.5 O2=5.5 Velocity=13.0 Temp=177.8 Humidity=42.3 Pressure=96.8 Flag=N
+2026-10-01 13:43:38 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:44:09 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:44:09 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:44:09 Flow=30684.0 Dust=2.88 SO2=19.8 NOx=54.5 O2=5.5 Velocity=13.0 Temp=177.4 Humidity=42.1 Pressure=96.8 Flag=N
+2026-10-01 13:44:09 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:44:40 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:44:40 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:44:40 Flow=30730.0 Dust=2.88 SO2=19.8 NOx=48.0 O2=5.5 Velocity=13.0 Temp=177.0 Humidity=42.3 Pressure=96.8 Flag=N
+2026-10-01 13:44:40 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:45:10 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:45:10 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:45:10 Flow=30884.0 Dust=2.88 SO2=19.8 NOx=41.9 O2=5.6 Velocity=12.9 Temp=177.0 Humidity=42.0 Pressure=96.8 Flag=N
+2026-10-01 13:45:10 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:45:41 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:45:41 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:45:41 Flow=30723.0 Dust=2.88 SO2=19.7 NOx=35.8 O2=5.6 Velocity=12.9 Temp=178.3 Humidity=42.0 Pressure=96.9 Flag=N
+2026-10-01 13:45:41 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:46:12 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:46:12 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:46:12 Flow=30732.0 Dust=2.88 SO2=19.7 NOx=32.1 O2=5.6 Velocity=13.0 Temp=177.4 Humidity=42.1 Pressure=96.9 Flag=N
+2026-10-01 13:46:12 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:46:43 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:46:43 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:46:43 Flow=30771.0 Dust=2.88 SO2=20.2 NOx=32.1 O2=5.6 Velocity=12.9 Temp=177.6 Humidity=42.3 Pressure=97.0 Flag=N
+2026-10-01 13:46:43 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:47:13 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:47:13 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:47:13 Flow=30876.0 Dust=2.88 SO2=23.8 NOx=32.1 O2=5.6 Velocity=13.0 Temp=176.9 Humidity=42.4 Pressure=96.9 Flag=N
+2026-10-01 13:47:13 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:47:44 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:47:44 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:47:44 Flow=30629.0 Dust=2.88 SO2=27.3 NOx=32.1 O2=5.5 Velocity=13.0 Temp=177.4 Humidity=42.2 Pressure=96.9 Flag=N
+2026-10-01 13:47:44 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:48:15 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:48:15 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:48:15 Flow=30796.0 Dust=2.88 SO2=30.7 NOx=32.1 O2=5.6 Velocity=12.9 Temp=177.4 Humidity=42.2 Pressure=97.0 Flag=N
+2026-10-01 13:48:15 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:48:46 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:48:46 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:48:46 Flow=30826.0 Dust=2.88 SO2=32.5 NOx=32.2 O2=5.5 Velocity=12.9 Temp=177.1 Humidity=42.4 Pressure=97.0 Flag=N
+2026-10-01 13:48:46 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:49:17 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:49:17 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:49:17 Flow=30679.0 Dust=2.88 SO2=28.9 NOx=32.2 O2=5.5 Velocity=12.9 Temp=176.8 Humidity=42.3 Pressure=97.1 Flag=N
+2026-10-01 13:49:17 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:49:47 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:49:47 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:49:47 Flow=30512.0 Dust=2.88 SO2=25.5 NOx=32.1 O2=5.5 Velocity=12.9 Temp=175.5 Humidity=42.4 Pressure=97.0 Flag=N
+2026-10-01 13:49:47 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:50:18 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:50:18 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:50:18 Flow=30620.0 Dust=2.88 SO2=21.9 NOx=32.2 O2=5.5 Velocity=12.9 Temp=176.2 Humidity=42.7 Pressure=97.1 Flag=N
+2026-10-01 13:50:18 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:50:49 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:50:49 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:50:49 Flow=30659.0 Dust=2.88 SO2=19.8 NOx=32.2 O2=5.4 Velocity=12.9 Temp=175.0 Humidity=42.9 Pressure=97.1 Flag=N
+2026-10-01 13:50:49 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:51:20 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:51:20 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:51:20 Flow=30450.0 Dust=3.29 SO2=19.8 NOx=32.2 O2=5.4 Velocity=13.0 Temp=174.6 Humidity=42.6 Pressure=97.0 Flag=N
+2026-10-01 13:51:20 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:51:51 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:51:51 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:51:51 Flow=30347.0 Dust=3.84 SO2=19.8 NOx=32.2 O2=5.4 Velocity=13.0 Temp=175.4 Humidity=43.1 Pressure=97.1 Flag=N
+2026-10-01 13:51:51 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:52:21 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:52:21 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:52:21 Flow=30320.0 Dust=4.4 SO2=19.8 NOx=32.1 O2=5.4 Velocity=12.9 Temp=174.7 Humidity=43.0 Pressure=97.1 Flag=N
+2026-10-01 13:52:21 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:52:52 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:52:52 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:52:52 Flow=30444.0 Dust=4.99 SO2=19.8 NOx=32.2 O2=5.5 Velocity=12.9 Temp=174.1 Humidity=43.0 Pressure=97.0 Flag=N
+2026-10-01 13:52:52 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:53:23 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:53:23 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:53:23 Flow=30568.0 Dust=4.66 SO2=19.8 NOx=33.4 O2=5.5 Velocity=13.0 Temp=175.1 Humidity=43.3 Pressure=97.0 Flag=N
+2026-10-01 13:53:23 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:53:54 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:53:54 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:53:54 Flow=30460.0 Dust=4.1 SO2=19.8 NOx=39.5 O2=5.5 Velocity=12.9 Temp=174.1 Humidity=43.2 Pressure=97.0 Flag=N
+2026-10-01 13:53:54 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:54:25 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:54:25 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:54:25 Flow=30658.0 Dust=3.51 SO2=19.8 NOx=45.9 O2=5.5 Velocity=12.8 Temp=174.2 Humidity=43.1 Pressure=97.1 Flag=N
+2026-10-01 13:54:25 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:54:55 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:54:55 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:54:55 Flow=30795.0 Dust=2.99 SO2=19.8 NOx=52.0 O2=5.4 Velocity=12.9 Temp=173.8 Humidity=43.2 Pressure=97.0 Flag=N
+2026-10-01 13:54:55 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:55:27 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:55:27 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:55:27 Flow=30669.0 Dust=3.58 SO2=19.8 NOx=54.5 O2=5.4 Velocity=12.9 Temp=173.6 Humidity=43.2 Pressure=97.0 Flag=N
+2026-10-01 13:55:27 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:55:57 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:55:57 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:55:57 Flow=30909.0 Dust=4.14 SO2=21.4 NOx=48.4 O2=5.4 Velocity=12.8 Temp=172.6 Humidity=43.3 Pressure=97.0 Flag=N
+2026-10-01 13:55:57 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:56:28 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:56:28 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:56:28 Flow=30977.0 Dust=4.69 SO2=24.8 NOx=42.3 O2=5.3 Velocity=13.0 Temp=172.3 Humidity=43.7 Pressure=96.7 Flag=N
+2026-10-01 13:56:28 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:56:59 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:56:59 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:56:59 Flow=30848.0 Dust=4.91 SO2=28.5 NOx=35.7 O2=5.2 Velocity=12.9 Temp=172.3 Humidity=43.4 Pressure=96.8 Flag=N
+2026-10-01 13:56:59 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:57:30 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:57:30 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:57:30 Flow=30881.0 Dust=4.36 SO2=31.9 NOx=32.2 O2=5.2 Velocity=12.9 Temp=172.4 Humidity=43.6 Pressure=96.8 Flag=N
+2026-10-01 13:57:30 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:58:00 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:58:00 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:58:00 Flow=31146.0 Dust=3.77 SO2=31.5 NOx=32.2 O2=5.0 Velocity=12.9 Temp=176.6 Humidity=43.8 Pressure=96.8 Flag=N
+2026-10-01 13:58:00 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:58:31 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:58:31 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:58:31 Flow=31135.0 Dust=3.21 SO2=28.1 NOx=32.2 O2=4.9 Velocity=12.9 Temp=176.5 Humidity=43.6 Pressure=96.8 Flag=N
+2026-10-01 13:58:31 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:59:02 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:59:02 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:59:02 Flow=30851.0 Dust=2.88 SO2=24.7 NOx=32.3 O2=4.9 Velocity=13.0 Temp=177.3 Humidity=44.1 Pressure=96.8 Flag=N
+2026-10-01 13:59:02 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 13:59:33 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 13:59:33 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 13:59:33 Flow=30830.0 Dust=2.88 SO2=21.1 NOx=32.3 O2=4.9 Velocity=12.9 Temp=176.3 Humidity=43.8 Pressure=96.8 Flag=N
+2026-10-01 13:59:33 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:00:04 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:00:04 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:00:04 Flow=30878.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=4.9 Velocity=12.9 Temp=176.8 Humidity=44.2 Pressure=96.9 Flag=N
+2026-10-01 14:00:04 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:00:35 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:00:35 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:00:34 Flow=30980.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=4.9 Velocity=12.9 Temp=177.2 Humidity=44.2 Pressure=96.9 Flag=N
+2026-10-01 14:00:35 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:01:05 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:01:05 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:01:05 Flow=30905.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=4.9 Velocity=12.9 Temp=177.4 Humidity=44.2 Pressure=96.9 Flag=N
+2026-10-01 14:01:05 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:01:36 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:01:36 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:01:36 Flow=30891.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=4.9 Velocity=12.9 Temp=178.8 Humidity=44.2 Pressure=96.9 Flag=N
+2026-10-01 14:01:36 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:02:07 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:02:07 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:02:07 Flow=30621.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=4.9 Velocity=13.0 Temp=177.9 Humidity=44.4 Pressure=96.9 Flag=N
+2026-10-01 14:02:07 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:02:38 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:02:38 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:02:38 Flow=30894.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.0 Velocity=13.0 Temp=179.0 Humidity=44.4 Pressure=97.0 Flag=N
+2026-10-01 14:02:38 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:03:09 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:03:09 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:03:09 Flow=30910.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.0 Velocity=13.1 Temp=178.8 Humidity=44.0 Pressure=96.9 Flag=N
+2026-10-01 14:03:09 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:03:40 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:03:40 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:03:40 Flow=31035.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.0 Velocity=13.1 Temp=178.2 Humidity=44.4 Pressure=97.0 Flag=N
+2026-10-01 14:03:40 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:04:10 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:04:10 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:04:10 Flow=31117.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.0 Velocity=13.2 Temp=179.8 Humidity=44.1 Pressure=96.9 Flag=N
+2026-10-01 14:04:10 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:04:41 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:04:41 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:04:41 Flow=31022.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.1 Velocity=13.3 Temp=178.8 Humidity=44.3 Pressure=96.9 Flag=N
+2026-10-01 14:04:41 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:05:12 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:05:12 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:05:12 Flow=31251.0 Dust=2.88 SO2=19.9 NOx=32.3 O2=5.0 Velocity=13.4 Temp=178.8 Humidity=44.2 Pressure=96.9 Flag=N
+2026-10-01 14:05:12 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:05:43 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:05:43 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:05:43 Flow=31154.0 Dust=2.88 SO2=19.8 NOx=32.3 O2=5.1 Velocity=13.6 Temp=179.8 Humidity=44.5 Pressure=96.9 Flag=N
+2026-10-01 14:05:43 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:06:14 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:06:14 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:06:14 Flow=31402.0 Dust=2.88 SO2=19.8 NOx=32.3 O2=5.1 Velocity=13.5 Temp=180.0 Humidity=44.4 Pressure=96.9 Flag=N
+2026-10-01 14:06:14 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:06:45 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:06:45 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:06:45 Flow=31218.0 Dust=2.88 SO2=19.8 NOx=32.3 O2=5.2 Velocity=13.7 Temp=178.7 Humidity=44.4 Pressure=96.9 Flag=N
+2026-10-01 14:06:45 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:07:16 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:07:16 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:07:16 Flow=31228.0 Dust=2.88 SO2=20.3 NOx=32.3 O2=5.2 Velocity=13.6 Temp=178.8 Humidity=44.6 Pressure=96.8 Flag=N
+2026-10-01 14:07:16 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:07:47 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:07:47 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:07:46 Flow=31084.0 Dust=2.88 SO2=23.7 NOx=32.3 O2=5.2 Velocity=13.7 Temp=178.9 Humidity=44.6 Pressure=96.9 Flag=N
+2026-10-01 14:07:47 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:08:17 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:08:17 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:08:17 Flow=31180.0 Dust=2.88 SO2=27.4 NOx=32.3 O2=5.2 Velocity=13.7 Temp=179.2 Humidity=44.7 Pressure=96.9 Flag=N
+2026-10-01 14:08:17 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:08:48 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:08:48 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:08:48 Flow=31048.0 Dust=2.88 SO2=30.8 NOx=32.3 O2=5.2 Velocity=13.7 Temp=179.6 Humidity=45.2 Pressure=96.9 Flag=N
+2026-10-01 14:08:48 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:09:19 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:09:19 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:09:19 Flow=31236.0 Dust=2.88 SO2=32.8 NOx=32.3 O2=5.3 Velocity=13.7 Temp=179.0 Humidity=45.0 Pressure=96.8 Flag=N
+2026-10-01 14:09:19 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:09:50 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:09:50 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:09:50 Flow=31109.0 Dust=2.88 SO2=29.2 NOx=36.4 O2=5.2 Velocity=13.6 Temp=180.1 Humidity=45.2 Pressure=96.9 Flag=N
+2026-10-01 14:09:50 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:10:21 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:10:21 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:10:21 Flow=30964.0 Dust=2.88 SO2=25.8 NOx=42.5 O2=5.2 Velocity=13.6 Temp=179.7 Humidity=45.2 Pressure=97.0 Flag=N
+2026-10-01 14:10:21 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:10:52 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:10:52 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:10:52 Flow=31159.0 Dust=2.88 SO2=21.9 NOx=49.4 O2=5.2 Velocity=13.6 Temp=179.4 Humidity=45.2 Pressure=97.0 Flag=N
+2026-10-01 14:10:52 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:11:23 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:11:23 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:11:23 Flow=31655.0 Dust=3.22 SO2=19.9 NOx=55.5 O2=5.2 Velocity=13.4 Temp=178.6 Humidity=45.4 Pressure=97.0 Flag=N
+2026-10-01 14:11:23 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:11:53 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:11:53 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:11:53 Flow=31586.0 Dust=3.77 SO2=19.8 NOx=51.8 O2=5.2 Velocity=13.5 Temp=179.3 Humidity=45.8 Pressure=97.1 Flag=N
+2026-10-01 14:11:53 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:12:24 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:12:24 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:12:24 Flow=31579.0 Dust=4.36 SO2=19.8 NOx=46.1 O2=5.2 Velocity=13.4 Temp=179.4 Humidity=45.8 Pressure=97.0 Flag=N
+2026-10-01 14:12:24 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:12:55 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:12:55 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:12:55 Flow=31375.0 Dust=4.92 SO2=19.8 NOx=52.2 O2=5.2 Velocity=13.5 Temp=178.7 Humidity=46.8 Pressure=97.1 Flag=N
+2026-10-01 14:12:55 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:13:26 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:13:26 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:13:26 Flow=30971.0 Dust=4.73 SO2=19.8 NOx=54.7 O2=5.3 Velocity=13.5 Temp=178.9 Humidity=46.6 Pressure=97.2 Flag=N
+2026-10-01 14:13:26 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:13:57 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:13:57 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:13:57 Flow=30810.0 Dust=4.59 SO2=19.8 NOx=48.6 O2=5.3 Velocity=13.5 Temp=178.9 Humidity=46.9 Pressure=97.2 Flag=N
+2026-10-01 14:13:57 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:14:28 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:14:28 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:14:28 Flow=30553.0 Dust=5.07 SO2=20.0 NOx=42.5 O2=5.5 Velocity=13.4 Temp=178.3 Humidity=46.8 Pressure=97.2 Flag=N
+2026-10-01 14:14:28 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:14:59 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:14:59 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:14:59 Flow=30405.0 Dust=4.48 SO2=20.0 NOx=43.3 O2=5.5 Velocity=13.4 Temp=176.5 Humidity=46.6 Pressure=97.2 Flag=N
+2026-10-01 14:14:59 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:15:30 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:15:30 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:15:30 Flow=30543.0 Dust=3.92 SO2=20.0 NOx=49.3 O2=5.5 Velocity=13.4 Temp=177.3 Humidity=46.5 Pressure=97.3 Flag=N
+2026-10-01 14:15:30 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:16:00 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:16:00 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:16:00 Flow=30305.0 Dust=3.33 SO2=20.0 NOx=55.8 O2=5.5 Velocity=13.4 Temp=176.2 Humidity=46.6 Pressure=97.3 Flag=N
+2026-10-01 14:16:00 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:16:31 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:16:31 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:16:31 Flow=30314.0 Dust=2.89 SO2=20.0 NOx=51.4 O2=5.6 Velocity=13.4 Temp=175.8 Humidity=46.4 Pressure=97.3 Flag=N
+2026-10-01 14:16:31 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:17:02 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:17:02 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:17:02 Flow=30454.0 Dust=2.88 SO2=20.0 NOx=44.8 O2=5.7 Velocity=13.4 Temp=175.2 Humidity=46.8 Pressure=97.3 Flag=N
+2026-10-01 14:17:02 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:17:33 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:17:33 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:17:33 Flow=30497.0 Dust=2.89 SO2=21.4 NOx=38.7 O2=5.7 Velocity=13.3 Temp=174.3 Humidity=46.6 Pressure=97.4 Flag=N
+2026-10-01 14:17:33 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:18:04 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:18:04 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:18:04 Flow=30591.0 Dust=2.89 SO2=24.7 NOx=32.6 O2=5.7 Velocity=13.4 Temp=174.1 Humidity=46.7 Pressure=97.4 Flag=N
+2026-10-01 14:18:04 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:18:35 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:18:35 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:18:35 Flow=30532.0 Dust=2.89 SO2=28.4 NOx=33.8 O2=5.7 Velocity=13.4 Temp=174.7 Humidity=46.4 Pressure=97.5 Flag=N
+2026-10-01 14:18:35 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:19:06 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:19:06 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:19:06 Flow=30466.0 Dust=2.88 SO2=32.0 NOx=40.3 O2=5.6 Velocity=13.4 Temp=175.2 Humidity=46.3 Pressure=97.5 Flag=N
+2026-10-01 14:19:06 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:19:37 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:19:37 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:19:37 Flow=30514.0 Dust=2.89 SO2=31.8 NOx=46.4 O2=5.6 Velocity=13.4 Temp=175.3 Humidity=46.4 Pressure=97.5 Flag=N
+2026-10-01 14:19:37 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-01 14:20:08 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-01 14:20:08 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-01 14:20:08 Flow=30564.0 Dust=2.89 SO2=28.3 NOx=52.5 O2=5.6 Velocity=13.5 Temp=175.6 Humidity=46.3 Pressure=97.5 Flag=N
+2026-10-01 14:20:08 [INFO] gateway: [补传完成] broker 已确认 1 条

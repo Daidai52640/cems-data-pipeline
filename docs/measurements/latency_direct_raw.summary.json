@@ -1,0 +1,85 @@
+{
+  "tag": "direct-after-drill",
+  "minutes": 12.0,
+  "poll_interval_s": 0.25,
+  "rows_in_db_window": 140,
+  "rows_seen_by_probe": 140,
+  "class_counts": {
+    "direct": 140,
+    "resend": 0,
+    "no-probe": 0
+  },
+  "clock_jump_events": 47,
+  "rows_excluded_for_clock_jump": 0,
+  "probe_arrivals_without_db_row": [],
+  "lat_visible_corrected_all": {
+    "n": 140,
+    "min": 0.368,
+    "p50": 0.8185,
+    "p95": 1.11285,
+    "max": 1.204,
+    "mean": 0.8346,
+    "stdev": 0.16380800307220522
+  },
+  "lat_visible_corrected_direct": {
+    "n": 140,
+    "min": 0.368,
+    "p50": 0.8185,
+    "p95": 1.11285,
+    "max": 1.204,
+    "mean": 0.8346,
+    "stdev": 0.16380800307220522
+  },
+  "lat_visible_corrected_resend": {
+    "n": 0
+  },
+  "lat_arrival_corrected_direct": {
+    "n": 140,
+    "min": 0.299,
+    "p50": 0.675,
+    "p95": 0.936,
+    "max": 0.978,
+    "mean": 0.7092714285714286,
+    "stdev": 0.14689774463632677
+  },
+  "delta2_direct": {
+    "n": 140,
+    "min": -0.003,
+    "p50": 0.125,
+    "p95": 0.23209999999999997,
+    "max": 0.25,
+    "mean": 0.12532857142857143,
+    "stdev": 0.07315239270929955
+  },
+  "delta2_direct_poll_debiased": {
+    "n": 140,
+    "min": -0.128,
+    "p50": 0.0,
+    "p95": 0.10709999999999997,
+    "max": 0.125,
+    "mean": 0.00032857142857142845,
+    "stdev": 0.07315239270929955
+  },
+  "direct_fixed_segment_s": 0.28600000000000003,
+  "direct_fixed_segment_stderr_s": 0.0070921985815602835,
+  "device_to_broker_fixed_segment_s": 0.13849999999999996,
+  "device_to_broker_stderr_s": 0.0070921985815602835,
+  "clock_offset_ms": {
+    "n": 2874,
+    "min": -0.4766709804534912,
+    "p50": 0.05555260181427002,
+    "p95": 0.49135968685150144,
+    "max": 0.5550656318664551,
+    "mean": 0.06004735265411929,
+    "stdev": 0.2769220813299308
+  },
+  "rest_rtt_ms": {
+    "min": 2.6886463165283203,
+    "p50": 3.9130449295043945,
+    "p95": 25.454044342041012,
+    "max": 33.39505195617676,
+    "mean": 7.296345676907916,
+    "stdev": 7.235014019650813
+  },
+  "quantization_note": "ts 只到秒：lat_visible_corrected = 真实延迟 + U(0,1)。逐样本仍有 ±0.5 s 量化偏差；直接引用 P50/P95 偏保守 0.5 s，去偏估计 = 观测值 - 0.5 s。"
+}
