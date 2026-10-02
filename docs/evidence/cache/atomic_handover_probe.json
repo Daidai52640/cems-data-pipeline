@@ -1,0 +1,195 @@
+{
+  "meta": {
+    "purpose": "ADR-0007 §2 原子交接回归测试规格 / §3.3 在途批次命名的设计期取证",
+    "one_shot": true,
+    "not_a_test": "不属 pytest，不进 CI；保留仅为「结论可追溯到证据」",
+    "run_at": "2026-10-02 18:06:37",
+    "python": "3.12.10",
+    "paho_mqtt": "2.1.0",
+    "gateway_md5": "fbd2a9c10528bcf2cf79acf1c78d1adf"
+  },
+  "input": {
+    "snapshot": "docs/evidence/drill/resend_snapshot_drill2.txt",
+    "snapshot_lines": 35,
+    "leftover_lines": 2,
+    "current_lines": 33,
+    "resend_window": 3,
+    "hook_publish_index": 4,
+    "fail_publish_indices": [
+      4
+    ]
+  },
+  "A_patch": {
+    "DATA_DIR": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\probe_ah_h7dm2odc",
+    "DATA_DIR_is_temp": true,
+    "CACHE_FILE_parent_is_temp": true,
+    "SENDING_FILE_parent_is_temp": true
+  },
+  "A_takeover": {
+    "batch_len": 35,
+    "cache_exists_after_takeover": false,
+    "sending_len_after_takeover": 35,
+    "order_is_leftover_plus_current": true,
+    "multiset_equal": true,
+    "distinct_lines": 35
+  },
+  "A_resend": {
+    "publishes": 35,
+    "confirmed": 34,
+    "new_lines_injected": [
+      "2026-10-01 15:00:00 Flow=33084.0 Dust=2.89 SO2=19.9 NOx=32.3 O2=5.5 Velocity=13.1 Temp=179.0 Humidity=45.2 Pressure=96.9 Flag=N"
+    ],
+    "final_cache_lines": [
+      "2026-10-01 14:54:57 Flow=33084.0 Dust=2.89 SO2=19.9 NOx=32.3 O2=5.5 Velocity=13.1 Temp=179.0 Humidity=45.2 Pressure=96.9 Flag=N",
+      "2026-10-01 15:00:00 Flow=33084.0 Dust=2.89 SO2=19.9 NOx=32.3 O2=5.5 Velocity=13.1 Temp=179.0 Humidity=45.2 Pressure=96.9 Flag=N"
+    ],
+    "final_sending_exists": false,
+    "count_conservation": true,
+    "final_cache_prefix_is_unconfirmed": true,
+    "final_cache_suffix_is_new_lines_in_order": true,
+    "window_observations": [
+      {
+        "k": 3,
+        "window_index": 1,
+        "sending_len_on_disk": 32,
+        "matches_expected": true
+      },
+      {
+        "k": 6,
+        "window_index": 2,
+        "sending_len_on_disk": 30,
+        "matches_expected": true
+      },
+      {
+        "k": 9,
+        "window_index": 3,
+        "sending_len_on_disk": 27,
+        "matches_expected": true
+      },
+      {
+        "k": 12,
+        "window_index": 4,
+        "sending_len_on_disk": 24,
+        "matches_expected": true
+      },
+      {
+        "k": 15,
+        "window_index": 5,
+        "sending_len_on_disk": 21,
+        "matches_expected": true
+      },
+      {
+        "k": 18,
+        "window_index": 6,
+        "sending_len_on_disk": 18,
+        "matches_expected": true
+      },
+      {
+        "k": 21,
+        "window_index": 7,
+        "sending_len_on_disk": 15,
+        "matches_expected": true
+      },
+      {
+        "k": 24,
+        "window_index": 8,
+        "sending_len_on_disk": 12,
+        "matches_expected": true
+      },
+      {
+        "k": 27,
+        "window_index": 9,
+        "sending_len_on_disk": 9,
+        "matches_expected": true
+      },
+      {
+        "k": 30,
+        "window_index": 10,
+        "sending_len_on_disk": 6,
+        "matches_expected": true
+      },
+      {
+        "k": 33,
+        "window_index": 11,
+        "sending_len_on_disk": 3,
+        "matches_expected": true
+      }
+    ],
+    "all_windows_match_expected": true
+  },
+  "A_tmp_bytes": 258,
+  "B_writeback_failure": {
+    "batch_len": 5,
+    "publishes": 5,
+    "confirmed": 0,
+    "blocked_by": "cache.jsonl.tmp 被做成目录 → _write_lines 抛 PermissionError(OSError)",
+    "cache_before": {
+      "exists": false
+    },
+    "cache_after": {
+      "exists": false
+    },
+    "sending_exists_after": true,
+    "sending_bytes_identical": true,
+    "sending_lines_after": 5,
+    "nothing_dropped": true
+  },
+  "B_recovery_after_unblock": {
+    "publishes": 5,
+    "confirmed": 5,
+    "sending_exists": false,
+    "cache_lines": 0
+  },
+  "B_tmp_bytes": 0,
+  "C_kill_between_replace_and_writeback": {
+    "step_skipped": true,
+    "sending_lines_on_disk": 33,
+    "disk_equals_current_only": true,
+    "leftover_preserved": false,
+    "lost_leftover_lines": [
+      "2026-10-01 14:57:36 Flow=33162.0 Dust=2.89 SO2=22.0 NOx=32.2 O2=5.5 Velocity=13.5 Temp=182.6 Humidity=45.9 Pressure=97.0 Flag=N",
+      "2026-10-01 14:57:41 Flow=33130.0 Dust=2.89 SO2=22.6 NOx=32.2 O2=5.5 Velocity=13.5 Temp=181.5 Humidity=45.6 Pressure=97.0 Flag=N"
+    ],
+    "window_width_measured": false,
+    "note": "窗口 = os.replace(cache→.sending) 之后、合并批 _write_lines(.sending) 完成之前；此期间 leftover 只存在于内存。窗口宽度的实测未做（需真实 kill 计时）。"
+  },
+  "C_tmp_bytes": 4257,
+  "D_production_sentinel": {
+    "before": {
+      "F:\\Project1\\cems-data-pipeline\\data\\cache.jsonl": {
+        "exists": true,
+        "size": 0,
+        "mtime_ns": 1790923006279951700
+      },
+      "F:\\Project1\\cems-data-pipeline\\data\\cache.jsonl.sending": {
+        "exists": false
+      }
+    },
+    "after": {
+      "F:\\Project1\\cems-data-pipeline\\data\\cache.jsonl": {
+        "exists": true,
+        "size": 0,
+        "mtime_ns": 1790923006279951700
+      },
+      "F:\\Project1\\cems-data-pipeline\\data\\cache.jsonl.sending": {
+        "exists": false
+      }
+    },
+    "unchanged": true
+  },
+  "key_log_messages": [
+    "ERROR [缓存] 写入 cache.jsonl 失败: [Errno 13] Permission denied: 'C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\probe_ah_5j9nljay\\\\cache.jsonl.tmp'",
+    "CRITICAL [补传] 回写 cache.jsonl 失败，保留 cache.jsonl.sending（本批 5 条未确认）等待下次重试"
+  ],
+  "verdict": {
+    "path_patch_works": true,
+    "takeover_is_permutation": true,
+    "interleaved_write_reproduced": true,
+    "window_rollback_matches_expected": true,
+    "count_conserved": true,
+    "writeback_failure_keeps_sending_intact": true,
+    "leftover_loss_window_exists": true,
+    "production_data_untouched": true,
+    "temp_footprint_bytes_max": 4257
+  }
+}
