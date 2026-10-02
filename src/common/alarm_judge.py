@@ -671,7 +671,12 @@ class AlarmJudge:
 
             n_valid = len(valid)
             n_invalid = n_total - n_valid
-            coverage = n_valid / expected
+            # ⚠️ 覆盖率是**比率**，上限 1.0。
+            # 实测：本机轮询实际比标称 5 秒略快（3600/722 ≈ 4.99 秒），
+            # 一个满小时会有 721~722 行 > 标称 720 → 裸算会得到 1.0028 这种"100.28%"。
+            # 那对外没有意义（比率不可能超过全部）。真实条数仍由 n_total/n_valid 如实保留，
+            # 需要看"多采样了几条"就查那两列，不要看覆盖率。
+            coverage = min(1.0, n_valid / expected)
             invalid_ratio = (n_invalid / n_total) if n_total else 1.0
             conv_mean = (sum(valid) / n_valid) if n_valid else float("nan")
             conv_max = max(valid) if n_valid else float("nan")
