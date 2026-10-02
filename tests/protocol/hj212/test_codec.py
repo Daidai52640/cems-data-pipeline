@@ -428,22 +428,63 @@ def test_official_a2_decryption(vector):
 
 @pytest.mark.parametrize("vector", ["a2_example_2", "a2_example_4"])
 def test_official_a2_packet_roundtrip(vector):
-    """端到端：官方明文组包加密 → 与官方密文一致（按可比长度）→ 解码还原。"""
+    """端到端：按官方明文组包加密 → 与官方密文报文**除长度字段外逐字符一致** → 解码还原。
+
+    官方向量取自 PDF，包尾的 ``\\r\\n`` 在文本层里是字面 4 个字符、提取时已裁掉，
+    故比较时把本模块编码结果的包尾去掉（只比包头到 CRC）。
+
+    ⚠️ 唯一的差异是那 4 位长度数字：原文填**明文**长度（``0295`` / ``0234``），
+    本模块填**实际传输**长度（``1128`` / ``0811``）。差异见下一个测试。
+    """
     data = VECTORS[vector]
     expected = data["expected"]
     key = bytes.fromhex(data["key_hex"])
+    official = data["encrypted_packet_trimmed"]
 
     packet = Packet.from_data_segment(data["plaintext_packet"][6:-4])
     encoded = encode_packet(packet, key=key, max_segment_length=10_000)
+    ours = encoded.rstrip("\r\n")
 
-    decoded: DecodedPacket = decode_packet(encoded, key=key)
+    assert len(ours) == len(official)
+    # 包头之后的一切（头部字段 / CP=&& / 密文块 / 明文尾巴 / &&CRC）逐字符一致
+    assert ours[6:] == official[6:], "密文与 CRC 必须与标准附录 A.2 印出的完全一致"
+    # 差异只允许出现在那 4 位长度数字上（下标 2..5）
+    assert ours[2:6] != official[2:6]
+    differing = [i for i, (a, b) in enumerate(zip(official, ours)) if a != b]
+    assert differing, "长度字段应当与原文不同"
+    assert set(differing) <= {2, 3, 4, 5}, f"差异越出长度字段：{differing}"
+
+    decoded = decode_packet(official, key=key)
     assert decoded.was_encrypted is True
     assert decoded.decrypted is True
     assert decoded.region_plaintext == expected["plaintext_region"]
     assert decoded.crc_ok is True, "CRC 必须对明文数据段计算"
-
-    # CRC 与明文示例完全一致（加密不改 CRC）
     assert decoded.crc_hex == expected["crc_hex"]
+
+
+def test_official_a2_example_4_plaintext_tail_is_not_hex_encoded():
+    """⚠️ 附录 A.2 示例 4：不足 16 字符的尾巴是**明文**，不能一起转成十六进制。
+
+    数据区 147 字符 = 9 个整块（144） + 3 字符余数。密文块写成 ``{0x..}``，
+    余下的 ``g=N`` 原样留在后面——原文第 33 页就是这样印的：
+    ``…0x03,0xA4}g=N&&B541``。早期实现把整个 147 字节都做了十六进制展开，
+    导致数据区多出 21 个字符、长度字段与原文差 21。
+    """
+    data = VECTORS["a2_example_4"]
+    key = bytes.fromhex(data["key_hex"])
+    packet = Packet.from_data_segment(data["plaintext_packet"][6:-4])
+
+    assert len(packet.region) % 16 == 3
+
+    encoded = encode_packet(packet, key=key, max_segment_length=10_000)
+    region_text = encoded.split("CP=&&", 1)[1].rsplit("&&", 1)[0]
+
+    assert region_text.endswith("}g=N"), "密文块之后应原样保留明文的不足 16 字符部分"
+    assert region_text.count("}") == 1
+    # 密文块只包含 9 个整块 = 144 字节 → 720 字符的 0xNN 写法
+    hex_block = region_text[: region_text.index("}") + 1]
+    assert parse_hex(hex_block) == bytes.fromhex(data["ciphertext_hex"])
+    assert len(bytes.fromhex(data["ciphertext_hex"])) == 144
 
 
 def test_encrypted_crc_equals_plaintext_crc():
@@ -471,10 +512,10 @@ def test_decode_encrypted_without_key_is_explicit_error():
 def test_encrypted_packet_length_semantics():
     """加密后长度字段记录**实际传输**的数据段长度（密文按十六进制书写形式计）。
 
-    ⚠️ 此处与官方示例**完全一致**：附录 A.2 的示例 2 长度字段写 ``0295`` 而非
-    1128，那是原文按明文长度书写的写法；本模块取表 2 的字面定义
-    （"数据段的 ASCII 字符数"），即**实际传输**的长度。
-    两者对同一份明文的密文书写长度相同（1128），只是长度字段里填的值不同。
+    ⚠️ 这是本模块与原文加密示例**唯一**的差异：附录 A.2 的长度字段填的是
+    **明文**长度（``0295`` / ``0234``），而它实际传输的字符数是 ``1128`` / ``811``。
+    按表 2 的字面定义（"数据段的 ASCII 字符数"），本模块填实际传输长度，
+    否则接收方无法据此定位数据段边界。
     """
     data = VECTORS["a2_example_2"]
     expected = data["expected"]
@@ -484,15 +525,15 @@ def test_encrypted_packet_length_semantics():
     encoded = encode_packet(packet, key=key, max_segment_length=10_000)
     declared = int(encoded[2:6])
     assert encoded.endswith("\r\n")
-    # 长度字段 = 数据段字符数（不含 CRC）；数据段 + CRC 才是包头之后的全部字符
+    # 长度字段 = 数据段的字符数（含密文写法与明文尾巴，不含 CRC）
     assert declared == len(encoded) - 2 - 4 - 4 - 2
     assert declared == segment_length_of(packet, key=key)
-    assert declared == expected["transmitted_data_segment_length"]
 
-    # 与官方示例核对：头部一字不变、CRC 仍是明文那一份
-    plain_header = data["plaintext_packet"][6:].split("CP=&&")[0]
-    assert encoded[6:].startswith(plain_header + "CP=&&{")
-    assert encoded[-6:-2] == expected["crc_hex"]
+    # 与官方示例对齐：报文除长度字段外逐字符一致
+    official = data["encrypted_packet_trimmed"]
+    assert declared != expected["declared_length_in_standard"], "原文填的是明文长度"
+    assert declared == len(official) - 6 - 4
+    assert encoded.rstrip("\r\n")[6:] == official[6:]
 
 
 # ===========================================================================

@@ -91,60 +91,48 @@ class Sm4EcbNoPadding:
         return bytes(out)
 
 
+_HEADER = re.compile(r"##\d{4}(?=[A-Za-z0-9]+=)")
+_HEX_BLOCK = re.compile(r"\{0x[0-9A-Fa-f]{2}(?:,0x[0-9A-Fa-f]{2})*\}")
+_CRC_TAIL = re.compile(r"&&([0-9A-Fa-f]{4})")
+
+
 def trim(raw_line: str) -> str:
-    """从"报文 + 并排的说明文字"里裁出干净的报文串。"""
+    """从"报文 + 并排的说明文字"里裁出干净的报文串。
+
+    PDF 文本层有两个现象要处理：
+
+    1. 说明文字被并进报文末行——附录 A.1 是
+       ``…&&&&2200\\r\\n，其中2200为CRC16校验码…``；包尾的 CRLF 也被印成
+       字面 4 个字符。
+    2. 加密报文的密文块之后**可能先跟明文尾巴**（不足 16 字符的部分），
+       再跟 ``&&CRC``——示例 4 是 ``…0xA4}g=N&&B541``。
+
+    做法：先按"数据区形态"分流，再按"结尾必是 ``&&`` + 4 位十六进制"定位 CRC。
+    """
     text = raw_line.replace("\\r\\n", "")
-    match = re.search(r"##\d{4}(?=[A-Za-z0-9]+=)", text)
-    if not match:
+    header = _HEADER.search(text)
+    if not header:
         return text
-    out = [match.group(0)]
-    index = match.end()
+    head, rest = text[: header.end()], text[header.end():]
 
-    block = re.search(r"CP=&&\{", text[index:])
-    block_start = index + block.start() if block else None
-    block_end = index + block.end() if block else None
-    field_end = block_start if block_start is not None else len(text)
+    block = _HEX_BLOCK.search(rest)
+    if block:
+        # 加密形态：整块十六进制序列形状固定，可整体匹配；其后是明文尾巴 + CRC
+        middle = rest[block.end():]
+        tail = _CRC_TAIL.search(middle)
+        if tail:
+            return f"{head}{rest[: block.end()]}{middle[: tail.start()]}&&{tail.group(1)}"
+        return f"{head}{rest[: block.end()]}"
 
-    while index < field_end:
-        char = text[index]
-        if char in ";=,&":
-            out.append(char); index += 1
-            continue
-        found = _FIELD_TOKEN.match(text, index)
-        if not found:
-            break
-        # 值直接撞上说明文字（如 "2200，其中…"）时整个 token 都要丢弃
-        after = text[found.end()] if found.end() < len(text) else ""
-        if after and after not in ";=,&":
-            break
-        out.append(found.group(0)); index = found.end()
-
-    if block_start is not None:
-        out.append("CP=&&{")
-        index = block_end
-        while index < len(text):
-            char = text[index]
-            if char == ",":
-                out.append(char); index += 1
-            elif char == "}":
-                out.append(char); index += 1
-                break
-            else:
-                found = _HEX_TOKEN.match(text, index)
-                if not found:
-                    break
-                out.append(found.group(0)); index = found.end()
-        while index < len(text) and text[index] == "&":
-            out.append(text[index]); index += 1
-        crc = re.match(r"[0-9A-Fa-f]{4}", text[index:])
-        if crc:
-            out.append(crc.group(0))
-        return "".join(out)
-
-    crc = re.match(r"[0-9A-Fa-f]{4}", text[index:])
-    if crc:
-        out.append(crc.group(0))
-    return "".join(out)
+    # 明文形态：数据区是 ``&&…&&``，其中 ``CP=`` 的值本身就是两个 ``&``。
+    # 把结尾的 ``&`` 摘掉后，第一个 ``&&XXXX`` 就是 CRC 前导。
+    stripped = rest
+    while stripped.endswith("&"):
+        stripped = stripped[:-1]
+    tail = _CRC_TAIL.search(stripped)
+    if not tail:
+        return f"{head}{stripped}"
+    return f"{head}{stripped[: tail.start()]}&&{tail.group(1)}"
 
 
 def split_packet(packet: str) -> tuple[int, str, str, str]:

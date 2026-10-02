@@ -30,6 +30,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Final
 
 from gmssl.func import bytes_to_list, list_to_bytes
@@ -129,16 +130,42 @@ def split_data_segment(segment: str) -> tuple[str, str, str]:
 
 
 def encrypt_region(region: str, key: bytes) -> str:
-    """加密数据区明文字符串，返回**十六进制书写形式** ``{0x..,0x..}``。
+    """加密数据区明文字符串，返回**可直接写回报文的数据区内容**。
 
-    返回值即标准附录 A.2 示例里 ``CP=&&{0xE4,0x3E,...}&&2200`` 中间那一段。
+    ⚠️ 返回值不一定是纯 ``{0x..}``：按附录 A.2"不足 16 个字符的部分使用明文"，
+    尾部不足一组的字符**原样保留**，因此在密文块之后可能直接跟明文尾巴。
+    例如 147 字符的数据区 → 9 个密文块（720 字符的 ``{0x..}`` 写法）+ 明文 ``g=N``。
+    标准附录 A.2 的示例 4 就是这样印的。
+
+    数据区短于 16 字符时整段都是明文，按标准仍写成 ``{}`` + 明文的形式
+    （``{}`` 表示"没有密文块"），以免与未加密报文混淆。
     """
-    return format_hex(Sm4EcbNoPadding(key).encrypt(region.encode("ascii")))
+    sm4 = Sm4EcbNoPadding(key)
+    data = region.encode("ascii")
+    full = len(data) - len(data) % BLOCK_SIZE
+    cipher = sm4.encrypt(data[:full])
+    tail = data[full:].decode("ascii")
+    return format_hex(cipher) + tail
 
 
-def decrypt_region(hex_text: str, key: bytes) -> str:
-    """把 ``{0x..,0x..}`` 形式的加密区还原成明文字符串。"""
-    return Sm4EcbNoPadding(key).decrypt(parse_hex(hex_text)).decode("ascii")
+def decrypt_region(region: str, key: bytes) -> str:
+    """把 :func:`encrypt_region` 的产物还原成明文字符串。
+
+    同时接受两种形态：
+
+    * 纯 ``{0x..}``（数据区长度是 16 的整数倍）
+    * ``{0x..}`` 之后跟明文尾巴（不足一组的部分，附录 A.2）
+
+    另外容忍整体未加密的明文（此时原样返回），便于"同一份解码代码吃两种报文"。
+    """
+    if not looks_encrypted(region):
+        return region
+    sm4 = Sm4EcbNoPadding(key)
+    cipher_text, tail = split_region(region)
+    plain = sm4.decrypt(parse_hex(cipher_text))
+    if not tail:
+        return plain.decode("ascii")
+    return (plain + tail.encode("ascii")).decode("ascii")
 
 
 def format_hex(data: bytes) -> str:
@@ -163,10 +190,45 @@ def parse_hex(text: str) -> bytes:
     return bytes(out)
 
 
+_HEX_ITEM: Final = re.compile(r"0x[0-9A-Fa-f]{2}\Z")
+
+
+def _is_hex_block(text: str) -> bool:
+    """``text`` 是不是 ``{0xNN,0xNN,…}``（允许空块 ``{}``）。"""
+    if not (text.startswith("{") and text.endswith("}")):
+        return False
+    inner = text[1:-1]
+    if inner == "":
+        return True
+    return all(_HEX_ITEM.match(item) for item in inner.split(","))
+
+
 def looks_encrypted(region: str) -> bool:
-    """判断数据区是不是加密后的十六进制书写形式。"""
+    """判断数据区是不是加密后的书写形式。
+
+    加密区形如 ``{0xNN,…}``，且按附录 A.2"不足 16 字符的部分使用明文"，
+    密文块之后**可能直接跟明文尾巴**（如 ``{0xE4,…}g=N``）。
+    数据区短于 16 字符时密文块为空，写作 ``{}`` + 明文。
+
+    对应地，**未加密**的 HJ 212 数据区不会以 ``{`` 开头（字段名首字母大写），
+    所以"以 ``{`` 开头且第一个 ``}`` 前是合法十六进制块"就是可靠判据。
+    """
     stripped = region.strip()
-    return stripped.startswith("{") and stripped.endswith("}") and "0x" in stripped
+    if not stripped.startswith("{"):
+        return False
+    end = stripped.find("}")
+    if end < 0:
+        return False
+    return _is_hex_block(stripped[: end + 1])
+
+
+def split_region(region: str) -> tuple[str | None, str]:
+    """把加密区切成 ``({0x..} 密文块文本, 明文尾巴)``；非加密时返回 ``(None, region)``。"""
+    if not looks_encrypted(region):
+        return None, region
+    stripped = region.strip()
+    end = stripped.index("}")
+    return stripped[: end + 1], stripped[end + 1:]
 
 
 def build_segment_with_region(head: str, region: str) -> str:

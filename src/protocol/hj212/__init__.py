@@ -49,6 +49,7 @@ from .crypto import (
     format_hex,
     looks_encrypted,
     parse_hex,
+    split_region,
 )
 from .factors import (
     BY_CODE,
@@ -115,6 +116,7 @@ __all__ = [
     "format_hex",
     "parse_hex",
     "looks_encrypted",
+    "split_region",
     "OFFICIAL_TEST_KEY",
     "CryptoError",
     # Profile
