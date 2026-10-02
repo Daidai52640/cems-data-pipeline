@@ -1,0 +1,11 @@
+# CEMS 工业数据采集链路 - 开发/测试依赖（**不参与 Docker 镜像构建**）
+#
+# 用途：在开发机/CI 上跑离线单元测试。
+#   pip install -r requirements-dev.txt
+#   pytest            # 仓库根目录直接跑（pyproject.toml 已配好 pythonpath）
+#
+# ⚠️ 运行期依赖仍只在 requirements.txt 里；改镜像请不要动本文件。
+
+# 测试框架（本机实测 9.1.1）。pytest 自带的 pytester fixture 用来在子进程里
+# 跑一次"禁止一切出网 socket"的离线验证，无需额外依赖。
+pytest>=8.0,<10.0

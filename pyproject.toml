@@ -1,0 +1,22 @@
+[project]
+name = "cems-data-pipeline"
+version = "0.1.0"
+description = "CEMS 工业数据采集链路：设备层 / 网关层 / 平台接入层 / 展示层"
+requires-python = ">=3.10"
+# 运行期依赖仍在 requirements.txt（Dockerfile 依赖它构建镜像）；
+# 开发/测试依赖在 requirements-dev.txt，两侧都不在这里重复声明。
+dependencies = []
+
+[tool.pytest.ini_options]
+# ---- 让 `pytest` 在仓库根目录直接可用（不依赖手工设 PYTHONPATH）----
+# `python -m pytest` 会把 CWD 放进 sys.path，但裸 `pytest` 不会：
+# 实测裸 `pytest` 报 "ModuleNotFoundError: No module named 'src'"。
+# pytest>=7 的 pythonpath 配置项在收集前把仓库根加入 sys.path，两种调用方式都能用。
+pythonpath = ["."]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra --strict-markers --strict-config"
+# 单元测试全是纯逻辑（不连 TDengine/EMQX、不读 data/、不 docker exec），秒级跑完。
+# 需要真实容器的验证脚本在 scripts/verify_*.py，不在 pytest 收集范围内。
