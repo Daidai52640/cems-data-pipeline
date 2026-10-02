@@ -801,18 +801,25 @@ def test_unknown_factor_does_not_get_invented():
         factor_of("NotAPoint")
 
 
-def test_code_review_records_all_project_code_mismatches():
-    """测点契约里的既有 code 与原文不一致 —— 逐条登记，不偷偷改。"""
+def test_code_review_records_history_and_is_now_fixed():
+    """测点契约的 code 曾 9 个全错，现已修正 —— 历史逐条留痕，且两处取值一致。
+
+    ⚠️ 本条测试的立场变过一次：修复前它断言"契约里是错的、只登记不改"；
+    契约侧修正后，改为断言"历史已记录 + 现值一致"，避免测试固化一个已知错误状态。
+    """
     from src.protocol.hj212 import CODE_REVIEW
+    from src.protocol.hj212 import factors
 
     assert len(CODE_REVIEW) == 9
-    assert all(review.verdict == "错误" for review in CODE_REVIEW)
+    assert all(review.verdict == "已修正" for review in CODE_REVIEW)
     by_point = {r.point: r for r in CODE_REVIEW}
-    # 最严重的一处：Dust 的既有 code 指向"氨（氨气）"
-    assert by_point["Dust"].project_code == "a21001"
+    # 最严重的一处：Dust 的旧 code 指向"氨（氨气）"
+    assert "a21001" in by_point["Dust"].project_code      # 旧值留痕
     assert by_point["Dust"].standard_code == "a34013"
-    assert by_point["SO2"].project_code == "a21002"   # 原文该码是氮氧化物
+    assert "a21002" in by_point["SO2"].project_code       # 旧值（原文该码是氮氧化物）
     assert by_point["NOx"].standard_code == "a21002"
+    # 核心断言：契约与本模块取值一致（防再次各自漂移）
+    assert factors.check_consistency() == ()
 
 
 def test_appendix_c_page59_uses_our_gas_factor_codes():
@@ -837,3 +844,22 @@ def test_module_does_not_touch_filesystem(tmp_path, monkeypatch):
     encoded = encode_packet(packet, key=key, max_segment_length=10_000)
     decode_packet(encoded, key=key)
     assert list(tmp_path.iterdir()) == []
+
+
+class TestFactorConsistency:
+    """测点契约的 code 与 factors.FACTORS 必须一致。
+
+    ⚠️ 保留这条测试的原因：同一条信息存在两处，历史上正是"两处各自维护"导致
+    9 个编码全错（Dust 曾写成原文的「氨」）却长期无人发现。见 factors.CODE_REVIEW。
+    """
+
+    def test_points_code_matches_factors(self) -> None:
+        from src.protocol.hj212 import factors
+
+        assert factors.check_consistency() == ()
+
+    def test_code_review_all_fixed(self) -> None:
+        from src.protocol.hj212 import factors
+
+        assert all(c.verdict == "已修正" for c in factors.CODE_REVIEW)
+        assert len(factors.CODE_REVIEW) == len(factors.FACTORS)
