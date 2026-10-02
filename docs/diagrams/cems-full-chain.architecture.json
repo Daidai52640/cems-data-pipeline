@@ -15,13 +15,13 @@
   },
   "components": [
     {
-      "id": "simulator", "type": "backend", "label": "设备仿真", "sublabel": "按同一随机种子生成 9 个测点", "tag": "每 2 秒出一组数",
-      "pos": [60, 100], "size": [190, 58],
+      "id": "simulator", "type": "backend", "label": "设备仿真", "sublabel": "按同一随机种子生成 9 个测点", "tag": "模拟现场仪表",
+      "pos": [50, 50], "size": [160, 58],
       "sources": [{ "path": "src/device/simulator.py", "line": 468, "end_line": 583, "label": "CemsSimulator" }]
     },
     {
-      "id": "registers", "type": "database", "label": "Modbus 寄存器", "sublabel": "模拟现场仪表的数据区", "tag": "本机端口 5020",
-      "pos": [60, 222], "size": [190, 58],
+      "id": "registers", "type": "database", "label": "Modbus 寄存器", "sublabel": "仪表的数据区", "tag": "本机端口 5020",
+      "pos": [284, 50], "size": [170, 58],
       "sources": [
         { "path": "src/device/modbus_server.py", "line": 128, "label": "写保持寄存器" },
         { "path": "src/device/modbus_server.py", "line": 54, "label": "2 秒刷新" }
@@ -29,16 +29,15 @@
     },
     {
       "id": "gateway", "type": "backend", "label": "网关", "sublabel": "读仪表、发布、断网先存本地", "tag": "每 5 秒采一轮",
-      "pos": [60, 360], "size": [190, 58],
+      "pos": [530, 50], "size": [170, 58],
       "sources": [
         { "path": "src/gateway/gateway.py", "line": 626, "label": "主循环" },
-        { "path": "src/gateway/gateway.py", "line": 119, "end_line": 139, "label": "读设备" },
-        { "path": "src/gateway/gateway.py", "line": 305, "label": "publish 等 PUBACK" }
+        { "path": "src/gateway/gateway.py", "line": 119, "end_line": 139, "label": "读设备" }
       ]
     },
     {
       "id": "cachefile", "type": "database", "label": "续传缓存", "sublabel": "存本机磁盘，断电不丢已确认外的数据", "tag": "断网时用",
-      "pos": [60, 480], "size": [230, 58],
+      "pos": [530, 180], "size": [230, 58],
       "sources": [
         { "path": "src/gateway/gateway.py", "line": 196, "end_line": 215, "label": "落盘" },
         { "path": "src/gateway/gateway.py", "line": 374, "end_line": 420, "label": "取批交接" }
@@ -46,7 +45,7 @@
     },
     {
       "id": "resend", "type": "backend", "label": "补传线程", "sublabel": "联网后按时间顺序把存的补齐", "tag": "只删已确认的",
-      "pos": [60, 590], "size": [230, 58],
+      "pos": [530, 300], "size": [230, 58],
       "sources": [
         { "path": "src/gateway/gateway.py", "line": 502, "end_line": 558, "label": "ResendWorker" },
         { "path": "src/gateway/gateway.py", "line": 468, "end_line": 498, "label": "resend_cache" }
@@ -54,12 +53,12 @@
     },
     {
       "id": "emqx", "type": "messagebus", "label": "EMQX", "sublabel": "消息中转，订阅方掉线也不丢消息", "tag": "消息中间件",
-      "pos": [360, 260], "size": [200, 58],
+      "pos": [780, 50], "size": [190, 58],
       "sources": [{ "path": "docker-compose.yml", "line": 55, "end_line": 82, "label": "emqx 服务" }]
     },
     {
       "id": "subscriber", "type": "backend", "label": "接入层", "sublabel": "校验数据、算折算值、判超标", "tag": "不合法就整条拒收",
-      "pos": [640, 260], "size": [220, 58],
+      "pos": [1050, 50], "size": [220, 58],
       "sources": [
         { "path": "src/platform/subscriber_to_td.py", "line": 841, "end_line": 893, "label": "订阅回调" },
         { "path": "src/platform/subscriber_to_td.py", "line": 859, "end_line": 862, "label": "入库+折算" },
@@ -68,7 +67,7 @@
     },
     {
       "id": "hourly", "type": "backend", "label": "整点结算", "sublabel": "每小时算一次达标/超标/数据不足", "tag": "独立线程",
-      "pos": [640, 440], "size": [220, 58],
+      "pos": [1050, 180], "size": [220, 58],
       "sources": [
         { "path": "src/platform/subscriber_to_td.py", "line": 648, "end_line": 685, "label": "结算循环" },
         { "path": "src/platform/subscriber_to_td.py", "line": 940, "end_line": 948, "label": "启动点" }
@@ -76,7 +75,7 @@
     },
     {
       "id": "tdengine", "type": "database", "label": "TDengine", "sublabel": "时序库：测点 + 告警事件 + 小时结论", "tag": "本机端口 6041",
-      "pos": [940, 260], "size": [230, 58],
+      "pos": [1350, 50], "size": [230, 58],
       "sources": [
         { "path": "src/platform/subscriber_to_td.py", "line": 271, "end_line": 276, "label": "cems_data 建表" },
         { "path": "src/common/alarm_judge.py", "line": 769, "end_line": 782, "label": "3 张告警表建表" }
@@ -84,7 +83,7 @@
     },
     {
       "id": "dashboard", "type": "backend", "label": "Web 大屏与报表", "sublabel": "实时曲线、日月报表、导出 Excel", "tag": "对外页面",
-      "pos": [940, 440], "size": [230, 58],
+      "pos": [1350, 180], "size": [230, 58],
       "sources": [
         { "path": "src/web/web_dashboard.py", "line": 169, "label": "Flask app" },
         { "path": "src/web/web_dashboard.py", "line": 172, "end_line": 368, "label": "路由" }
@@ -92,7 +91,7 @@
     },
     {
       "id": "redis", "type": "database", "label": "Redis", "sublabel": "缓存已结束时间窗的报表结果（当前数据不缓存）", "tag": "查询加速",
-      "pos": [940, 590], "size": [230, 58],
+      "pos": [1350, 420], "size": [230, 58],
       "sources": [
         { "path": "src/web/cache.py", "line": 124, "end_line": 312, "label": "CacheClient" },
         { "path": "src/web/report.py", "line": 286, "end_line": 298, "label": "缓存出口" }
@@ -100,12 +99,12 @@
     },
     {
       "id": "nginx", "type": "backend", "label": "nginx", "sublabel": "唯一对外入口，转发给大屏、静态文件自己发", "tag": "本机端口 80",
-      "pos": [940, 100], "size": [230, 58],
+      "pos": [1350, 300], "size": [230, 58],
       "sources": [{ "path": "docker-compose.yml", "line": 287, "end_line": 318, "label": "nginx 服务" }]
     },
     {
       "id": "demo", "type": "backend", "label": "本地回环验证", "sublabel": "不起真实平台也能证明报文可收发、可解回", "tag": "验证用，非生产环节",
-      "pos": [60, 710], "size": [230, 58],
+      "pos": [1350, 540], "size": [230, 58],
       "sources": [
         { "path": "scripts/northbound_demo.py", "line": 181, "label": "三出口演示" },
         { "path": "scripts/hj212_loopback_demo.py", "line": 1, "label": "回环演示" }
@@ -113,7 +112,7 @@
     },
     {
       "id": "outlet", "type": "backend", "label": "北向出口适配层", "sublabel": "一套接口三种出口：环保报文 / JSON / 寄存器", "tag": "已实现未接入",
-      "pos": [60, 830], "size": [230, 58],
+      "pos": [520, 680], "size": [240, 58],
       "sources": [
         { "path": "src/protocol/adapter.py", "line": 62, "end_line": 77, "label": "ProtocolAdapter" },
         { "path": "src/protocol/adapter.py", "line": 435, "end_line": 439, "label": "ADAPTERS" }
@@ -121,7 +120,7 @@
     },
     {
       "id": "hj212", "type": "backend", "label": "HJ212 编解码 + SM4", "sublabel": "国标环保报文：组包、校验、加密、心跳", "tag": "国家环保标准",
-      "pos": [400, 830], "size": [230, 58],
+      "pos": [900, 680], "size": [240, 58],
       "sources": [
         { "path": "src/protocol/adapter.py", "line": 118, "end_line": 257, "label": "连接管理" },
         { "path": "src/protocol/hj212/framing.py", "line": 1, "label": "分帧器" }
@@ -129,7 +128,7 @@
     },
     {
       "id": "monitor", "type": "external", "label": "监控平台", "sublabel": "对方的接收端，参数填配置即可对接", "tag": "外部系统",
-      "pos": [760, 830], "size": [230, 58]
+      "pos": [1290, 680], "size": [240, 58]
     }
   ],
   "boundaries": [
@@ -159,7 +158,7 @@
       "dot": "emerald",
       "title": "主链路（已在运行）",
       "items": [
-        "仿真每 2 秒把 9 个测点写进模拟仪表的数据区；网关每 5 秒读一轮并发布",
+        "仿真每 2 秒把 9 个测点写进仪表数据区；网关每 5 秒读一轮并发布",
         "接入层收到后先校验（不合法整条拒收），再入库；入库成功才算数"
       ]
     },
@@ -184,18 +183,17 @@
       "title": "北向出口：做好了，还没接进网关",
       "items": [
         "网关代码里没有任何出口引用；目前只有本地验证脚本在调它（这是有意留的待接线）",
-        "三个出口共用同一套接口，但算送达的标准各不相同：等应答 / 看 HTTP 状态码 / 写成功即算",
-        "⚠️ 底部那一行是本地验证路径，不是生产链路；落地时整行移除"
+        "三个出口共用同一套接口，但算送达的标准各不相同：等应答 / 看 HTTP 状态码 / 写成功即算"
       ]
     },
     {
       "dot": "cyan",
       "title": "落地（现场部署）要改什么",
       "items": [
-        "移出去：设备仿真、模拟寄存器、本地回环验证脚本（都是假的、模拟的东西）",
-        "跟着现场走：网关 + 续传缓存 + 北向出口（放现场工控机/边缘盒子；断网时现场必须能继续采集并暂存）",
+        "移出去：设备仿真、模拟寄存器、本地回环验证脚本（都是模拟的、开发期的）",
+        "跟着现场走：网关 + 续传缓存 + 补传（放现场工控机；断网时现场必须能继续采集并暂存）",
         "可以放机房：EMQX / 接入层 / 时序库 / 大屏 / Redis",
-        "唯一对外的仍应是 nginx；其余服务保持不对外（把当前的 127.0.0.1 默认值按需改成内网地址）"
+        "唯一对外的仍应是 nginx；其余保持不对外（把 127.0.0.1 默认绑定按需改成内网地址，而不是把服务搬走）"
       ]
     }
   ]
