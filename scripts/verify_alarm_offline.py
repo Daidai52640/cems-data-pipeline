@@ -512,7 +512,7 @@ def section_c_hourly() -> None:
     #    —— 库被清过/重建过（多设备迁移期间），于是这条判据变成"在不存在的时段上
     #    求 ok/over"，必然误报 FAIL。**判据要跟着数据走，不能钉死某个历史时刻。**
     _cols, picked = query(
-        f"SELECT _wstart, COUNT(*) FROM {TD_DB}.{TD_STABLE} "
+        f"SELECT _wstart, COUNT(*) FROM {TD_DB}.{TABLES.data_stable} "
         f"WHERE plant = 'plant1' AND device = 'device1' AND ts >= '2026-10-02 20:00:00' "
         f"AND ts < NOW INTERVAL(1h)"
     )
@@ -522,9 +522,38 @@ def section_c_hourly() -> None:
     else:
         hour_text = str(full_hours[-1][0])[:19].replace("T", " ")
         print(f"  选取满覆盖小时（{full_hours[-1][1]} 条）: {hour_text}")
-        # ⚠️ settle_hour 的作用对象是 TABLES 的标签（verify/offline），它按
-        #    hour_rows_sql 回读的是 plant1/device1 的真实数据；这里只借它的计算路径。
-        SUB.settle_hour(writer, TABLES, AlarmJudge(CONFIG), to_datetime(hour_text))
+        # ⚠️⚠️ 关键：`TABLES` 的标签是 **verify/offline**（给"写入的结论行"做隔离），
+        #   而 `hour_rows_sql` 是拿 **自己的 plant/device 去 `cems_data` 里找原始行** ——
+        #   于是它去查 `plant='verify' AND device='offline'` 的数据，那里**根本没有行**
+        #   → 结算恒得 0 行 → verdict=insufficient。
+        #   （实测踩到：库里该小时真有 722 条，但结算读出 0 条。）
+        #   修法：读原始数据要用**真实数据源标签**，写结论仍用隔离标签 —— 两者分开。
+        source_tables = AlarmTables(
+            db=TD_DB,
+            plant=os.getenv("TD_PLANT", "plant1"),
+            device=os.getenv("TD_DEVICE", "device1"),
+            event_stable=TABLES.event_stable,
+            verdict_stable=TABLES.verdict_stable,
+            push_stable=TABLES.push_stable,
+            data_stable=TABLES.data_stable,
+        )
+        verdicts, _events = AlarmJudge(CONFIG).judge_hour(
+            hour_text,
+            [
+                (
+                    str(row[0]),
+                    float(row[1]),
+                    {column: float(value) for column, value in zip(ZS_TARGETS, row[2:])},
+                )
+                for row in writer.query(source_tables.hour_rows_sql(
+                    hour_text,
+                    (to_datetime(hour_text) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                ))
+                if row[1] is not None and all(v is not None for v in row[2:])
+            ],
+        )
+        # 把结论写到 verify/offline（隔离标签），再回读做判据
+        writer.write([TABLES.verdict_insert_sql(v) for v in verdicts])
         _columns, rows = query(
             f"SELECT point, n_total, n_valid, coverage, conv_mean, limit_value, verdict FROM "
             f"{TD_DB}.{TABLES.verdict_stable} WHERE plant = 'verify' "
