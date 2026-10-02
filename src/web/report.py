@@ -246,15 +246,19 @@ def query_aggregate(
     缓存：`kind` 进缓存键（分钟报表/日报表/曲线各自独立），
     是否真的命中由 cache.query_cached 按"窗口是否已闭合"决定。
 
-    ★ **设备维度**也进缓存键：同一个时间窗对不同设备是不同的数据，键里少了它，第二台设备
-      查同一时间窗就会命中第一台的条目（见 src/web/cache.py 模块头第 6 条）。
-      设备取值不在本模块解析，统一从 cache.DEVICE_SCOPE 引用（唯一真源，避免两处各解析一遍
-      环境变量而出现"查询按 A 设备、键按 B 设备"）。
+    ★ **设备维度**既进缓存键、也进 SQL 的 tag 过滤：
+      - 进缓存键：同一时间窗对不同设备是不同的数据，键里少了它，第二台设备查同一时间窗
+        就会命中第一台的条目（见 src/web/cache.py 模块头第 6 条）。
+      - 进 SQL：`cems_data` 是多设备共用的超级表（TAG = plant/device），**不过滤就会把
+        两台设备的样本一起 AVG** —— 出的是"混合曲线"，比缓存串数据更隐蔽。
+      两个取值都从 `cache.DEVICE_SCOPE` 引用（唯一真源，避免"查询按 A 设备、键按 B 设备"）。
     """
     avg_columns = ", ".join(f"AVG({column})" for column in COLUMNS)
+    plant, device = cache.DEVICE_SCOPE_PARTS
     sql = (
         f"SELECT _wstart, {avg_columns}, COUNT(*) FROM {TD_DB}.{TD_STABLE} "
         f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts < '{end.strftime(TS_FORMAT)}' "
+        f"AND plant = '{plant}' AND device = '{device}' "
         f"INTERVAL({window})"
     )
     if fill_null:
@@ -535,11 +539,16 @@ def query_raw(start: datetime, end: datetime, limit: int) -> list[tuple[Any, ...
 
     ⚠️ **明确不缓存**：原始点区间按定义可能覆盖"当前秒"（短区间默认就含当下），
     缓存它等于把当前数据冻住。这里直接调 `_execute`，连读缓存都不做。
+
+    ★ **按 plant/device tag 过滤**：超级表是多设备共用的，不过滤会把两台设备的原始点
+    混成一条曲线（与 `query_aggregate` 同一理由）。取值同源于 `cache.DEVICE_SCOPE_PARTS`。
     """
     columns = ", ".join(("ts", *COLUMNS))
+    plant, device = cache.DEVICE_SCOPE_PARTS
     sql = (
         f"SELECT {columns} FROM {TD_DB}.{TD_STABLE} "
         f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts <= '{end.strftime(TS_FORMAT)}' "
+        f"AND plant = '{plant}' AND device = '{device}' "
         f"ORDER BY ts ASC LIMIT {limit}"
     )
     return _execute(sql)
