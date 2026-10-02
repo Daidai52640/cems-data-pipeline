@@ -140,15 +140,23 @@ def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, ...]]:
                    只写 ts >= now - N m 会把它们全捞回来，"最近 10 分钟"直接失真
       LIMIT     —— 查询结果不能无上限膨胀，否则响应体会随着积压越滚越大
     取数用"倒序 + LIMIT"再翻转，保证截断时留下的是**最新**的 N 个点。
+
+    ★ **按 plant/device tag 过滤**：`cems_data` 是多设备共用的超级表（TAG = plant/device），
+    不过滤就会把两台设备的点按 ts 混排成一条曲线。取值同源于 `cache.DEVICE_SCOPE_PARTS`
+    （与缓存键同源，避免"查询按 A 设备、键按 B 设备"）。
+    ⚠️ 这条读路径同时是缓存**水位**的观测源（下面 note_data_ts / note_minute_max）——
+      加了设备过滤后，水位观测到的才是"本设备"的写入进度。
     """
     conn: Any = None
     try:
         conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
         cur = conn.cursor()
         columns = ", ".join(POINTS)
+        plant, device = cache.DEVICE_SCOPE_PARTS
         cur.execute(
             f"SELECT ts, {columns} FROM {TD_DB}.{TD_STABLE} "
             f"WHERE ts >= now - {minutes}m AND ts <= now "
+            f"AND plant = '{plant}' AND device = '{device}' "
             f"ORDER BY ts DESC LIMIT {QUERY_LIMIT}"
         )
         rows = list(cur.fetchall())[::-1]      # 翻转成时间升序，画曲线从左到右

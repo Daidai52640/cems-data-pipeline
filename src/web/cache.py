@@ -160,6 +160,13 @@ def _device_scope(plant: str, device: str) -> str:
 
 
 DEVICE_SCOPE: Final[str] = _device_scope(TD_PLANT, TD_DEVICE)
+#: `DEVICE_SCOPE` 的拆解形式 `(plant, device)`，给需要把它拼进 SQL tag 过滤的调用方用
+#: （`report.query_aggregate` / `report.query_raw` / `web_dashboard.query_recent`）。
+#: ⚠️ CSV SQL 的 tag 值用这两个、算缓存键用 `DEVICE_SCOPE`，**必须同源** ——
+#: 否则会出现"查询按 A 设备、键按 B 设备"。两边都从这里取，不各自解析 env。
+#: 从 `DEVICE_SCOPE` 拆回来而不是再解析一次 env：保证与缓存键用的是同一份取值
+#: （含空值回落后的结果）。
+DEVICE_SCOPE_PARTS: Final[tuple[str, str]] = tuple(DEVICE_SCOPE.split("/", 1))  # type: ignore[assignment]
 
 
 # ==================== 2. 客户端（懒连接 + 全链路降级） ====================
