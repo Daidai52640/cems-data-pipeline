@@ -1,247 +1,208 @@
-# CEMS 工业数据采集演示项目
+# CEMS 工业数据采集链路
 
-模拟环保 CEMS 烟气在线监测数据采集全链路：仿真设备 → 网关 → MQTT Broker → 平台接入 → 时序库 → Web 实时大屏。
+一条端到端的工业烟气连续监测（CEMS）数据链路：**仿真设备 → 网关采集（Modbus TCP）→ MQTT 消息总线 → 接入层入库（TDengine）→ Web 实时大屏 / 报表**。
+默认 **5 秒采集一次，单设备链路实测 12 条/分钟稳定入库**；支持双设备接入与高并发吞吐验证。
 
-![CEMS 数据采集链路架构](docs/diagrams/cems-pipeline-architecture.visual-check.2048x1320.dark.png)
+> 当前形态：**8 个基础容器 + 2 个双设备容器（profile）= 10 个容器**，**9 个测点**。
+> 本项目在本地仿真环境中开发与验收，未接现场真实仪表，见文末「已知边界」。
 
-## 技术栈
+---
 
-- 设备协议：Modbus TCP（功能码 03 读保持寄存器）
-- 消息队列：MQTT 3.1.1 + EMQX（Docker 部署）
-- 时序数据库：TDengine 3.x（Docker 部署，taospy 连接）
-- Web 后端：Flask
-- 前端图表：ECharts
+## 架构分层
 
-## 架构分层（数据流向：上 → 下）
+### 1. 设备层（Modbus TCP 仿真服务器）
 
-### 1. 设备层 `src/device/modbus_server.py`
-- 功能：模拟 CEMS 分析仪，Modbus TCP 服务端
-- 寄存器（**按测点各自的比例系数**放大存整数，系数见 `src/common/points.py` 的 `Point.scale`）：
-  地址0=Flow、地址1=Dust、地址2=SO2、地址3=NOx、地址4=O2、地址5=Velocity、地址6=Temp、地址7=Humidity、地址8=Pressure
-  ⚠️ 顺序即 HJ 212 上传值序；系数不是全局统一值（大数测点用更小的系数，避免 16 位寄存器溢出）
-- 监听端口：5020
-- **多从站（可同时模拟多台设备）**：一个 TCP 服务端可以同时提供多个 unit id（`SLAVE_IDS=1,2`），
-  每个从站有**自己的寄存器数据块和自己的仿真器实例**（第 n 台的种子 = `SIM_SEED+(n-1)`，
-  相位按 `SLAVE_PHASE_OFFSET` 错开）⇒ 两台设备的曲线肉眼可辨。
-  这对应现场最常见的形态：一条链路（一个 IP:端口）后面挂多台仪表，数采侧按 unit id 分别读取，
-  所以第二台设备**不需要第二个端口、第二个容器**。默认 `SLAVE_IDS=1`（单从站，行为与改造前一致）。
+- 纯 Python 实现的 Modbus TCP 从站，模拟一台 CEMS 监测设备，**9 个保持寄存器**对应 9 个测点：
+  流量、颗粒物、SO2、NOx、O2、流速、温度、湿度、压力（定义见 `src/common/points.py`）。
+- 寄存器值按正弦 + 日变化相位 + 小幅噪声生成，各测点有独立量程与编码（如 SO2 = `a21026`）。
+- 支持多从站：`.env` 中 `SLAVE_IDS=1,2` 即同时仿真两台设备（unit id 严格分派，见下文「双设备 / 高并发」）。
+- 端口 **5020**。
 
-### 2. 网关层 `src/gateway/gateway.py`
-- 功能：轮询读设备寄存器 → 按各测点系数换算真实值 → 加时间戳 → MQTT 发布
-- 发布主题：`cems/plant1/data`
-- QoS：1
-- 断网续传：本地 JSONL 缓存，重连后自动补传。缓存分两种文件、各有一个写者：
-  - `data/cache.jsonl`——采集主循环追加写，放新数据
-  - `data/inflight-<seq>.jsonl`——补传线程持有，放在途批次（段名唯一，只增不减；
-    旧版固定名 `cache.jsonl.sending` 只读兼容，不再写入）
-  两者用原子改名交接，所以补传期间新采的数据不会被覆盖；进程中途被杀也能接着补。
-  ⚠️ **保护范围只覆盖"已进入网关的数据"**；网关读不到设备（上游断）时源头无缓冲，那一段会真丢
-  （实测与边界见 `docs/reference/` 与 `docs/runbooks/故障台账.md`）
-- **缓存目录多实例必须分开**（`GATEWAY_DATA_DIR`）：缓存文件、在途段、心跳文件都是目录内的固定
-  文件名，两个网关共用一个目录会互相接手对方的缓存并**发到自己的主题上**（数据张冠李戴）。
-  不设该变量时用默认值 `PROJECT_ROOT/data`（单设备现状不变）；相对路径按项目根解析。
-- 送达判定：QoS=1 必须等到 broker 的 **PUBACK** 才算送达（`publish()` 返回 `rc=0`
-  只代表进了本机发送队列）。没等到 PUBACK 的数据一律转存缓存重试，不会静默丢弃。
-- 补传节奏可用环境变量调：`PUBLISH_ACK_TIMEOUT`（单条确认超时）、
-  `RESEND_WINDOW`（在途窗口条数）、`RESEND_RETRY_INTERVAL`（部分失败后的重试间隔）
-- 断网缓存有容量上限（`CACHE_MAX_BYTES`，默认 64MB）：写满磁盘会让之后每条数据都丢，
-  所以超限时按"丢最旧、保最新"裁剪并打 CRITICAL；写盘走 `flush + fsync`，
-  进程被 kill 也不会丢尾部数据；启动时先校验缓存目录可写
-- 依赖：pymodbus、paho-mqtt
+### 2. 网关层（数据采集 + 断网缓存 + 补传）
 
-### 3. 平台接入层 `src/platform/subscriber_to_td.py`
-- 功能：订阅 MQTT 主题 → 解析 9 个测点 → 写入 TDengine
-- 会话持久化：默认使用**非干净会话**（`MQTT_CLEAN_SESSION=0`）配合固定的 client_id。
-  订阅端离线期间，broker 会为 `cems/plant1/data` 上 QoS≥1 的消息排队，重连后自动补投。
-  若不持久化（干净会话），离线期间发布的报文会被 broker 直接丢弃，且发布端拿到的是 PUBACK，
-  看日志一切正常 —— 属于静默丢数据。
-  - broker 侧上限（EMQX 默认值）：会话保留 `session_expiry_interval=2h`、离线队列 `max_mqueue_len=1000` 条，
-    超出即丢最旧的；需要更长的断线容忍时间要改 EMQX 配置
-  - 把 `MQTT_CLEAN_SESSION` 置 1 可退回"离线即丢"，仅用于对比演示
-- TDengine 超级表：`cems.cems_data`（ts, flow, dust, so2, nox, o2, velocity, temp, humidity, pressure + TAG plant/device）
-- 老库自动升级：启动时 DESCRIBE 超级表，缺哪列用 ALTER STABLE 补哪列
-- 子表命名：`{厂区}_{设备}`（如 `plant1_device1`）。TDengine 对**已存在**的子表会沿用
-  第一次写入的 TAGS 且不报错，若拿厂区名当子表名，接入第二台设备时数据会被静默
-  挂到第一台的标签下；启动时还会核对该子表已有标签是否与配置一致
-  （子表名统一转小写后比对：TDengine 表名不区分大小写，不归一化就会查不到行、静默跳过检查）
-- 启动自检：主题的厂区段（`cems/<厂区>/...`）与 `TD_PLANT` 不一致时给出 WARNING ——
-  "订阅了 A 厂区的主题却写进 B 厂区的标签"是**静默错标**（入库成功、报表却挂错名），
-  但主题命名允许自定义，所以只告警、不拒绝启动
-- **多设备 = 每台设备一个接入实例**：本模块带状态的东西都是每设备一份（判据滑窗、折算值快照、
-  持久会话 client_id），而"一个实例只写一张子表"正是多实例方案能保持单设备代码路径零改动的原因。
-  取舍与边界见 `docs/adr/0008-多设备多实例路线.md`
-- 数值校验：每个测点先过 `math.isfinite()`（挡 NaN/inf）再过量程白名单
-  （`POINT_RANGES`，挡负数和超量程）。任一测点不合格就整条拒收 —— 因为 NaN/inf 会让
-  TDengine 报 syntax error，整行连其余 8 个正常测点一起丢，不如提前拦下。
-  拒收条数会累计在日志里（`报文已拒收（累计 N 条）`）
-- 启动自检：库名/表名/标签做标识符白名单校验（这些值会拼进 SQL），不合法直接拒绝启动
-- 标签：plant, device
-- 依赖：paho-mqtt、taospy
+- 每 5 秒通过 Modbus TCP 轮询 9 个寄存器，按 HJ 212 因子顺序组装成一条 JSON 样本。
+- 通过 MQTT（QoS 1）发布到 EMQX；发布前在本地 `data/cache.jsonl` 留一份待确认记录，收到 broker 确认后删除。
+- **断网时自动缓存**（容量上限 64MB，超出丢弃最旧数据），恢复后按 30 秒间隔自动补传，保证数据不丢。
+- 双设备时每台设备一个独立网关实例（第二套为 profile `plant2`，缓存目录 `data/plant2/`）。
 
-### 4. 展示层 `src/web/web_dashboard.py`
-- 功能：Flask 后端 + ECharts 前端实时曲线（9 测点 / 4 组 Y 轴）
-- 接口：`GET /api/data` 返回最近 10 分钟数据（JSON）
-- 健康检查：`GET /api/health` 判**数据新鲜度**（最近 1 分钟有条数、且最近一条样本距今 ≤ `POLL_INTERVAL × HEALTH_STALE_POLL_FACTOR`，默认 15 s）；
-  满足返回 200，库不可达 / 最近 1 分钟 0 条 / 数据陈旧一律返回 **503** + `reason` 字段（容器的 healthcheck 按状态码判成败，不再吞 503）
-- 刷新：前端每 5 秒自动拉取
-- 监听：0.0.0.0:5000（局域网可访问）
-- 依赖：flask、taospy
+### 3. 接入层（MQTT 订阅 + 入库 TDengine）
 
-## 方式零：一键启动（双击即可，就绪后自动打开浏览器）
+- 订阅 MQTT 主题，将样本批量写入 TDengine 超级表 `cems.cems_data`（按设备名分子表，`KEEP 365d`）。
+- 告警判定（覆盖率门限 0.75、折算值严格大于限值判超标），事件落 `cems_alarm_event`、
+  小时达标率落 `cems_hourly_verdict`、推送记录落 `cems_alarm_push`。
+- 支持 MQTT Clean Session=0 + EMQX 持久会话，接入层重启期间消息由 broker 保留。
+- 双设备时第二套接入实例独立消费、独立入库，互不影响。
 
-**双击 `一键启动.bat`** 就行。脚本会：构建并启动 8 个容器 → 轮询 `http://localhost:5000/api/health`
-→ **确认 Web 真的能响应之后**才打开浏览器（不是盲等几秒就开）。
+### 4. 展示层（Flask + ECharts 实时大屏 / 报表）
 
-失败时不再假装成功：会打印占用端口的进程、`docker compose logs` 排查命令；
-Docker Desktop 没启动时会自动尝试拉起并等引擎就绪。
+- **实时大屏**（`/`，暗色主题）：ECharts 曲线展示全部测点；鼠标悬停 tooltip 对三个浓度测点
+  （颗粒物、SO2、NOx）显示 **实测 / 折算 / 限值** 三行——
+  折算值 = 实测值 × 15 / (21 − O2)；**O2 > 19% 时折算无意义，显示 "—"**。
+- **超标标记**：以折算值与限值比较，**折算值 > 限值**的点在曲线上标红（等于限值算达标，不标）。
+- **报表页**（`/report`）：分钟/日/月/自定义报表，覆盖率面板直接显示
+  **整体覆盖率 overall、门限 threshold、数据不足窗口数 insufficient_windows、断档数 gap_count**；
+  状态严格三态：**达标绿 / 超标红 / 数据不足灰**（缺数据绝不画成达标；窗口未结束另有"进行中"描边态）。
+- Redis 查询缓存（TTL 300 秒），降低 TDengine 查询压力；`/api/cache/*` 经 nginx 对外 403。
 
-| 命令 | 作用 |
-|---|---|
-| `一键启动.bat` | 默认 Docker 模式：启动全部服务 + 打开大屏 |
-| `一键启动.bat -Mode Local` | 本机模式：EMQX/TDengine 走容器，4 个服务用 4 个 Python 窗口（逐层看日志） |
-| `一键启动.bat -NoBrowser` | 只启动服务，不打开浏览器 |
-| `一键启动.bat -NoBuild` | 跳过镜像构建（改过 `src/` 代码时不要加） |
-| `一键启动.bat -Stop` | 停止全部容器（数据卷保留，数据不丢） |
-| `.\start.ps1 -DryRun` | 只打印将要执行的动作，不实际启动（排查用） |
+---
 
-说明：`.bat` 只是外壳，真正逻辑在 `start.ps1`（同为项目文件，可直接传参运行）。
+## 快速开始
 
-## 方式一：Docker Compose 一键启动（推荐）
+### 一键启动（Windows）
 
-一条命令拉起 EMQX + TDengine + 四个服务，无需本地装 Python 环境：
+双击 **`一键启动.bat`**（内部调用 `scripts/start.ps1`），自动完成：环境检查 → 构建镜像 → 启动容器 → 轮询健康接口 → 打开浏览器。
 
-```bash
-docker compose up -d --build
-```
-
-第一次会构建镜像（装依赖），之后启动只要几秒。数据库初始化、建库建表、订阅、
-采集全部自动完成，服务之间用健康检查排好启动顺序。
-
-| 服务 | 容器名 | 地址 |
+| 启动方式 | 命令 | 说明 |
 |---|---|---|
-| MQTT Broker (EMQX) | emqx | `localhost:1883`，管理台 `localhost:18083` |
-| 时序库 (TDengine) | tdengine | REST `localhost:6041` |
-| 仿真设备 | cems-device | `localhost:5020` |
-| 网关 | cems-gateway | — |
-| 平台接入 | cems-subscriber | — |
-| Web 大屏 | cems-web | `http://localhost:5000` |
+| 完整启动（默认） | `.\一键启动.bat` | 构建 + 启动 + 打开页面 |
+| 快速重启（不构建） | `.\一键启动.bat -NoBuild` | 镜像已构建，跳过 build |
+| 只启动不打开浏览器 | `.\一键启动.bat -NoBrowser` | 服务器启动后不自动开页面 |
+| 启动并跟踪日志 | `.\一键启动.bat -Tail` | 启动后 `docker compose logs -f` |
+| 组合使用 | `.\一键启动.bat -NoBuild -NoBrowser -Tail` | 跳过构建和浏览器，直接看日志 |
+| 清理后重新启动 | `.\一键启动.bat -ForceClean` | 清理旧容器/悬空镜像后再启动 |
+| 查看帮助 | `.\一键启动.bat -?` | 显示所有参数说明 |
 
-默认启动的就是上面这 8 个服务（含 nginx 与 redis）。**第二台设备**是另外两个容器
-（`cems-gateway-plant2` / `cems-subscriber-plant2`），默认不启动，见 §多设备。
-
-### 多设备（第二台设备）：已具备能力，配置即可
-
-链路按 `(plant, device)` 建 TAG、按 `{plant}_{device}` 建子表，数据层本来就支持多台；
-采集侧是"一个实例服务一台设备"，所以第二台设备 = **第二套实例**。开启需要两步
-（两步都做才行：只起实例、设备层没有从站 2，第二个网关会读不到数据并在日志里报错）：
-
-```ini
-# .env：让设备层在同一个 5020 端口上同时提供从站 1 和 2
-SLAVE_IDS=1,2
-```
+### Docker Compose（Linux/macOS 同样适用）
 
 ```bash
-docker compose --profile plant2 up -d     # 追加启动第二套网关/接入实例
-docker compose --profile plant2 ps        # 看两套实例
+# 构建镜像并启动 8 个基础服务（后台运行）
+docker compose up -d --build
+
+# 查看运行状态
+docker compose ps
+
+# 跟踪网关日志（观察采集和补传）
+docker compose logs -f gateway
+
+# 停止并删除容器（数据保留在卷里）
+docker compose down
+
+# 停止并连数据一起删除
+docker compose down -v
 ```
 
-第二套的默认取值：从站 `2` → 主题 `cems/plant2/data` → 标签 `plant2/device2`
-（子表 `plant2_device2`）→ 缓存目录 `./data/plant2`。要改厂区/设备名，改 `.env` 里的
-`PLANT2` / `DEVICE2` / `MQTT_TOPIC2` / `GATEWAY2_CLIENT_ID` / `SUBSCRIBER2_CLIENT_ID`
-（**注意主题的厂区段要与 `PLANT2` 一致**，不一致时接入层会在启动日志里给 WARNING）。
+启动后访问 `http://localhost`（经 nginx 反代）。
 
-关闭第二套：
+### 访问入口
 
-```bash
-docker compose --profile plant2 stop gateway2 subscriber2
-```
+| 服务 | 地址 | 说明 |
+|---|---|---|
+| Nginx 统一入口 | http://localhost | 对外主入口，反代 Web 与 API |
+| Web 直连后端 | http://localhost:5001 | 直连 web 容器（容器内端口 5000），对照 nginx 层差异 |
+| EMQX Dashboard | http://localhost:18083 | MQTT 管理台，默认 admin/public |
+| TDengine | 6041（REST）/ 6030（原生） | 默认 root/taosdata |
+| Modbus 设备 | 5020 | 仿真设备 Modbus TCP 端口 |
 
-⚠️ 不带 `--profile` 的 `docker compose stop/down` **管不到**这两个容器（它们不在默认模型里）。
-
-为什么是"每台设备一套实例"而不是"一个实例订阅通配主题、从主题解析设备号"、
-为什么设备层用多从站而不是第二个端口，见 `docs/adr/0008-多设备多实例路线.md`。
-
-### 端口暴露范围（默认只开本机）
-
-所有端口默认只绑定 `127.0.0.1`，同网段的其它设备访问不到。原因很实际：
-EMQX 的 1883 默认允许匿名发布（别人可以伪造数据）、18083 管理台默认 `admin/public`、
-TDengine 6041 用的是演示口令 `root/taosdata`（可以读写删库）。绑到 `0.0.0.0`
-等于把这三样一起交出去。
-
-需要局域网看大屏时，在 `.env` 里改：
-
-```ini
-BIND_ADDR=0.0.0.0
-```
-
-**改完必须同时改掉 `TD_PASS` 和 EMQX 的默认口令**，否则就是上面那种情况。
-`start.ps1` 在这种情况下会额外打一条告警。
-
-常用命令：
-
-```bash
-docker compose ps                     # 看服务状态（默认 8 个）
-docker compose logs -f gateway        # 跟踪某个服务日志
-docker compose down                   # 停止（数据保留在具名卷里）
-docker compose down -v                # 停止并连数据一起删
-docker compose run --rm web python src/web/query_tool.py   # 在容器里核对入库情况
-```
-
-数据落地位置：TDengine 数据在具名卷 `cems-tdengine-data`，EMQX 在 `cems-emqx-data`，
-网关断网缓存分别在宿主机的 `data/`（第一套）与 `data/plant2/`（第二套）。
-
-
-### 构建报 `auth.docker.io` 鉴权错误的处理
-
-若 `docker compose up -d --build` 在最后一步报
-`failed to fetch oauth token: ... auth.docker.io`，这是 Docker Desktop 开了
-**containerd 镜像存储** + 该域名被 DNS 污染导致的（镜像其实已经构建出来了）。
-两种解法：
+### 本机方式（不用 Docker）
 
 ```powershell
-# 解法 A：改用传统构建器（推荐，一条命令）
-$env:DOCKER_BUILDKIT=0; docker compose build; docker compose up -d
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+.\一键启动.bat -NoBuild    # 会自动拉起本机 EMQX/TDengine（若已安装）或用 Docker 只起中间件
 ```
 
-- 解法 B：Docker Desktop → Settings → General → 取消勾选
-  "Use containerd for pulling and storing images"，重启 Docker Desktop 后重试。
+### 端口暴露 / 安全
 
-## 方式二：本机直接运行（适合逐层调试）
+默认所有端口只绑定 `127.0.0.1`（本机访问）。如需局域网/外网访问：
 
-先起依赖：`docker compose up -d emqx tdengine`，再开四个终端依次运行：
+1. 在 `.env` 中设置 `BIND_ADDR=0.0.0.0`（或具体网卡 IP）；
+2. **务必修改默认口令**：EMQX（admin/public）、TDengine（root/taosdata）；
+3. 不要把 5020（Modbus 设备）、6041（TDengine REST）暴露到公网；
+4. 如需修改宿主机端口，设置 `NGINX_HOST_PORT`、`WEB_HOST_PORT` 等变量（见 `docker-compose.yml`）。
 
-1. `python src/device/modbus_server.py` — 仿真设备
-2. `python src/gateway/gateway.py` — 网关
-3. `python src/platform/subscriber_to_td.py` — 平台接入（入库）
-4. `python src/web/web_dashboard.py` — Web 大屏
-5. 浏览器访问 `http://localhost:5000`（局域网：`http://<电脑IP>:5000`）
+> **Docker Desktop 构建鉴权错误**：若 `docker compose up -d --build` 报
+> `unauthorized: authentication required` / `not authorized`，是 Docker 客户端把本机构建请求
+> 错误带上了 registry 凭证。处理：`docker logout`，或在 Docker Desktop 设置中登出 registry 账号后重试；
+> 本项目镜像 `pull_policy: never`，构建不依赖任何 registry。
 
-各服务的连接参数都在文件顶部配置区，且支持用环境变量覆盖
-（如 `MQTT_HOST`、`TD_URL`），默认值就是本机 `localhost`，所以直接跑不用改代码。
+---
 
-本机模式下同样可以跑第二套实例（PowerShell 里设好环境变量再起一个终端即可）：
+## 双设备 / 高并发
 
-```powershell
-# 终端 A：设备层同时提供从站 1、2
-$env:SLAVE_IDS="1,2"; python src/device/modbus_server.py
-# 终端 B：第二套网关（从站 2 → 主题 cems/plant2/data → 缓存目录 data/plant2）
-$env:MODBUS_UNIT="2"; $env:MQTT_TOPIC="cems/plant2/data";
-$env:MQTT_CLIENT_ID="cems-gateway-plant2"; $env:GATEWAY_DATA_DIR="data/plant2";
-python src/gateway/gateway.py
-# 终端 C：第二套接入（写 plant2_device2）
-$env:MQTT_TOPIC="cems/plant2/data"; $env:MQTT_CLIENT_ID="cems-subscriber-plant2";
-$env:TD_PLANT="plant2"; $env:TD_DEVICE="device2";
-python src/platform/subscriber_to_td.py
-```
+双设备能力**已具备，配置即可**：开关一在 `.env` 设 `SLAVE_IDS=1,2`（设备层双从站），
+开关二用 `docker compose --profile plant2 up -d` 拉起第二套网关 + 接入实例（共 10 个容器）；
+两个开关缺一不可，且必须做"同一时刻逐值对比"验收。
+高并发实测 N=50 下端到端 52.59 条/秒、missing=0；注意网关节拍硬上限约 1.05 条/秒/实例，扩容靠加实例。
 
-## 辅助工具
+- 启用步骤、日志证据、验收命令与回退：[`docs/runbooks/双设备启用与验证.md`](docs/runbooks/双设备启用与验证.md)
+- 吞吐/延迟/资源数据与压测方法：[`docs/reference/并发与负载指标.md`](docs/reference/并发与负载指标.md)
 
-- `src/web/query_tool.py` — 查询入库数据 + INTERVAL 时间聚合（运维排查用）
-- `docs/` — 架构复习图（HTML）
+---
 
-## 环境依赖
+## 能力清单
 
-见 `requirements.txt`。Python 3.12。
+- **稳定采集**：5 秒周期，单设备 12 条/分钟、名义 720 条/小时；实测周期约 5.146 s。
+- **断网缓存与补传**：64 MB 本地缓存；EMQX 断 181 秒演练，补传成功率 **100%（35/35）**，零丢失。
+- **完整率**：名义完整率 97.22%（5 s 周期对 720 条/h），有效完整率 100%；断档判据 15 s。
+- **直发延迟**：P50 0.58 s / P95 1.07 s（max 1.23 s）。
+- **告警**：超阈值 / 恢复 / 小时达标率判定与落库，覆盖率门限 0.75，严格大于限值才判超标。
+- **折算与超标展示**：tooltip 实测/折算/限值三行、曲线超标红点、报表三态状态列（见「展示层」）。
+- **查询缓存**：Redis 缓存 TTL 300 秒，命中率/水位可经 5001 端口 `/api/cache/stats` 查看。
+- **备份与恢复**：备份到仓库外 `F:\cems-backup`（逻辑 + 物理），双设备 18 570 行备份 4.42 s；
+  灾难恢复 RTO（另起实例）P50 14.788 s，自定目标 RTO ≤ 30 分钟。
+- **高并发**：N=50 时 52.59 条/秒、missing=0、duplicate_ts=0（loadgen 直发 EMQX，绕过网关）。
 
-> 注意：`pymodbus` 已锁到 `<3.9`。3.9 起官方把 `ModbusSlaveContext` 改名、
-> 把 `slave=` 参数改成 `device_id=`，设备层会直接 ImportError。
+---
+
+## 文档索引
+
+**运维操作（runbooks）**
+- [运维手册](docs/runbooks/运维手册.md) —— 启停、健康检查、巡检、备份恢复入口、日志、常见问题、阈值速查
+- [双设备启用与验证](docs/runbooks/双设备启用与验证.md) —— 两个开关、启用步骤、逐值对比验收、回退
+- [容器重建与代码生效](docs/runbooks/容器重建与代码生效.md) —— 改代码后让容器真正生效的正确命令
+- [故障台账](docs/runbooks/故障台账.md) —— 历次故障的现象、排查、根因、修复与数据影响
+- [恢复演练与对账口径](docs/runbooks/恢复演练与对账口径.md) —— 备份/恢复步骤、RTO 台账、对账恒等式
+- [全链路验收设计](docs/runbooks/全链路验收设计.md) —— 启动顺序、C1–C19 验收契约、冻结常量表
+
+**参考指标（reference）**
+- [性能与可靠性指标](docs/reference/性能与可靠性指标.md) —— 延迟分位、完整率、补传成功率
+- [并发与负载指标](docs/reference/并发与负载指标.md) —— 吞吐 vs N、网关硬上限、资源余量
+- [HJ212 协议实现说明](docs/reference/hj212-协议实现说明.md)
+- [HJ212 协议层独立验证记录](docs/reference/HJ212协议层独立验证记录.md)
+- [容器时钟漂移](docs/reference/容器时钟漂移.md)
+
+**设计决策（adr）**
+- [0001 测点契约改版](docs/adr/0001-测点契约改版.md)
+- [0002 告警判据选型](docs/adr/0002-告警判据选型.md)
+- [0003 补传入队判定修正](docs/adr/0003-补传入队判定修正.md)
+- [0004 引入 nginx 与 redis 缓存](docs/adr/0004-引入nginx与redis缓存.md)
+- [0005 备份策略与保留期](docs/adr/0005-备份策略与保留期.md)
+- [0006 HJ212 出口与北向适配](docs/adr/0006-HJ212出口与北向适配.md)
+- [0007 P3 出口与传输方案](docs/adr/0007-P3出口与传输方案.md)
+- [0008 多设备多实例路线](docs/adr/0008-多设备多实例路线.md)
+
+**其他**
+- [RELEASE v2.0.0 地基冻结](docs/RELEASE-v2.0.0-地基冻结.md)
+- [docs 目录说明](docs/README.md)
+- 旧版（6 容器 / 8 测点）资料归档于 `docs/legacy/v1.0-6容器-8测点/`
+
+---
+
+## 已知边界
+
+以下为当前明确未覆盖/未验证的范围，**不作为已具备能力对外宣称**：
+
+1. **非现场联调**：仅在本地回环完成，对照手段为官方向量与开源实现对拍，未接真实监测平台/仪表/环保平台。
+2. **接入层无入库副本**：TDengine 写失败时，该样本不在任何地方（接入层不持有本地队列，P1 未修）。
+3. **仿真非真实工况**：设备为仿真器，数据为合成波形，未验证真实仪表的量程边界、异常码、时钟漂移等现场问题。
+4. **负载为合成**：高并发数据由 loadgen 生成并**直发 EMQX、绕过网关**，验证的是接入 + 存储层，不代表现场网关容量。
+5. **单机部署**：所有容器在一台宿主上，未验证多机部署、集群与高可用（HA）。
+6. **网关采集上限**：单网关实例节拍硬上限约 **1.05 条/秒**（采集周期从 5 s 压到 0.05 s 不再提升），
+   扩容方式是增加网关实例，而非压单实例。
+
+---
+
+## 我用了哪些源文件
+
+- `docker-compose.yml` —— 8 基础 + 2 profile 共 10 个服务/容器、端口、环境变量、nginx 403 口径
+- `src/common/points.py` —— 9 个测点、量程、编码、限值与基准氧
+- `README.md`（原有版本） —— 架构分层、一键启动参数、本机方式、端口暴露、构建鉴权处理等正确内容
+- `docs/runbooks/双设备启用与验证.md` —— 两个开关、逐值对比验收、回退
+- `docs/runbooks/全链路验收设计.md` —— 覆盖率门限 0.75、6 条已知边界、验收契约
+- `docs/runbooks/恢复演练与对账口径.md` —— 备份落点、RTO 数字、备份行数与耗时
+- `docs/reference/性能与可靠性指标.md` —— 延迟分位、完整率、补传成功率、断档判据
+- `docs/reference/并发与负载指标.md` —— N=50 吞吐、网关 1.05 条/秒硬上限、loadgen 绕过网关
+- `docs/adr/0008-多设备多实例路线.md` —— 双设备"已具备能力，配置即可"的口径
+- `docs/runbooks/故障台账.md` —— healthy 与业务正常的区分、故障案例
+- `docs/runbooks/容器重建与代码生效.md` —— 单构建入口、`pull_policy: never` 的表述
