@@ -46,6 +46,7 @@ from typing import Any, Final, Mapping, Optional, Sequence
 
 from src.common.points import (
     LIMITS,
+    O2_DRY_BASIS,
     O2_REFERENCE,
     POINTS,
     ZS_TARGETS,
@@ -110,6 +111,7 @@ class AlarmConfig:
     hourly_backfill_hours: int = 2          # ALARM_HOURLY_BACKFILL_HOURS（启动时补结算几个已闭合小时）
     coverage_min: float = 0.75              # ALARM_COVERAGE_MIN（§3.4 覆盖率门限）
     invalid_ratio_max: float = 0.10         # ALARM_INVALID_RATIO_MAX（§3.5 无效样本占比上限）
+    o2_denominator_min: float = 2.0         # ALARM_O2_DENOM_MIN（21-O2 下限，低于它折算视为不可用）
     poll_interval: float = 5.0              # ALARM_POLL_INTERVAL（算"应有样本数"用，须与网关一致）
     judge_version: str = "v1.0.0"           # ALARM_JUDGE_VERSION（写进事件快照，公式/口径变更时改）
     push_channel: str = "log"               # ALARM_PUSH_CHANNEL（一期：log = 只落记录 + 日志）
@@ -140,6 +142,12 @@ class AlarmConfig:
             raise ValueError(f"ALARM_COVERAGE_MIN 必须落在 [0, 1]: {self.coverage_min}")
         if not 0.0 <= self.invalid_ratio_max <= 1.0:
             raise ValueError(f"ALARM_INVALID_RATIO_MAX 必须落在 [0, 1]: {self.invalid_ratio_max}")
+        # 折算分母下限：0 与 O2_DRY_BASIS(=21) 之间是开区间 —— 取 0 等于关掉这条判据
+        # （分母 > 0 才是数学可算），取 21 会把 O2=0% 这种正常样本也判无效。
+        if not 0.0 < self.o2_denominator_min < O2_DRY_BASIS:
+            raise ValueError(
+                f"ALARM_O2_DENOM_MIN 必须落在 (0, {O2_DRY_BASIS}): {self.o2_denominator_min}"
+            )
         if self.poll_interval <= 0:
             raise ValueError(f"ALARM_POLL_INTERVAL 必须 > 0: {self.poll_interval}")
         if self.poll_interval > HOUR_SECONDS:
@@ -172,6 +180,7 @@ class AlarmConfig:
             hourly_backfill_hours=int(os.getenv("ALARM_HOURLY_BACKFILL_HOURS", "2")),
             coverage_min=float(os.getenv("ALARM_COVERAGE_MIN", "0.75")),
             invalid_ratio_max=float(os.getenv("ALARM_INVALID_RATIO_MAX", "0.10")),
+            o2_denominator_min=float(os.getenv("ALARM_O2_DENOM_MIN", "2.0")),
             poll_interval=float(os.getenv("ALARM_POLL_INTERVAL", "5.0")),
             judge_version=os.getenv("ALARM_JUDGE_VERSION", "v1.0.0").strip(),
             push_channel=os.getenv("ALARM_PUSH_CHANNEL", "log").strip(),
@@ -643,6 +652,16 @@ class AlarmJudge:
             无效样本占比 > 上限      → insufficient
             折算均值 > 限值          → over（产 judge_type=hourly 的超标事件）
             否则                     → ok
+
+        ★ **折算不可用**有两条路径，都归入"无效样本"（§3.5），**不新造第四种状态**：
+            ① O2 ≥ 21% ⇒ `to_reference_o2()` 返回 nan（分母 ≤ 0，原有语义）；
+            ② 分母 `21 - O2` 小于 `ALARM_O2_DENOM_MIN`（默认 2.0）⇒ 放大倍数过大
+               （O2=12% 时 1.67×、18% 时 5×、20% 时 15×、20.99% 时 1500×）。
+               后果是**标干完全达标**的读数被折算放大到越过限值 ⇒ 小时判 over ⇒ 假超标。
+               这类样本并入无效样本后：覆盖率与无效占比按既有门限走，
+               无效占比超上限 ⇒ insufficient（既不判达标也不判超标），与①同一条路径。
+        ⚠️ 逐条判定（instant 滑窗）**不改**：那里的语义是"单点折算值越限"，
+           M/N、滞回、`_clear`、`>` 边界全部保持原样。
         """
         config = self.config
         expected = max(1, config.expected_samples_per_hour)
@@ -658,12 +677,19 @@ class AlarmJudge:
             valid: list[float] = []
             raw_sum = o2_sum = 0.0
             over_count = 0
+            # 分母过小被判无效的样本数：只用于把原因写清楚，不参与任何判定
+            floor_dropped = 0
             for _ts, o2, raw_values in samples:
                 raw = float(raw_values[column])
-                converted = to_reference_o2(raw, float(o2))
+                o2_value = float(o2)
+                converted = to_reference_o2(raw, o2_value)
                 raw_sum += raw
-                o2_sum += float(o2)
+                o2_sum += o2_value
+                # 折算是否可用于**达标判定**：先看数学可算性，再看分母下限（见 docstring ★）
                 if not math.isfinite(converted):
+                    continue
+                if (O2_DRY_BASIS - o2_value) < config.o2_denominator_min:
+                    floor_dropped += 1
                     continue
                 valid.append(converted)
                 if over_limit(name, converted):
@@ -690,6 +716,12 @@ class AlarmJudge:
                     if coverage < config.coverage_min
                     else f"无效样本占比 {invalid_ratio:.3f} > 上限 {config.invalid_ratio_max}"
                 )
+                # 分母过小是"无效样本"里最容易被误读为"现场数据没问题"的一类，指名道姓写出来
+                if floor_dropped:
+                    reason += (
+                        f"（其中 {floor_dropped} 条因 21-O2 < {config.o2_denominator_min} "
+                        "折算放大不可信，按无效样本处理）"
+                    )
             elif conv_mean > limit:
                 verdict = VERDICT_OVER
                 reason = f"折算均值 {conv_mean:.4f} > 限值 {limit}，且覆盖率 {coverage:.3f} 达标"

@@ -783,6 +783,87 @@ class TestHourlyVerdict:
         assert by_point == {"dust": VERDICT_OVER, "so2": VERDICT_OK, "nox": VERDICT_OVER}
 
 
+class TestO2DenominatorFloor:
+    """折算分母下限（ALARM_O2_DENOM_MIN）：稀薄烟气不得被折算放大成"超标"。
+
+    折算 = 标干 × (21-6)/(21-O2)，分母 → 0 时放大倍数无界：
+    O2=12% → 1.67×、18% → 5×、20% → 15×、20.99% → 1500×。
+    判据：分母 < 下限的样本并入**无效样本**（与 O2>=21% 的 nan 同一条路径），
+    不新造第四种状态；逐条判定（instant）的语义不受影响。
+    """
+
+    HOUR: datetime = datetime(2026, 10, 2, 9, 0, 0)
+    #: 分母 = 21 - 20 = 1.0 < 默认下限 2.0；标干 4.0（达标）会被放大到 60（远超限值 5.0）
+    O2_THIN: float = 20.0
+
+    @staticmethod
+    def make_samples(count: int, *, o2: float, dust: float) -> list[tuple[str, float, Mapping[str, float]]]:
+        return [
+            (
+                (TestO2DenominatorFloor.HOUR + timedelta(seconds=5 * index)).strftime(TS_FORMAT),
+                o2,
+                {"dust": dust, "so2": SO2_CLEAN, "nox": NOX_CLEAN},
+            )
+            for index in range(count)
+        ]
+
+    def test_thin_o2_hour_is_insufficient_not_over(self) -> None:
+        """O2=20%（分母 1.0 < 2.0）：标干完全达标的整点 ⇒ insufficient，绝不判 over。
+
+        修复前：折算 4.0 × 15/1.0 = 60 > 5.0 ⇒ 判 over ⇒ 假超标事件。
+        """
+        samples = self.make_samples(720, o2=self.O2_THIN, dust=DUST_CLEAN)
+        judge = AlarmJudge(tight_config())
+        verdicts, events = judge.judge_hour(self.HOUR.strftime(TS_FORMAT), samples)
+
+        dust = {verdict.point: verdict for verdict in verdicts}["dust"]
+        assert dust.n_valid == 0
+        assert dust.n_invalid == 720
+        assert math.isnan(dust.conv_mean)
+        assert dust.verdict == VERDICT_INSUFFICIENT
+        assert VERDICT_OVER not in {verdict.verdict for verdict in verdicts}
+        # 只产"数据不足"的 invalid 行，且原因里点明是分母下限，不产小时超标事件
+        assert {event.phase for event in events} == {PHASE_INVALID}
+        dust_event = [event for event in events if event.point == "dust"][0]
+        assert "21-O2 < 2.0" in dust_event.reason
+
+    def test_denominator_just_above_floor_is_still_judged(self) -> None:
+        """分母 2.01 >= 下限 2.0 ⇒ 照常参与判定（下限只在**小于**时生效）。"""
+        samples = self.make_samples(720, o2=21.0 - 2.01, dust=DUST_OVER)
+        judge = AlarmJudge(tight_config())
+        verdicts, _events = judge.judge_hour(self.HOUR.strftime(TS_FORMAT), samples)
+        dust = {verdict.point: verdict for verdict in verdicts}["dust"]
+        assert dust.n_valid == 720
+        assert dust.verdict == VERDICT_OVER
+        assert dust.conv_mean > DUST_LIMIT
+
+    def test_floor_is_configurable(self) -> None:
+        """下限可配：设 0.5 时 O2=20% 的样本重新参与判定（配置决定宽严，不是硬编码）。"""
+        samples = self.make_samples(720, o2=self.O2_THIN, dust=DUST_CLEAN)
+        judge = AlarmJudge(tight_config(o2_denominator_min=0.5))
+        verdicts, _events = judge.judge_hour(self.HOUR.strftime(TS_FORMAT), samples)
+        dust = {verdict.point: verdict for verdict in verdicts}["dust"]
+        assert dust.n_valid == 720
+        assert dust.verdict == VERDICT_OVER          # 放大 15 倍后越过限值（放宽设置下的行为）
+
+    def test_floor_boundary_values_are_rejected_by_validate(self) -> None:
+        """下限必须落在开区间 (0, 21)：0 = 关掉判据、21 = 把 O2=0% 也判无效，都不接受。"""
+        for bad in (0.0, -1.0, 21.0, 25.0):
+            with pytest.raises(ValueError):
+                tight_config(o2_denominator_min=bad).validate()
+        tight_config(o2_denominator_min=2.0).validate()   # 默认值合法，不抛
+
+    def test_instant_judgement_unchanged_for_thin_o2(self) -> None:
+        """逐条判定语义**不变**：O2=20% 的越限样本照旧触发 instant START（本次不动它）。"""
+        judge = AlarmJudge(tight_config())
+        events = feed(judge, [
+            at(T0, dust=DUST_OVER, o2=self.O2_THIN),
+            at(T0 + timedelta(seconds=5), dust=DUST_OVER, o2=self.O2_THIN),
+            at(T0 + timedelta(seconds=10), dust=DUST_OVER, o2=self.O2_THIN),
+        ])
+        assert PHASE_START in phases([event for event in events if event.judge_type == JUDGE_INSTANT])
+
+
 # ===========================================================================
 # 6. SQL 文本生成（不执行；只断言字符串）
 # ===========================================================================

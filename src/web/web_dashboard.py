@@ -10,7 +10,7 @@ import sys
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Final
+from typing import Any, Callable, Final, Optional
 from urllib.parse import quote
 
 import taosrest
@@ -86,6 +86,20 @@ QUERY_LIMIT: Final[int] = int(os.getenv("QUERY_LIMIT", "5000"))          # 单�
 WEB_HOST: Final[str] = os.getenv("WEB_HOST", "0.0.0.0")   # 监听所有网卡，局域网可访问
 WEB_PORT: Final[int] = int(os.getenv("WEB_PORT", "5000"))
 WEB_THREADS: Final[int] = int(os.getenv("WEB_THREADS", "8"))   # waitress 工作线程数
+
+# ---- 健康判据（GET /api/health，见 §4）----
+# 判据是**数据新鲜度**，不是"库连得上"。原来只看"能不能连库"，
+# 于是"网关 MQTT 断 / 网关只写缓存补不出去 / 订阅端连着但不入库 / 设备刷新线程死 /
+# tag 拼错导致查询恒 0 行"这些故障全都 200 + ok，容器 healthy、无告警。
+#
+# 阈值 = 轮询周期 × 因子（默认 5.0 s × 3 = 15 s）：
+#   · 周期真源是网关的 POLL_INTERVAL（单设备/双设备实测都在 11~12 条/分钟 ≈ 5 s 一条），
+#     web 侧的覆盖率口径（src/web/report.py）已经在用同一个变量，这里沿用同一个。
+#   · 因子取 3：允许连续丢 2 条样本而不误报（本机实测间隔均值 5.15 s，15 s 有 2.9 倍余量），
+#     同时远小于"人工发现不了"的量级 —— 一个整分钟没有任何新数据必然判不健康。
+POLL_INTERVAL_SECONDS: Final[float] = float(os.getenv("POLL_INTERVAL", "5.0"))
+HEALTH_STALE_POLL_FACTOR: Final[int] = int(os.getenv("HEALTH_STALE_POLL_FACTOR", "3"))
+HEALTH_STALE_AFTER_SECONDS: Final[float] = POLL_INTERVAL_SECONDS * HEALTH_STALE_POLL_FACTOR
 
 # ---- 报表导出 ----
 XLSX_MIME: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -213,15 +227,77 @@ def api_data() -> tuple[Response, int] | Response:
     return jsonify(payload)
 
 
+def latest_sample_age_seconds(rows: list[tuple[Any, ...]]) -> Optional[float]:
+    """最近一条样本的时间戳距离"现在"多少秒（行里没有可解析时间戳时返回 None）。
+
+    ⚠️ 时间戳统一走 `cache.ts_text()` + `cache.parse_ts_text()`（去掉时区标记的 19 位本地串），
+    与缓存水位的口径**完全同源**：容器时区与 TDengine 一致（TZ=Asia/Shanghai），
+    容器虚拟时钟相对宿主有 100 ms 级漂移（见缓存模块头部），对 15 s 量级的判据无影响。
+    直接拿 datetime 相减会在"带时区的 aware datetime"上抛 TypeError，所以先归一到本地串。
+    """
+    if not rows:
+        return None
+    moment = cache.parse_ts_text(cache.ts_text(rows[-1][0]))
+    if moment is None:
+        return None
+    return (datetime.now() - moment).total_seconds()
+
+
 @app.route("/api/health")
 def api_health() -> tuple[Response, int] | Response:
-    """接口2：健康检查，确认 Web 与 TDengine 是否都通。"""
+    """接口2：健康检查 —— 判据是**数据新鲜度**，不是"库连得上"。
+
+    ★ 为什么原来的判据不够（这次修的就是它）：
+      原实现只探"能不能连上库并查到最近 1 分钟的行"，且 `rows_last_1min == 0` 也返回 200。
+      于是下面这些故障**全部**表现为 200 + 容器 healthy + 无告警：
+        网关 MQTT 断 / 网关只写本地缓存补不出去 / 订阅端连着但不入库 /
+        设备刷新线程死 / tag 拼错导致查询恒 0 行（静默全绿）。
+      现在两条判据任一不满足即 503，并在 `reason` 里给出原因：
+        ① `rows_last_1min == 0`          → reason=no_rows_last_1min
+        ② 最近一条样本距今 > 阈值         → reason=stale_data（阈值 = POLL_INTERVAL × 因子，默认 15 s）
+      查库失败仍是 503（reason=td_unreachable）。
+
+    ★ 字段兼容：`td` / `rows_last_1min` 语义未变（分别是"库探针"与"最近 1 分钟条数"）；
+      `ok` 的语义**升级为"真健康"**，与 HTTP 状态严格一致（200 ⇔ ok=true），
+      并新增同义字段 `healthy`、`reason`、`data_age_seconds`、`stale_after_seconds`。
+      需要"库是否连得上"这个子判据的调用方读 `td` 字段。
+      （仓库内唯一的读者是 start.ps1：它只匹配 `"ok": false` 打一条提示，不会因为多一个
+        原因而失效；scripts/measure_nginx_redis.py 只量接口耗时，不解析字段。）
+    """
+    threshold = HEALTH_STALE_AFTER_SECONDS
     try:
         rows = query_recent(1)
     except TdQueryError as exc:
         body, _ = safe_error(exc, "GET /api/health")
-        return jsonify({"ok": False, "td": "down", **body}), 503
-    return jsonify({"ok": True, "td": "up", "rows_last_1min": len(rows)})
+        return jsonify({
+            "ok": False, "healthy": False, "td": "down", "rows_last_1min": 0,
+            "reason": "td_unreachable", "data_age_seconds": None,
+            "stale_after_seconds": threshold, **body,
+        }), 503
+
+    age = latest_sample_age_seconds(rows)
+    payload: dict[str, Any] = {
+        "td": "up",
+        "rows_last_1min": len(rows),
+        "data_age_seconds": None if age is None else round(age, 3),
+        "stale_after_seconds": threshold,
+    }
+    if not rows:
+        reason = "no_rows_last_1min"
+    elif age is None:
+        reason = "unparsable_ts"
+    elif age > threshold:
+        reason = "stale_data"
+    else:
+        payload.update({"ok": True, "healthy": True, "reason": "fresh"})
+        return jsonify(payload)
+
+    payload.update({"ok": False, "healthy": False, "reason": reason})
+    LOGGER.warning(
+        "健康检查不通过：reason=%s rows_last_1min=%d data_age_seconds=%s 阈值=%ss",
+        reason, payload["rows_last_1min"], payload["data_age_seconds"], threshold,
+    )
+    return jsonify(payload), 503
 
 
 @app.route("/api/cache/stats")

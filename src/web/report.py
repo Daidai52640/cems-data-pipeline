@@ -251,10 +251,11 @@ def query_aggregate(
         就会命中第一台的条目（见 src/web/cache.py 模块头第 6 条）。
       - 进 SQL：`cems_data` 是多设备共用的超级表（TAG = plant/device），**不过滤就会把
         两台设备的样本一起 AVG** —— 出的是"混合曲线"，比缓存串数据更隐蔽。
-      两个取值都从 `cache.DEVICE_SCOPE` 引用（唯一真源，避免"查询按 A 设备、键按 B 设备"）。
+      两个取值都从 `cache.device_tag_parts()` 引用（唯一真源，且带 tag 白名单校验：
+      非法 `TD_PLANT`/`TD_DEVICE` 在导入期就拒绝启动，见 src/common/sql_safety.py）。
     """
     avg_columns = ", ".join(f"AVG({column})" for column in COLUMNS)
-    plant, device = cache.DEVICE_SCOPE_PARTS
+    plant, device = cache.device_tag_parts()
     sql = (
         f"SELECT _wstart, {avg_columns}, COUNT(*) FROM {TD_DB}.{TD_STABLE} "
         f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts < '{end.strftime(TS_FORMAT)}' "
@@ -541,10 +542,10 @@ def query_raw(start: datetime, end: datetime, limit: int) -> list[tuple[Any, ...
     缓存它等于把当前数据冻住。这里直接调 `_execute`，连读缓存都不做。
 
     ★ **按 plant/device tag 过滤**：超级表是多设备共用的，不过滤会把两台设备的原始点
-    混成一条曲线（与 `query_aggregate` 同一理由）。取值同源于 `cache.DEVICE_SCOPE_PARTS`。
+    混成一条曲线（与 `query_aggregate` 同一理由）。取值同源于 `cache.device_tag_parts()`。
     """
     columns = ", ".join(("ts", *COLUMNS))
-    plant, device = cache.DEVICE_SCOPE_PARTS
+    plant, device = cache.device_tag_parts()
     sql = (
         f"SELECT {columns} FROM {TD_DB}.{TD_STABLE} "
         f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts <= '{end.strftime(TS_FORMAT)}' "
