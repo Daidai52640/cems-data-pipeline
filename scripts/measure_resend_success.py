@@ -9,7 +9,7 @@
 #    ✅ 脚本用 try/finally 保证：无论中途报错，最后一定把 emqx 起回来并等服务 healthy。
 # 2) 数据的唯一来源是**只读**：
 #    - 演练前先记库内基线（SELECT MAX(ts)）
-#    - 静置结束时把 data/cache.jsonl 与 .sending 快照到 docs/evidence/drill/ 作证据
+#    - 静置结束时把 data/cache.jsonl 与在途文件（inflight-*.jsonl / 旧 .sending）快照到 docs/evidence/drill/ 作证据
 #    - 恢复后等网关把队列排空（轮询文件大小归零），再查库对账
 #    脚本本身不写库、不改网关代码、不动缓存文件内容。
 # 3) 前置条件：六服务在跑；docker CLI 可用；宿主机能读项目 data/ 目录。
@@ -103,11 +103,29 @@ def fetch_ts_between(start: float, end: float) -> set[int]:
     return {int(parse_iso_utc(row[0])) for row in rows}
 
 
+def in_flight_files() -> list[Path]:
+    """在读途文件清单：旧版固定名 `.sending` + 新版在途段 `inflight-*.jsonl`。
+
+    ⚠️ 网关的补传接管已改为**唯一段名**（`inflight-<seq>.jsonl`，永不覆盖，
+    见 ADR-0007 / 提交 14b648f）。本脚本原先只读 `.sending`，
+    改造后**段文件里的数据不会被统计到** —— 那会让"该补条数/剩余条数"偏小、
+    对账恒等式失真。这里把两者都纳入，口径才与网关实际行为一致。
+
+    排序：残留段按 seq 升序在前、`cache.jsonl` 在后（发送顺序）。
+    """
+    files: list[Path] = []
+    if DATA_DIR.is_dir():
+        files.extend(sorted(DATA_DIR.glob("inflight-*.jsonl")))
+    if SENDING_FILE.exists():
+        files.append(SENDING_FILE)
+    if CACHE_FILE.exists():
+        files.append(CACHE_FILE)
+    return files
+
+
 def read_cache_lines() -> list[str]:
     lines: list[str] = []
-    for path in (SENDING_FILE, CACHE_FILE):
-        if not path.exists():
-            continue
+    for path in in_flight_files():
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
@@ -118,7 +136,7 @@ def read_cache_lines() -> list[str]:
 
 def cache_bytes() -> int:
     total = 0
-    for path in (CACHE_FILE, SENDING_FILE):
+    for path in in_flight_files():
         try:
             total += path.stat().st_size
         except OSError:
