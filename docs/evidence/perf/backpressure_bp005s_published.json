@@ -1,0 +1,12 @@
+{
+  "topics": [
+    "cems/loadtest/gw/device4/data"
+  ],
+  "seconds": 177.12,
+  "messages_received": 1904,
+  "distinct_ts": 105,
+  "duplicate_deliveries": 1799,
+  "first_ts": "2026-10-02 21:51:31",
+  "last_ts": "2026-10-02 21:53:15",
+  "sample_payload": "2026-10-02 21:51:31 Flow=34120.0 Dust=2.89 SO2=20.1 NOx=32.6 O2=6.5 Velocity=12.5 Temp=198.9 Humidity=46.8 Pressure=97.7 Flag=N"
+}
