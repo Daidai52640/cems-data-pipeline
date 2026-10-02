@@ -333,6 +333,9 @@ def index() -> Response:
         .replace("__REFRESH_MS__", str(REFRESH_SECONDS * 1000))
         .replace("__REFRESH_SEC__", str(REFRESH_SECONDS))
         .replace("__POINTS_JSON__", POINT_VIEWS_JSON)
+            # ⚠️ 测点数从契约现算，不写死：标题曾长期写着"8 测点"而契约早已是 9
+            #    （改契约时没人会记得改标题 —— 让它跟着 points.py 走就不会再错）
+            .replace("__POINT_COUNT__", str(len(POINTS)))
     )
     return Response(html, mimetype="text/html")
 
@@ -395,7 +398,10 @@ def api_report_custom() -> tuple[Response, int] | Response:
 @app.route("/report")
 def report_page() -> Response:
     """报表页面：4 类时间维度聚合，折线图 + 数据表格。"""
-    return Response(REPORT_PAGE.replace("__POINTS_JSON__", POINT_VIEWS_JSON), mimetype="text/html")
+    return Response(REPORT_PAGE.replace("__POINTS_JSON__", POINT_VIEWS_JSON)
+            # ⚠️ 测点数从契约现算，不写死：标题曾长期写着"8 测点"而契约早已是 9
+            #    （改契约时没人会记得改标题 —— 让它跟着 points.py 走就不会再错）
+            .replace("__POINT_COUNT__", str(len(POINTS))), mimetype="text/html")
 
 
 @app.route("/api/curve")
@@ -494,7 +500,7 @@ HTML_PAGE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-  <h1>CEMS 烟气在线监测 · 曲线（8 测点）</h1>
+  <h1>CEMS 烟气在线监测 · 曲线（__POINT_COUNT__ 测点）</h1>
   <div style="font-size:13px;margin-bottom:10px;">
     <a href="/report" style="color:#38bdf8;text-decoration:none;">报表 →</a>
   </div>
