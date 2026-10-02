@@ -448,12 +448,18 @@ def _finish_resend(remaining: list[str], confirmed: int) -> None:
 
 
 def has_backlog() -> bool:
-    """缓存里是否还有待补传的数据（空文件和残留的空 .sending 都不算）。"""
+    """缓存里是否还有待补传的数据（空文件和残留的空段都不算）。
+
+    ⚠️ 必须把**在途段**（`inflight-<seq>.jsonl`）也算进来，否则会出现"数据滞留但永不补传"：
+    硬杀发生在取批过程中时，leftover 只落在段文件里；此时 `cache.jsonl` 可能为空，
+    若这里只看 `cache.jsonl`/旧 `.sending`，重启后就不会触发补传，**残留段永久滞留 = 真丢数据**。
+    修复前 `.sending` 是固定名，这个检查顺带覆盖了它；改成唯一段名后必须显式覆盖。
+    """
     try:
-        return (
-            (CACHE_FILE.exists() and CACHE_FILE.stat().st_size > 0)
-            or (SENDING_FILE.exists() and SENDING_FILE.stat().st_size > 0)
-        )
+        if CACHE_FILE.exists() and CACHE_FILE.stat().st_size > 0:
+            return True
+        # 旧版固定名 + 新版在途段；`_collect_leftover_segments` 已按"文件非空"过滤
+        return bool(_collect_leftover_segments())
     except OSError as exc:
         LOGGER.error("[缓存] 检查积压失败: %s", exc)
         return False

@@ -464,6 +464,34 @@ def case_p5_writeback_failure(sandbox: Sandbox, mode: str, checks: Checks) -> No
     )
 
 
+# ==================== P8：滞留段必须仍被判定为"有积压" ====================
+#
+# ⚠️ 为什么单列一条：改成唯一段名（inflight-<seq>.jsonl）之后，
+# 出现了一个新的滞留路径 —— 硬杀发生在取批过程中时，leftover 只落在段文件里，
+# 此时 cache.jsonl 可能为空。若 has_backlog() 只看 cache.jsonl/旧 .sending，
+# 重启后就不会触发补传，**残留段永久滞留 = 真丢数据**。
+# 修复前 `.sending` 是固定名，那个检查顺带覆盖了它；改名后必须显式覆盖。
+
+
+def case_p8_stranded_segment_is_backlog(sandbox: Sandbox, mode: str, checks: Checks) -> None:
+    """只有"滞留段"有数据（cache.jsonl 为空）时，`has_backlog()` 仍须为真。"""
+    leftover, _current = load_corpus()
+    stranded = list(leftover)          # 用真实报文，不用自造串
+    _setup_leftover(sandbox, stranded)
+
+    cache_empty = (not _cache_file().exists()) or _cache_file().stat().st_size == 0
+    checks.check(cache_empty, "P8 前置：cache.jsonl 为空（模拟硬杀后只剩段文件）")
+
+    got = bool(gw.has_backlog())
+    checks.check(
+        got,
+        "P8 滞留段被 has_backlog() 认出来（否则重启后不补传 = 永久滞留）",
+    )
+    if not got:
+        checks.note("若这里 FAIL：说明改名后漏了「段文件也算积压」，滞留数据再也不会被补传")
+    checks.note(f"滞留段条数 = {len(_in_flight_lines(sandbox))}；has_backlog() = {got}")
+
+
 # ==================== D1：已知窗口（不计门禁） ====================
 
 class _ProcessKilled(BaseException):
@@ -715,6 +743,7 @@ def run_sort_mode(sort_mode: str, checks: Checks) -> int:
 
     _run_case(sort_mode, checks, "P3", p3)
     _run_case(sort_mode, checks, "P5", lambda sandbox, ck: case_p5_writeback_failure(sandbox, sort_mode, ck))
+    _run_case(sort_mode, checks, "P8", lambda sandbox, ck: case_p8_stranded_segment_is_backlog(sandbox, sort_mode, ck))
     _run_case(sort_mode, checks, "D1", lambda sandbox, ck: case_d1_kill_window(sandbox, sort_mode, ck))
     return confirmed_holder[0] if confirmed_holder else -1
 
