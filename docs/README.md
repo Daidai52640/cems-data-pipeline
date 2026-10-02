@@ -53,6 +53,13 @@
 | scripts/northbound_demo.py | P5 演示：一份数据走**三个出口**、各自独立解读、27 项比对 |
 | scripts/verify_atomic_handover.py | 补传原子交接回归测试（P1~P8 + 负向对照） |
 
+### diagrams/ — 全链路图
+| 文件 | 内容 |
+|---|---|
+| cems-full-chain.html | ⭐ **全链路架构图（按代码结构）**：可交互、明暗主题、导出 PNG/SVG；16 组件 · 带源码证据行号 |
+| cems-full-chain.architecture.json | 图的源规格（改它再 rchify finalize 重新生成） |
+| legacy/ | 早期 dataflow 版（保留备查） |
+
 **P4/P5 的说明**：全部出口均**已通过独立验证**（本地回环 + 官方向量与开源实现对拍）。
 `MN`/`PW` 当前为占位值，**按目标平台下发的值填入配置即可对接**；P3（接进网关）方案已定、硬门禁与连接管理均已就绪，见 `RELEASE-v2.0.0-地基冻结.md`。
 
