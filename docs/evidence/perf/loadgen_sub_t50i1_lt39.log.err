@@ -1,0 +1,9 @@
+2026-10-02 14:44:18 [INFO] platform.subscriber_to_td: 本实例负责: 主题 cems/loadtest/device39/data → 子表 loadtest_lt39（plant=loadtest, device=lt39）
+2026-10-02 14:44:18 [INFO] platform.subscriber_to_td: TDengine 就绪: 库=cems, 超级表=cems_data
+2026-10-02 14:44:18 [INFO] platform.subscriber_to_td: 告警表就绪: cems_alarm_event / cems_hourly_verdict / cems_alarm_push
+2026-10-02 14:44:18 [WARNING] platform.subscriber_to_td: ALARM_ENABLE=0：本次不判超标（只入库、只算折算值）
+2026-10-02 14:44:18 [INFO] platform.subscriber_to_td: 等待 MQTT 数据...（Ctrl+C 停止）
+2026-10-02 14:44:18 [INFO] platform.subscriber_to_td: MQTT 已连接: 127.0.0.1:1883（会话恢复=False）
+2026-10-02 14:44:18 [INFO] platform.subscriber_to_td: 已订阅主题: cems/loadtest/device39/data (QoS=1)
+2026-10-02 14:44:24 [INFO] platform.subscriber_to_td: 折算值抽样（第 1 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 21:44:24 O2=5.4000 -> dust=3.7500 so2=20.2885 nox=39.7115
+2026-10-02 14:44:43 [INFO] platform.subscriber_to_td: 折算值抽样（第 20 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 21:44:43 O2=5.4000 -> dust=3.8462 so2=20.4808 nox=40.0000
