@@ -1,8 +1,11 @@
-2026-10-02 14:42:37 [INFO] platform.subscriber_to_td: 本实例负责: 主题 cems/loadtest/device17/data → 子表 loadtest_lt17（plant=loadtest, device=lt17）
-2026-10-02 14:42:37 [INFO] platform.subscriber_to_td: TDengine 就绪: 库=cems, 超级表=cems_data
-2026-10-02 14:42:37 [INFO] platform.subscriber_to_td: 告警表就绪: cems_alarm_event / cems_hourly_verdict / cems_alarm_push
-2026-10-02 14:42:37 [WARNING] platform.subscriber_to_td: ALARM_ENABLE=0：本次不判超标（只入库、只算折算值）
-2026-10-02 14:42:37 [INFO] platform.subscriber_to_td: 等待 MQTT 数据...（Ctrl+C 停止）
-2026-10-02 14:42:37 [INFO] platform.subscriber_to_td: MQTT 已连接: 127.0.0.1:1883（会话恢复=False）
-2026-10-02 14:42:37 [INFO] platform.subscriber_to_td: 已订阅主题: cems/loadtest/device17/data (QoS=1)
-2026-10-02 14:42:43 [INFO] platform.subscriber_to_td: 折算值抽样（第 1 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 21:42:42 O2=3.3000 -> dust=2.2034 so2=14.0678 nox=21.1017
+2026-10-02 15:21:51 [INFO] platform.subscriber_to_td: 本实例负责: 主题 cems/loadtest/device17/data → 子表 loadtest_lt17（plant=loadtest, device=lt17）
+2026-10-02 15:21:51 [INFO] platform.subscriber_to_td: TDengine 就绪: 库=cems, 超级表=cems_data
+2026-10-02 15:21:51 [INFO] platform.subscriber_to_td: 告警表就绪: cems_alarm_event / cems_hourly_verdict / cems_alarm_push
+2026-10-02 15:21:52 [WARNING] platform.subscriber_to_td: ALARM_ENABLE=0：本次不判超标（只入库、只算折算值）
+2026-10-02 15:21:52 [INFO] platform.subscriber_to_td: 等待 MQTT 数据...（Ctrl+C 停止）
+2026-10-02 15:21:52 [INFO] platform.subscriber_to_td: MQTT 已连接: 127.0.0.1:1883（会话恢复=True）
+2026-10-02 15:21:52 [INFO] platform.subscriber_to_td: 已订阅主题: cems/loadtest/device17/data (QoS=1)
+2026-10-02 15:21:52 [INFO] platform.subscriber_to_td: 折算值抽样（第 1 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:18:30 O2=3.1000 -> dust=2.1788 so2=14.2458 nox=21.3687
+2026-10-02 15:21:53 [INFO] platform.subscriber_to_td: 折算值抽样（第 20 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:18:49 O2=3.0000 -> dust=2.2500 so2=14.1667 nox=21.3333
+2026-10-02 15:21:53 [INFO] platform.subscriber_to_td: 折算值抽样（第 40 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:16:23 O2=3.2000 -> dust=2.1910 so2=13.7360 nox=20.6461
+2026-10-02 15:21:53 [INFO] platform.subscriber_to_td: 折算值抽样（第 60 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 21:44:43 O2=3.3000 -> dust=2.2034 so2=13.9831 nox=21.0169
