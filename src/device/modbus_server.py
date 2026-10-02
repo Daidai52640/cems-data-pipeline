@@ -204,14 +204,28 @@ def build_server_context(
 ) -> ModbusServerContext:
     """按从站号列表建服务端上下文。
 
-    - 单从站 ⇒ `single=True`：pymodbus 会把唯一的数据块放到内部地址 0 上、
-      忽略请求里的 unit id（**与改造前的调用完全一致**，单设备行为不变）
-    - 多从站 ⇒ `single=False` + `{unit_id: context}`：按请求的 unit id 分派
-      （pymodbus 3.8.6 的 requesthandler 用 `context[dev_id]` 取对应数据块）
+    ⚠️ **一律 `single=False` + `{unit_id: context}`（2026-10-03 修）**：
+    原先单从站走 `single=True`，而 pymodbus 在 `single=True` 下会把**任何**请求的
+    unit id 改写成内部地址 0 —— 于是"请求一个不存在的从站"会**成功返回**这份唯一的数据块，
+    **既不报错也不是异常码**。实测（pymodbus 3.6.9，临时服务端只建从站 1）：
+
+        read unit=1 → OK   data
+        read unit=2 → OK   data   ← 从站 2 不存在，却拿到从站 1 的数据
+        read unit=3 → OK   data
+
+    这正是"只开了 `--profile plant2`、忘开 `SLAVE_IDS=1,2`"那个静默错的机制：
+    plant2 网关（`MODBUS_UNIT=2`）日志照写"Modbus 已连接: 从站2"，而它读到的
+    **是 device1 的数据** → 两台曲线逐值相等、容器全 healthy、一条报错都没有。
+
+    改成 `single=False` 后，`ModbusServerContext.__getitem__` 走原生分支
+    （`if slave in self._slaves ... else raise NoSuchSlaveException`），
+    请求未登记的从站**会返回 Modbus 异常响应** → 网关 `response.isError()` 为真、
+    读不到数据 → **马上暴露成立刻可见的故障**，而不是悄悄给别的设备的数据。
+
+    寄存器访问路径不变：刷新循环用的是 `context[slave_id]`（显式 unit id），
+    单从站时 `slaves={1: ctx}`，取 `context[1]` 与原先取同一份数据块。
     """
     slaves = {slave_id: build_slave_context() for slave_id in slave_ids}
-    if len(slaves) == 1:
-        return ModbusServerContext(slaves=slaves[slave_ids[0]], single=True)
     return ModbusServerContext(slaves=slaves, single=False)
 
 
@@ -274,8 +288,8 @@ def main() -> None:
         "Modbus 仿真设备启动: %s:%d 从站=%s（%s）",
         SERVER_HOST, SERVER_PORT,
         ",".join(str(slave_id) for slave_id in SLAVE_IDS),
-        "单从站 single=True，与单设备形态一致" if len(SLAVE_IDS) == 1
-        else "多从站 single=False，按 unit id 分派",
+        "按 unit id 严格分派：请求未登记的从站会收到异常响应，"
+        "不会拿到本从站的数据（见 build_server_context 的说明）",
     )
     # 多设备可区分性的证据就在这几行：每台的种子/相位不同 ⇒ 曲线不同
     for slave_id, simulator in simulators.items():

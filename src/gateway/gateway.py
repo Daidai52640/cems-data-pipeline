@@ -194,6 +194,47 @@ def connect_modbus() -> Optional[ModbusTcpClient]:
     return None
 
 
+def verify_unit_readable(client: ModbusTcpClient) -> bool:
+    """启动期预检：本实例配置的从站**真的能被读到**吗？读不到就拒绝启动。
+
+    ★ 为什么需要这道预检（2026-10-03 加）：
+      设备层是"一个 TCP 服务端、多个从站"（`SLAVE_IDS=1,2`），而每个网关实例按
+      `MODBUS_UNIT` 各读一个从站。**两个开关是分开的**：`SLAVE_IDS` 在使用方 `.env`，
+      `--profile plant2` 在命令行。只开后者时，设备层只建了从站 1，而 plant2 网关
+      去读从站 2 —— 此时**一条数据也读不到**（修复前更糟：会静默拿到从站 1 的数据，
+      于是两台曲线逐值相等、容器全 healthy、无任何报错）。
+
+      "连得上 TCP" ≠ "读得到本从站的数据"：`client.connect()` 只证明端口通。
+      所以这里必须**真读一次寄存器**，把"配置错"变成**启动即失败**（容器红），
+      而不是"容器健康但永远不出数、只能去日志里挖"。
+
+    返回 True 表示预检通过；False 表示本从站读不到（调用方据此拒绝启动）。
+    """
+    reason = ""
+    try:
+        response = _read_holding_registers(client, REG_BASE, REG_COUNT)
+        if response is None or response.isError():
+            reason = f"无响应/返回异常码（{response}）"
+    except Exception as exc:                       # noqa: BLE001 —— 预检要兜住一切读失败
+        # 实测（pymodbus 3.6.9）：读未登记的从站会在这里以 "Unable to decode request"
+        # 之类的解码异常冒出来（服务端对未登记从站不作答），所以两个分支必须给同一套提示
+        reason = f"读取抛异常（{type(exc).__name__}: {exc}）"
+
+    if reason:
+        LOGGER.critical(
+            "启动预检失败: 读 Modbus 从站%d %s。"
+            "⚠️ 最可能的原因：本实例的 MODBUS_UNIT=%d 不在设备层的 SLAVE_IDS 里 —— "
+            "设备层只对**已登记**的从站提供数据。多设备是**两个开关**："
+            "① 使用方 .env 里 SLAVE_IDS 要包含 %d（如 SLAVE_IDS=1,2）并重建 device 容器；"
+            "② 起第二套实例要带 --profile plant2。只开②不开①就会命中这条。"
+            "（本实例拒绝启动，而不是空跑或拿别的从站的数据。设备层是 %s:%d）",
+            MODBUS_UNIT, reason, MODBUS_UNIT, MODBUS_UNIT, MODBUS_HOST, MODBUS_PORT,
+        )
+        return False
+    LOGGER.info("启动预检通过: 从站%d 可读（%d 个寄存器）", MODBUS_UNIT, REG_COUNT)
+    return True
+
+
 # ==================== 4. 断网续传（★ 核心逻辑，勿改动） ====================
 
 def _read_lines(path: Path) -> list[str]:
@@ -653,6 +694,14 @@ def main() -> None:
 
     # ---- 连 Modbus：连不上不退出进程，进主循环后持续重试 ----
     modbus_client = connect_modbus()
+
+    # ---- 启动预检：本实例的从站必须真的读得到，否则拒绝启动 ----
+    # ⚠️ 与"连不上设备"的处置**故意不同**：连不上（设备还没起）是暂时状态，值得重试；
+    #    而"连上了但读不到本从站"是**配置错**（MODBUS_UNIT 不在设备层 SLAVE_IDS 里），
+    #    重试一万次也不会好，只会让容器一直 healthy 却永远不出数（只能去日志里挖）。
+    if modbus_client is not None and not verify_unit_readable(modbus_client):
+        close_modbus(modbus_client)
+        raise SystemExit(1)
 
     count = 0
     try:
