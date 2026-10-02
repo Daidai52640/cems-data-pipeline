@@ -185,27 +185,33 @@ class DeviceCurve:
 
 def make_curves(count: int, seed: int, devices_per_channel: int = 1,
                 interval: float = 5.0) -> list[DeviceCurve]:
-    """造 count 台设备，每台一个派生种子（互不相同）。
+    """造 count 台设备，每台一个派生种子（互不相同）。ts_offset 一律为 0。
 
-    `ts_offset`（同秒错峰）的取值规则：
-      - 每通道 1 台（默认 k=N）→ 偏移恒为 0，报文时间戳就是本机秒级时间，**不做任何加工**
-      - 每通道 m>1 台 → 在通道内第 j (0-based) 台偏移 = **j 秒**（整数！），两两不同
-    ★ 必须是**整秒**：报文 ts 只有秒级精度，亚秒偏移取整后会塌回同一秒，
-      错峰就失效了（实测：0/0.33/0.67 三个偏移全部落在同一秒）。
-    ★ 必须"通道内唯一"：偏移按 `(device-1) % m` 取，所以只有**按模分通道**
-      （见 LoadGen.__init__ 的说明）时才能保证不重复。
-    ⚠️ 这是**为负载发生器内部构造**：接入层的子表主键是 (子表, ts)，同秒即覆盖，
-       共用一张子表的多台设备必须在秒上分开，否则"更坏"的观察会被静默掩盖。
-       代价是报文 ts 可能比真实墙钟超前 < m 秒 —— 只影响用它当起点的推算，
-       **本脚本的延迟全部以宿主机时钟为准**（见文件头 §4），不受该偏移影响。
+    ⚠️ 错峰偏移**不在这里算**：它必须是"在本通道内排第几台"，
+    而"谁和谁同通道"由 LoadGen 的按模分组决定 —— 在这里按全局下标取模会算错。
+    （实测踩过：4 台按 k=2 分组时，按全局下标算出的偏移让两个通道内部都出现重复秒。）
+    正确做法见 `build_channel_offsets()`。
     """
-    curves: list[DeviceCurve] = []
-    per_channel = max(1, devices_per_channel)
-    for index in range(1, count + 1):
-        within = (index - 1) % per_channel
-        offset = float(within) if per_channel > 1 else 0.0
-        curves.append(DeviceCurve(index=index, seed=seed + (index - 1) * 7919, ts_offset=offset))
-    return curves
+    return [
+        DeviceCurve(index=index, seed=seed + (index - 1) * 7919)
+        for index in range(1, count + 1)
+    ]
+
+
+def build_channel_offsets(devices: int, channels: int) -> tuple[dict[int, int], dict[int, list[int]]]:
+    """按模分组算出"每台在本通道内的序位"，返回 ({设备号: 偏移秒}, {通道号: [设备号…]})。
+
+    - 通道划分：`channel = (device-1) % k + 1`（按模，保证同通道内序位唯一）
+    - 偏移：通道内第 j 台（0-based）偏移 = j 秒；每通道只有 1 台时偏移恒为 0
+    """
+    groups: dict[int, list[int]] = {}
+    for index in range(1, devices + 1):
+        groups.setdefault((index - 1) % channels + 1, []).append(index)
+    offsets: dict[int, int] = {}
+    for members in groups.values():
+        for position, index in enumerate(members):
+            offsets[index] = position if len(members) > 1 else 0
+    return offsets, groups
 
 
 # ==================== 2. TDengine REST（只读查询 + 批量写库） ====================
@@ -359,10 +365,9 @@ class LoadGen:
         #   于是偏移 = (i-1)//k，**同一通道内两两不同、不同通道之间互不干扰**；
         #   而"连续分组"在第 6 台就会重复偏移（实测 10 台只留 40 行、丢 360 行）。
         self.channels = max(1, min(args.ingest_channels, args.devices))
-        self.channel_devices: dict[int, list[int]] = {}
-        for index in range(1, args.devices + 1):
-            channel = (index - 1) % self.channels + 1
-            self.channel_devices.setdefault(channel, []).append(index)
+        self.channel_offsets, self.channel_devices = build_channel_offsets(
+            args.devices, self.channels
+        )
         self.devices_per_channel = max(len(v) for v in self.channel_devices.values())
         # ⚠️ 每通道 m 台共用一张子表时，ts 只能在 m 个整秒上错开；若上报周期比 m 短，
         #    不同周期的 ts 必然相撞，而子表主键 (子表, ts) 会**静默覆盖** → 库里条数变少，
@@ -379,6 +384,8 @@ class LoadGen:
             )
         self.curves = make_curves(args.devices, args.seed,
                                   self.devices_per_channel, args.interval)
+        for curve in self.curves:
+            curve.ts_offset = float(self.channel_offsets[curve.index])
         self.topics = {
             curve.index: f"{args.topic_prefix}/device{curve.index}/data" for curve in self.curves
         }
@@ -555,13 +562,12 @@ class LoadGen:
         args = self.args
         interval = args.interval
         start, end = self.publish_window
-        burst = interval < 1.0
-        if burst:
-            # ★ interval < 1 s 必须改成"**整周期突发**"：报文 ts 只有秒级精度，
-            #   一个周期内发完 N 条（同一秒），每个周期换一个秒，
-            #   于是"每设备每周期恰好一条、ts 全局唯一"。
-            #   若沿用"每周期只发 1 条"，一周期要跨 N 秒，下一周期的 ts 会与上一周期重叠，
-            #   子表主键 (子表, ts) 直接把上一条覆盖掉（实测 106 条唯一 ts 只留 90 行）。
+        # ★ interval < 1 s：改成"**每秒发一台**"的轮询突发。
+        #   为什么不能"每秒把 N 台都发一遍"：报文 ts 只有秒级精度，接入层子表主键是
+        #   (子表, ts)，同一台在同一秒发两条就会被**静默覆盖**（实测 300 条只留 21 行）。
+        #   轮询突发让"每秒恰好一条、ts 全局唯一"，代价是每台的有效采样周期被拉长到 N 秒
+        #   （报告里必须写清这一点，否则吞吐数字会被误读）。
+        if interval < 1.0:
             cycle = 0
             while not self.stop_publisher.is_set():
                 cycle_start = start + cycle * interval
@@ -570,12 +576,11 @@ class LoadGen:
                 delay = cycle_start - time.monotonic()
                 if delay > 0:
                     time.sleep(delay)
-                # 突发周期：base 秒 = 窗口起点 + 周期序号（唯一），每台按 ts_offset 再错开
                 cycle_base = self.publish_base_epoch + int(round(cycle * interval))
-                for index in range(worker_index, len(self.curves), workers):
-                    if self.stop_publisher.is_set():
-                        break
-                    self._emit(publisher, self.curves[index], cycle_base, cycle)
+                # 归我发的设备：worker_index, +workers, ...；每轮只发 1 台，按轮次取
+                mine = list(range(worker_index, len(self.curves), workers))
+                curve = self.curves[mine[cycle % len(mine)]]
+                self._emit(publisher, curve, cycle_base, cycle)
                 cycle += 1
             return
 
@@ -915,6 +920,16 @@ def verify(args: argparse.Namespace, published: dict[str, set[str]]) -> dict[str
             "extra_examples": extra[:5],
             "duplicate_ts": len(dup),
         }
+    # ⚠️ `extra` 大不等于丢数，但它有一个**极易误读的成因**：上一次运行遗留在
+    #    EMQX 持久会话队列里的行，会在本次被投递进来。若本次发布集合里只有
+    #    一部分运行期内发出，就会同时出现 extra 很大、missing=0 的形态。
+    #    所以这里显式给出两侧时间窗，让读的人能自己判断 extra 是不是"别的运行留下的"。
+    published_min = min((ts for s in published.values() for ts in s), default="")
+    published_max = max((ts for s in published.values() for ts in s), default="")
+    report["window"] = {
+        "published_ts_min": published_min,
+        "published_ts_max": published_max,
+    }
     report["totals"] = {
         "published": sum(len(v) for v in published.values()),
         "in_db_rows": total_db,
@@ -922,6 +937,8 @@ def verify(args: argparse.Namespace, published: dict[str, set[str]]) -> dict[str
         "extra": total_extra,
         "duplicate_ts": total_dup,
         "loss_free": total_missing == 0,
+        "extra_note": "extra = 库内落在本次发布 ts 集合之外的行；常见成因是上一轮运行"
+                      "遗留在 EMQX 持久会话队列里的数据在本次被投递（用 client_id 区分运行可避免）",
     }
     return report
 
@@ -1084,8 +1101,10 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 def dry_run(args: argparse.Namespace) -> None:
     """打印前两台设备各一条报文，用于人工核对格式。"""
     channels = max(1, min(args.ingest_channels, args.devices))
-    per_channel = -(-args.devices // channels)
-    curves = make_curves(args.devices, args.seed, per_channel, args.interval)
+    offsets, _groups = build_channel_offsets(args.devices, channels)
+    curves = make_curves(args.devices, args.seed)
+    for curve in curves:
+        curve.ts_offset = float(offsets[curve.index])
     now = datetime.now(tz=LOCAL_TZ)
     for curve in curves:
         payload, ts = curve.payload_at(now)
