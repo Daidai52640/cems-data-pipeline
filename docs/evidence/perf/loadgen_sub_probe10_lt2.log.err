@@ -1,0 +1,13 @@
+2026-10-02 15:10:08 [INFO] platform.subscriber_to_td: 本实例负责: 主题 cems/loadtest/device2/data → 子表 loadtest_lt2（plant=loadtest, device=lt2）
+2026-10-02 15:10:08 [INFO] platform.subscriber_to_td: TDengine 就绪: 库=cems, 超级表=cems_data
+2026-10-02 15:10:08 [INFO] platform.subscriber_to_td: 告警表就绪: cems_alarm_event / cems_hourly_verdict / cems_alarm_push
+2026-10-02 15:10:08 [WARNING] platform.subscriber_to_td: ALARM_ENABLE=0：本次不判超标（只入库、只算折算值）
+2026-10-02 15:10:08 [INFO] platform.subscriber_to_td: 等待 MQTT 数据...（Ctrl+C 停止）
+2026-10-02 15:10:08 [INFO] platform.subscriber_to_td: MQTT 已连接: 127.0.0.1:1883（会话恢复=False）
+2026-10-02 15:10:08 [INFO] platform.subscriber_to_td: 已订阅主题: cems/loadtest/device2/data (QoS=1)
+2026-10-02 15:10:13 [INFO] platform.subscriber_to_td: 折算值抽样（第 1 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:10:13 O2=4.5000 -> dust=2.6364 so2=13.7273 nox=16.5455
+2026-10-02 15:10:16 [INFO] platform.subscriber_to_td: 折算值抽样（第 20 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:10:17 O2=4.7000 -> dust=2.7607 so2=14.3558 nox=17.3926
+2026-10-02 15:10:20 [INFO] platform.subscriber_to_td: 折算值抽样（第 40 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:10:21 O2=4.7000 -> dust=2.7607 so2=14.6319 nox=17.7607
+2026-10-02 15:10:24 [INFO] platform.subscriber_to_td: 折算值抽样（第 60 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:10:25 O2=4.5000 -> dust=2.6364 so2=14.0909 nox=17.0000
+2026-10-02 15:10:28 [INFO] platform.subscriber_to_td: 折算值抽样（第 80 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:10:29 O2=4.6000 -> dust=2.6524 so2=13.8110 nox=16.6463
+2026-10-02 15:10:32 [INFO] platform.subscriber_to_td: 折算值抽样（第 100 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 22:10:33 O2=4.7000 -> dust=2.6687 so2=14.2638 nox=17.2086

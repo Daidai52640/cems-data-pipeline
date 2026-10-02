@@ -1,0 +1,199 @@
+{
+  "tag": "probe10",
+  "started_at": "2026-10-02 22:10:43",
+  "config": {
+    "devices": 3,
+    "interval_seconds": 0.2,
+    "duration_seconds": 20.0,
+    "qos": 1,
+    "topic_prefix": "cems/loadtest",
+    "topic_example": "cems/loadtest/device1/data",
+    "mqtt": "127.0.0.1:1883",
+    "publisher_client_id": "cems-loadgen-probe10-13840",
+    "probe_client_id": "cems-loadgen-probe-probe10-13840",
+    "td_db_stable": "cems.cems_data",
+    "td_plant": "loadtest",
+    "td_device_tag": "lt<i>（i=1..3）",
+    "ingest_channels": 3,
+    "channel_device_ranges": {
+      "lt1": "device 1-1（子表 loadtest_lt1）",
+      "lt2": "device 2-2（子表 loadtest_lt2）",
+      "lt3": "device 3-3（子表 loadtest_lt3）"
+    },
+    "settle_seconds": 6.0,
+    "poll_interval_seconds": 0.3,
+    "parallel_publishers": 3,
+    "seed": 20261002,
+    "probe_subscribed": true,
+    "probe_suback_rc": [
+      1,
+      1,
+      1
+    ],
+    "probe_messages_received": 300,
+    "probe_keys_seen": 63,
+    "probe_key_sample": [
+      "1@2026-10-02 22:10:13",
+      "1@2026-10-02 22:10:14",
+      "1@2026-10-02 22:10:15"
+    ],
+    "ledger_key_sample": [
+      "1@2026-10-02 22:10:13",
+      "2@2026-10-02 22:10:13",
+      "3@2026-10-02 22:10:13"
+    ],
+    "ts_offset_seconds": [
+      0.0
+    ],
+    "ts_offset_note": "同一子表内多台设备共用一张表时，为避免 (子表, ts) 同秒覆盖，第 j 台的报文 ts 加了 j 秒的整数偏移（亚秒偏移无效：ts 只有秒级）；延迟口径不受影响（全部用宿主机时钟）"
+  },
+  "counts": {
+    "published_enqueued": 300,
+    "published_ok": 300,
+    "enqueue_failures": 0,
+    "ack_failures": 0,
+    "arrived_at_broker": 300,
+    "visible_in_db": 63
+  },
+  "throughput": {
+    "publish_window_seconds": 19.797,
+    "published_per_second": 15.154,
+    "visible_in_db_per_second": 3.182,
+    "nominal_per_second": 15.0,
+    "drain_seconds": 30.219,
+    "drain_complete": false,
+    "e2e_rows_per_second": 2.085,
+    "per_second_buckets": {
+      "0": 15,
+      "1": 15,
+      "2": 15,
+      "3": 15,
+      "4": 15,
+      "5": 15,
+      "6": 15,
+      "7": 15,
+      "8": 15,
+      "9": 15,
+      "10": 15,
+      "11": 15,
+      "12": 15,
+      "13": 15,
+      "14": 15,
+      "15": 15,
+      "16": 15,
+      "17": 15,
+      "18": 15,
+      "19": 15
+    }
+  },
+  "latency_ms": {
+    "note": "全部由宿主机时钟相减（不含跨容器时钟漂移）；lat_gen = 计划发布 → 实际发布；lat_broker = 发布 → 旁听端收到；lat_store = 旁听端收到 → 库内首次可见（含 ≤poll_interval 的轮询量化）；lat_e2e = 发布 → 库内首次可见",
+    "samples_observed": 63,
+    "gen_to_publish": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0
+    },
+    "publish_to_broker": {
+      "p50": -390.0,
+      "p95": 0.0,
+      "p99": 16.0,
+      "min": -813.0,
+      "max": 16.0,
+      "mean": -386.1
+    },
+    "broker_to_db_visible": {
+      "p50": 140.0,
+      "p95": 281.0,
+      "p99": 313.0,
+      "min": 31.0,
+      "max": 313.0,
+      "mean": 151.7
+    },
+    "e2e_publish_to_db_visible": {
+      "p50": 94.0,
+      "p95": 203.0,
+      "p99": 203.0,
+      "min": 31.0,
+      "max": 203.0,
+      "mean": 96.0
+    }
+  },
+  "per_device": {
+    "lt1": {
+      "publish_topic": "cems/loadtest/device1/data",
+      "ingest_table": "loadtest_lt1",
+      "ingest_channel": 1,
+      "published": 100,
+      "arrived_at_broker": 100,
+      "visible_in_db": 21,
+      "curve_digest": "083f48d58dc1",
+      "first_payload": "2026-10-02 22:10:13 Flow=18233.8 Dust=3.0 SO2=16.3 NOx=20.8 O2=4.6 Velocity=12.5 Temp=163.4 Humidity=20.8 Pressure=91.8 Flag=N"
+    },
+    "lt2": {
+      "publish_topic": "cems/loadtest/device2/data",
+      "ingest_table": "loadtest_lt2",
+      "ingest_channel": 2,
+      "published": 100,
+      "arrived_at_broker": 100,
+      "visible_in_db": 21,
+      "curve_digest": "8fec27d7c5bf",
+      "first_payload": "2026-10-02 22:10:13 Flow=19760.4 Dust=2.9 SO2=15.1 NOx=18.2 O2=4.5 Velocity=14.4 Temp=159.9 Humidity=44.6 Pressure=90.2 Flag=N"
+    },
+    "lt3": {
+      "publish_topic": "cems/loadtest/device3/data",
+      "ingest_table": "loadtest_lt3",
+      "ingest_channel": 3,
+      "published": 100,
+      "arrived_at_broker": 100,
+      "visible_in_db": 21,
+      "curve_digest": "37d981dfc010",
+      "first_payload": "2026-10-02 22:10:13 Flow=21519.5 Dust=2.7 SO2=16.3 NOx=35.4 O2=6.5 Velocity=15.7 Temp=125.4 Humidity=55.6 Pressure=91.8 Flag=N"
+    }
+  },
+  "reconciliation": {
+    "per_device": {
+      "lt1": {
+        "published": 21,
+        "in_db_rows": 21,
+        "in_db_distinct_ts": 21,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt2": {
+        "published": 21,
+        "in_db_rows": 21,
+        "in_db_distinct_ts": 21,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt3": {
+        "published": 21,
+        "in_db_rows": 21,
+        "in_db_distinct_ts": 21,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      }
+    },
+    "totals": {
+      "published": 63,
+      "in_db_rows": 63,
+      "missing": 0,
+      "extra": 0,
+      "duplicate_ts": 0,
+      "loss_free": true
+    }
+  }
+}
