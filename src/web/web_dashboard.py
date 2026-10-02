@@ -524,6 +524,35 @@ HTML_PAGE = """<!DOCTYPE html>
   // 单次请求超时：fetch 默认不会超时，请求卡住时 finally 不执行、轮询会悄悄停掉
   var FETCH_TIMEOUT_MS = 15000;
 
+  // ---- 折算值 / 超标判据（/api/data 与 /api/curve 都不含限值，按固定口径在前端现算）----
+  // 只对三个浓度测点折算，口径同 src/common/points.py（基准氧 6%，21−6=15）：
+  //   折算值 = 实测值 × 15 / (21 − O2)
+  // O2 > 19% 时分母过小、折算结果没意义 → 不折算（显示 “—”）；
+  // 其他测点（O2、湿度、流量、温度、压力、流速）不折算。
+  var ZS_MAP = { dust: true, so2: true, nox: true };
+  var ZS_LIMITS = { dust: 5, so2: 35, nox: 50 };   // mg/m3：颗粒物 / SO2 / NOx
+  var O2_FOR_ZS_MAX = 19;
+  var COLOR_OVER = '#f87171';
+
+  function isFiniteNum(v) {
+    return typeof v === 'number' && isFinite(v);
+  }
+
+  // 算折算值；不该折算 / 缺实测或缺 O2 / O2>19% / 分母≤0 时统一返回 null（界面显示 “—”）
+  function toConverted(key, measured, o2) {
+    if (!ZS_MAP[key] || !isFiniteNum(measured) || !isFiniteNum(o2)) { return null; }
+    if (o2 > O2_FOR_ZS_MAX) { return null; }
+    var denominator = 21 - o2;
+    if (denominator <= 0) { return null; }
+    return measured * 15 / denominator;
+  }
+
+  // 悬停里的数字统一保留最多 2 位小数；null / 非有限数显示 “—”
+  function fmtNum(v) {
+    if (!isFiniteNum(v)) { return '—'; }
+    return String(Math.round(v * 100) / 100);
+  }
+
   if (typeof echarts === 'undefined') {
     status.className = 'err';
     status.textContent = '图表库加载失败（网络问题），请检查网络后刷新';
@@ -592,6 +621,7 @@ HTML_PAGE = """<!DOCTYPE html>
     var xAxis = useTimeAxis
       ? { type: 'time', axisLabel: AXIS_STYLE }
       : { type: 'category', data: d.ts, axisLabel: AXIS_STYLE };
+    var o2Column = d.o2 || [];
     var series = POINTS.map(function(p) {
       var values = d[p.key] || [];
       var data = useTimeAxis
@@ -608,8 +638,68 @@ HTML_PAGE = """<!DOCTYPE html>
         itemStyle: { color: p.color }
       };
     });
+
+    // 超标点：折算值 > 限值（严格大于，**等于限值算达标**）才在曲线上标红；
+    // O2>19% 算不出折算值的点不判、不标。红点画在实测值位置（即曲线本身的那个点上）。
+    POINTS.forEach(function(p) {
+      if (!ZS_MAP[p.key]) { return; }
+      var values = d[p.key] || [];
+      var marks = [];
+      for (var i = 0; i < values.length; i++) {
+        var zs = toConverted(p.key, values[i], o2Column[i]);
+        if (zs !== null && zs > ZS_LIMITS[p.key]) {
+          var x = useTimeAxis ? d.ts[i].replace(' ', 'T') : d.ts[i];
+          marks.push([x, values[i]]);
+        }
+      }
+      series.push({
+        name: p.label + '·超标点',
+        type: 'scatter',
+        yAxisIndex: 0,
+        data: marks,
+        symbolSize: 9,
+        z: 10,
+        silent: true,
+        tooltip: { show: false },    // tooltip 统一走下面的三行格式，散点不单独占行
+        itemStyle: { color: COLOR_OVER, borderColor: '#fecaca', borderWidth: 1 }
+      });
+    });
+
     myChart.setOption({
-      tooltip: { trigger: 'axis' },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: '#1e293b',
+        borderColor: '#334155',
+        textStyle: { color: '#e2e8f0' },
+        // 三个浓度测点各显示 实测 / 折算 / 限值 三行；折算不可用（O2>19% 等）显示 “—”；
+        // 其余测点保持单行。折算值 > 限值时在折算行后用红字注 “（超标）”。
+        formatter: function(params) {
+          if (!params || !params.length) { return ''; }
+          var dataIndex = params[0].dataIndex;
+          var html = '<div style="font-weight:600;margin-bottom:4px;">' + d.ts[dataIndex] + '</div>';
+          POINTS.forEach(function(p) {
+            var dot = '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;'
+              + 'background:' + p.color + ';margin-right:6px;"></span>';
+            var indent = '<span style="display:inline-block;width:10px;margin-right:6px;"></span>';
+            var measured = (d[p.key] || [])[dataIndex];
+            if (ZS_MAP[p.key]) {
+              var zs = toConverted(p.key, measured, o2Column[dataIndex]);
+              var over = zs !== null && zs > ZS_LIMITS[p.key];
+              html += dot + p.label + '　实测：' + fmtNum(measured)
+                + (p.unit ? ' ' + p.unit : '') + '<br/>'
+                + indent + '折算：' + fmtNum(zs)
+                + (over ? '<span style="color:' + COLOR_OVER + ';font-weight:600;">（超标）</span>' : '')
+                + '<br/>'
+                + indent + '限值：' + ZS_LIMITS[p.key]
+                + (p.unit ? ' ' + p.unit : '') + '<br/>';
+            } else {
+              html += dot + p.label + '：' + fmtNum(measured)
+                + (p.unit ? ' ' + p.unit : '') + '<br/>';
+            }
+          });
+          return html;
+        }
+      },
       legend: {
         data: POINTS.map(function(p) { return p.label; }),
         textStyle: { color: '#cbd5e1' },
@@ -799,6 +889,21 @@ REPORT_PAGE = """<!DOCTYPE html>
   th, td { border-bottom:1px solid #1e293b; padding:4px 8px; text-align:right; white-space:nowrap; }
   th:first-child, td:first-child { text-align:left; position:sticky; left:0; background:#0f172a; }
   th { color:#94a3b8; font-weight:600; position:sticky; top:0; background:#0f172a; }
+  /* 覆盖率卡片 */
+  .cards { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 12px; }
+  .card { background:#1e293b; border:1px solid #334155; border-radius:8px;
+          padding:10px 16px; min-width:120px; }
+  .card-label { font-size:12px; color:#94a3b8; margin-bottom:4px; }
+  .card-value { font-size:20px; font-weight:600; color:#e2e8f0; }
+  .card-value.gray { color:#94a3b8; }
+  .card-value.red { color:#f87171; }
+  /* 窗口状态三态 + 进行中：达标绿 / 超标红 / 数据不足灰（缺数据绝不画成绿）/ 进行中描边 */
+  .badge { display:inline-block; padding:2px 10px; border-radius:999px;
+           font-size:12px; font-weight:600; white-space:nowrap; }
+  .badge-ok { background:rgba(34,197,94,.15); color:#22c55e; }
+  .badge-over { background:rgba(248,113,113,.15); color:#f87171; }
+  .badge-ins { background:rgba(148,163,184,.18); color:#94a3b8; }
+  .badge-pending { background:transparent; border:1px solid #475569; color:#94a3b8; }
 </style>
 </head>
 <body>
@@ -834,6 +939,16 @@ REPORT_PAGE = """<!DOCTYPE html>
   </div>
 
   <div id="status">选择时间范围后点「查询」</div>
+  <div class="cards" id="coverage" hidden>
+    <div class="card"><div class="card-label">整体覆盖率</div>
+      <div class="card-value" id="cov-overall">—</div></div>
+    <div class="card"><div class="card-label">覆盖率门限</div>
+      <div class="card-value" id="cov-threshold">—</div></div>
+    <div class="card"><div class="card-label">数据不足窗口数</div>
+      <div class="card-value gray" id="cov-insufficient">—</div></div>
+    <div class="card"><div class="card-label">断档数</div>
+      <div class="card-value red" id="cov-gap">—</div></div>
+  </div>
   <div class="scroll">
     <table id="table"><thead></thead><tbody></tbody></table>
   </div>
@@ -848,6 +963,60 @@ REPORT_PAGE = """<!DOCTYPE html>
   var exportBtn = document.getElementById('export');
   var activeTab = 'minute';
   var busy = false;
+
+  // ---- 折算值 / 超标判据（口径与实时大屏一致：折算 = 实测 × 15 / (21 − O2)，基准氧 6%）----
+  var ZS_KEYS = ['dust', 'so2', 'nox'];
+  var ZS_LABELS = { dust: '颗粒物', so2: 'SO2', nox: 'NOx' };
+  var ZS_LIMITS = { dust: 5, so2: 35, nox: 50 };   // mg/m3
+  var O2_FOR_ZS_MAX = 19;                          // O2 > 19% 不折算
+
+  function isFiniteNum(v) {
+    return typeof v === 'number' && isFinite(v);
+  }
+
+  function toConverted(key, measured, o2) {
+    if (!isFiniteNum(measured) || !isFiniteNum(o2)) { return null; }
+    if (o2 > O2_FOR_ZS_MAX) { return null; }
+    var denominator = 21 - o2;
+    if (denominator <= 0) { return null; }
+    return measured * 15 / denominator;
+  }
+
+  function fmtNum(v) {
+    if (!isFiniteNum(v)) { return '—'; }
+    return String(Math.round(v * 100) / 100);
+  }
+
+  // 窗口状态（三态 + 进行中）。顺序不能乱：
+  //   pending（窗口未结束）→ 进行中；
+  //   insufficient（覆盖率 < 门限）→ 数据不足（灰），**既不判达标也不判超标**；
+  //   任一浓度折算值 > 限值（严格大于，等于算达标）→ 超标（红）；
+  //   浓度值全部算不出折算 → 同样按数据不足（灰），没有浓度依据不能给绿；
+  //   其余 → 达标（绿）。
+  function windowStatus(pt) {
+    if (pt.pending) { return { cls: 'badge-pending', text: '进行中' }; }
+    if (pt.insufficient) { return { cls: 'badge-ins', text: '数据不足' }; }
+    var over = false;
+    var judged = 0;
+    ZS_KEYS.forEach(function(k) {
+      var zs = toConverted(k, pt[k], pt.o2);
+      if (zs !== null) {
+        judged += 1;
+        if (zs > ZS_LIMITS[k]) { over = true; }
+      }
+    });
+    if (over) { return { cls: 'badge-over', text: '超标' }; }
+    if (judged === 0) { return { cls: 'badge-ins', text: '数据不足' }; }
+    return { cls: 'badge-ok', text: '达标' };
+  }
+
+  // 状态徽标悬停提示：逐污染物给出 折算 / 限值，方便核对
+  function statusTitle(pt) {
+    return ZS_KEYS.map(function(k) {
+      return ZS_LABELS[k] + ' 折算 ' + fmtNum(toConverted(k, pt[k], pt.o2))
+        + ' / 限值 ' + ZS_LIMITS[k];
+    }).join('\\n');
+  }
 
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function toLocalInput(d) {
@@ -921,7 +1090,7 @@ REPORT_PAGE = """<!DOCTYPE html>
     POINTS.forEach(function(p) {
       head += '<th>' + p.label + (p.unit ? ' (' + p.unit + ')' : '') + '</th>';
     });
-    head += '<th>采样条数</th></tr>';
+    head += '<th>采样条数</th><th>状态</th></tr>';
     document.querySelector('#table thead').innerHTML = head;
 
     var rows = '';
@@ -931,9 +1100,31 @@ REPORT_PAGE = """<!DOCTYPE html>
         var v = pt[p.key];
         rows += '<td>' + (v === null || v === undefined ? '—' : v) + '</td>';
       });
-      rows += '<td>' + (pt.n === null || pt.n === undefined ? '—' : pt.n) + '</td></tr>';
+      rows += '<td>' + (pt.n === null || pt.n === undefined ? '—' : pt.n) + '</td>';
+      var st = windowStatus(pt);
+      rows += '<td style="text-align:center;"><span class="badge ' + st.cls
+        + '" title="' + statusTitle(pt) + '">' + st.text + '</span></td></tr>';
     });
     document.querySelector('#table tbody').innerHTML = rows;
+  }
+
+  // 覆盖率卡片：overall/threshold 按百分比显示（overall 为 null 时显示 —），
+  // insufficient_windows / gap_count 直接显示接口给的计数，不重算。
+  function pctText(v) {
+    return isFiniteNum(v) ? (v * 100).toFixed(1) + '%' : '—';
+  }
+  function countText(v) {
+    return (v === null || v === undefined) ? '—' : String(v);
+  }
+  function renderCoverage(cov) {
+    var el = document.getElementById('coverage');
+    if (!cov) { el.hidden = true; return; }
+    el.hidden = false;
+    document.getElementById('cov-overall').textContent = pctText(cov.overall);
+    document.getElementById('cov-threshold').textContent = pctText(cov.threshold);
+    document.getElementById('cov-insufficient').textContent =
+      countText(cov.insufficient_windows);
+    document.getElementById('cov-gap').textContent = countText(cov.gap_count);
   }
 
   function query() {
@@ -952,6 +1143,7 @@ REPORT_PAGE = """<!DOCTYPE html>
         }
         var points = r.body.points || [];
         renderTable(points);
+        renderCoverage(r.body.coverage);
         if (points.length) {
           showStatus('共 ' + points.length + ' 个窗口（' + r.body.unit + '）　'
             + r.body.start + ' ~ ' + r.body.end, false);
