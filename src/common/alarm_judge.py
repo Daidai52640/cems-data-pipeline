@@ -857,7 +857,15 @@ class AlarmTables:
         )
 
     def restore_select_sql(self, limit: int = 400) -> str:
-        """启动恢复用的查询：按 ts 升序取最近 limit 条事件行（列序与 `AlarmJudge.restore` 一致）。
+        """启动恢复用的查询：按 ts 升序取**本设备**最近 limit 条事件行（列序与 `AlarmJudge.restore` 一致）。
+
+        ⚠️ **必须按 plant/device 过滤**（与 `hour_rows_sql` 同一理由）：
+        `cems_alarm_event` 是多设备共用的超级表（TAG = `(plant, device, point, judge_type)`），
+        而 `AlarmJudge.restore()` 是按 **point 名**（`dust`/`so2`/`nox`）折叠状态的 ——
+        它没有设备维度。不过滤的话，**另一台设备的事件会被折进本实例的判定状态**：
+        例如对方一条 `phase=start` 会让本设备某测点被误判为"仍 OPEN"，
+        于是**真正的越限不会补发 START**；对方一条 `phase=end` 又可能把本设备
+        正在累计的事件误标为已闭合。`_last_ts` 水位也会被对方的时间戳推高。
 
         ⚠️ 用子查询取"最近 N 条"再正序排：TDengine 的 ORDER BY ... DESC LIMIT 配
           子查询才拿得到最近的那一批（直接 ASC LIMIT 拿的是最早的一批）。
@@ -865,7 +873,9 @@ class AlarmTables:
         return (
             f"SELECT ts, event_id, phase, point, judge_type, over_samples, trigger_ts FROM ("
             f"SELECT ts, event_id, phase, point, judge_type, over_samples, trigger_ts "
-            f"FROM {self.db}.{self.event_stable} ORDER BY ts DESC LIMIT {int(limit)}"
+            f"FROM {self.db}.{self.event_stable} "
+            f"WHERE plant = {sql_text(self.plant)} AND device = {sql_text(self.device)} "
+            f"ORDER BY ts DESC LIMIT {int(limit)}"
             f") ORDER BY ts ASC"
         )
 
