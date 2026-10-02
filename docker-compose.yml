@@ -329,6 +329,13 @@ services:
       TD_PASS: ${TD_PASS:-taosdata}
       TD_DB: cems
       TD_STABLE: cems_data
+      # ---- 展示层设备维度（查询缓存键按设备隔离，见 src/web/cache.py 头部）----
+      # 与下方 subscriber 服务的 TD_PLANT/TD_DEVICE 保持同一组取值：缓存键哈希的就是这两个值，
+      # 取值不一致会让缓存命名空间与真实 tag 对不上。
+      # 单设备部署下就是 plant1/device1（代码里的默认值也一样），不改变现有行为；
+      # 多设备部署时每台设备起一个 web 实例，各自改成对应设备。
+      TD_PLANT: plant1
+      TD_DEVICE: device1
       WEB_HOST: 0.0.0.0
       WEB_PORT: "5000"
       QUERY_MINUTES: "10"
