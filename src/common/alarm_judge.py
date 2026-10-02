@@ -73,6 +73,10 @@ VERDICT_INVALID: Final[str] = "invalid"  # 保留值：当前判据不产出（�
 
 # ---- 推送记录（一期把"推送"落成可验证的动作）----
 PUSH_STATUS_RECORDED: Final[str] = "recorded"
+#: 推送记录状态：真正送达到外部通道（例如 Webhook 返回 2xx）
+PUSH_STATUS_SENT: Final[str] = "sent"
+#: 推送记录状态：尝试送外部通道但失败（**不影响事件落库**，只如实标记）
+PUSH_STATUS_FAILED: Final[str] = "failed"
 
 # ---- 时间戳格式（与接入层 parse_timestamp 同一口径）----
 TS_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
