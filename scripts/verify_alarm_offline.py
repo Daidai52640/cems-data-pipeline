@@ -507,22 +507,41 @@ def section_c_hourly() -> None:
         "C4 该小时**没有**任何 ok（样本不足绝不判达标）",
     )
 
-    # 真库满覆盖小时（对照）：2026-10-02 16:00 有 722 条
-    SUB.settle_hour(writer, TABLES, AlarmJudge(CONFIG), to_datetime("2026-10-02 16:00:00"))
-    _columns, rows = query(
-        f"SELECT point, n_total, n_valid, coverage, conv_mean, limit_value, verdict FROM "
-        f"{TD_DB}.{TABLES.verdict_stable} WHERE plant = 'verify' "
-        f"AND ts = '2026-10-02 16:00:00' ORDER BY point"
+    # 真库满覆盖小时（对照）：**动态挑一个数据真有的小时**
+    # ⚠️ 原先硬编码 "2026-10-02 16:00"（当时 722 条）。但那个小时现在 n_total=0
+    #    —— 库被清过/重建过（多设备迁移期间），于是这条判据变成"在不存在的时段上
+    #    求 ok/over"，必然误报 FAIL。**判据要跟着数据走，不能钉死某个历史时刻。**
+    _cols, picked = query(
+        f"SELECT _wstart, COUNT(*) FROM {TD_DB}.{TD_STABLE} "
+        f"WHERE plant = 'plant1' AND device = 'device1' AND ts >= '2026-10-02 20:00:00' "
+        f"AND ts < NOW INTERVAL(1h)"
     )
-    print("  小时结论表（真库满覆盖小时）:")
-    for row in rows:
-        print(f"    {row[0]:<5} n_total={row[1]} n_valid={row[2]} coverage={row[3]:.4f} "
-              f"conv_mean={row[4]:.3f} limit={row[5]:.1f} verdict={row[6]}")
-    check(
-        len(rows) == 3 and all(row[6] in ("ok", "over") for row in rows),
-        "C5 真库满覆盖小时 → verdict 落在 {ok, over}（覆盖率够就正常判）",
-        f"verdict={[row[6] for row in rows]}",
-    )
+    full_hours = [r for r in picked if int(r[1]) >= 600]
+    if not full_hours:
+        check(False, "C5 真库满覆盖小时 → verdict 落在 {ok, over}", "找不到满覆盖小时（n>=600）")
+    else:
+        hour_text = str(full_hours[-1][0])[:19].replace("T", " ")
+        print(f"  选取满覆盖小时（{full_hours[-1][1]} 条）: {hour_text}")
+        # ⚠️ settle_hour 的作用对象是 TABLES 的标签（verify/offline），它按
+        #    hour_rows_sql 回读的是 plant1/device1 的真实数据；这里只借它的计算路径。
+        SUB.settle_hour(writer, TABLES, AlarmJudge(CONFIG), to_datetime(hour_text))
+        _columns, rows = query(
+            f"SELECT point, n_total, n_valid, coverage, conv_mean, limit_value, verdict FROM "
+            f"{TD_DB}.{TABLES.verdict_stable} WHERE plant = 'verify' "
+            f"AND ts = '{hour_text}' ORDER BY point"
+        )
+        print("  小时结论表（真库满覆盖小时）:")
+        for row in rows:
+            conv = "NULL" if row[4] is None else f"{row[4]:.3f}"
+            limit = "NULL" if row[5] is None else f"{row[5]:.1f}"
+            cov = "NULL" if row[3] is None else f"{row[3]:.4f}"
+            print(f"    {row[0]:<5} n_total={row[1]} n_valid={row[2]} coverage={cov} "
+                  f"conv_mean={conv} limit={limit} verdict={row[6]}")
+        check(
+            len(rows) == 3 and all(row[6] in ("ok", "over") for row in rows),
+            "C5 真库满覆盖小时 → verdict 落在 {ok, over}（覆盖率够就正常判）",
+            f"verdict={[row[6] for row in rows]}",
+        )
     writer.close()
 
 
