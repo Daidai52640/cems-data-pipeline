@@ -12,7 +12,8 @@
   device1 单独 364 行 ⇒ 99.56%、device2 单独 365 行 ⇒ 99.84%）；
 - `measure_latency` 的 `ORDER BY ts DESC LIMIT n` 取回的是**所有设备混排**的最近 n 行，
   「库内可查」样本里混进别的设备（实测压测并发时 `LIMIT 600` 取回的 600 行里
-  device1 只占 195 行 = **32.5%**，另 195 行是 device2、210 行是压测标签）；- `measure_resend_success` 的对账分母（该补条数）与 `COUNT(*)` 分母都会把
+  device1 只占 195 行 = **32.5%**，另 195 行是 device2、210 行是压测标签）；
+- `measure_resend_success` 的对账分母（该补条数）与 `COUNT(*)` 分母都会把
   另一台设备的行算进来，补传成功率不再可分设备；
 - `analyze_gateway_resend_lag` 的「走补传路径占比」分母同样被放大
   （实测 2026-10-02 21:12:49~21:17:30：混读分母 114 行 ⇒ 占比 8.8%，

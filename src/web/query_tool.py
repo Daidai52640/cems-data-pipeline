@@ -3,12 +3,29 @@
 
 用途：不依赖 Web 大屏，直接从命令行确认「采集链路是否真的在入库」——
 入库总量长期不涨、最新明细停在同一时刻、或聚合窗口为空，都指向接入层/网关故障。
+
+★ 设备维度（多设备部署必读）
+-----------------------------------------------------------------------------
+`cems_data` 是多设备共用的超级表（TAG = `plant` / `device`），三条查询**默认全表读**：
+看得到"库里现在总共有什么"，这是排障时想要的（能一眼发现多出来一台设备的行）。
+但全表读**不能**用来回答"某台设备的采样正不正常"：实测同一分钟混读 24 行
+= `device1` 12 + `device2` 12，一台掉一半采样时混读仍然显示"正常"。
+所以：
+
+  - 不传 `--device`：结果里会显式提示"未按设备过滤，行数可能是多台之和"；
+  - 传 `--device device1`：三条查询都加 `AND device = 'device1'`，才是单设备口径。
+
+用法：
+    python src/web/query_tool.py                     # 全表（含提示）
+    python src/web/query_tool.py --device device2     # 只看 device2
 """
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Final, Optional
@@ -47,6 +64,39 @@ LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
 
 LOGGER: Final[logging.Logger] = logging.getLogger("web.query_tool")
+
+# ---- 设备维度（可选过滤）----
+# 设备名会被拼进 SQL，所以这里做一次白名单校验（规则与 scripts/_device_scope.py 一致：
+# 只允许字母/数字/下划线/中划线）。这条规则在 src/ 里就地实现，不从 scripts/ 引 —— 镜像只
+# 拷贝 src/（见 Dockerfile），src 依赖 scripts/ 在容器里会 ImportError。
+DEVICE_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]+$")
+
+#: 不传 `--device` 时的显式提示。多设备下它是**必须说出来**的一句话：
+#: 没有它，"最新 5 条 / 每窗口 24 行"会被读成"这台设备采样很密"。
+NO_DEVICE_NOTICE: Final[str] = (
+    "⚠️ 未按设备过滤（--device）：本次结果是全表口径，行数/条数可能是多台设备之和，"
+    "不能据此判断单台设备的采样是否正常"
+)
+
+
+def device_condition(device: str) -> str:
+    """把 `--device` 转成**裸条件** `device = 'device1'`；没传则返回空串（= 全表读）。
+
+    返回裸条件而不是完整 WHERE：三条查询的 WHERE 形态不同（有的没有、有的带时间范围），
+    带前导 `AND`/`WHERE` 会逼出 `WHERE 1 = 1 AND ...` 这种掩盖真实条件的写法。
+    """
+    scope = (device or "").strip()
+    if not scope:
+        return ""
+    if not DEVICE_NAME_RE.match(scope):
+        raise SystemExit(f"--device 取值非法（只允许字母/数字/下划线/中划线）: {scope!r}")
+    return f"device = '{scope}'"
+
+
+def scope_note(device: str) -> str:
+    """给每条输出的表头配一句口径说明：按设备过滤 vs 全表（多台之和）。"""
+    scope = (device or "").strip()
+    return f"设备={scope}" if scope else "全表口径：行数/条数可能是多台设备之和"
 
 
 # ==================== 2. 日志 ====================
@@ -90,23 +140,27 @@ def run_query(conn: Any, sql: str) -> Optional[list[tuple[Any, ...]]]:
         return None
 
 
-def show_total(conn: Any) -> None:
-    """打印入库总条数。"""
-    rows = run_query(conn, f"SELECT COUNT(*) FROM {TD_DB}.{TD_STABLE}")
+def show_total(conn: Any, device: str = "") -> None:
+    """打印入库总条数（给了设备就是该设备的条数，否则是全表条数）。"""
+    condition = device_condition(device)
+    where = f" WHERE {condition}" if condition else ""
+    rows = run_query(conn, f"SELECT COUNT(*) FROM {TD_DB}.{TD_STABLE}{where}")
     if rows:
-        LOGGER.info("入库总条数: %s", rows[0][0])
+        LOGGER.info("入库总条数（%s）: %s", scope_note(device), rows[0][0])
 
 
-def show_latest(conn: Any, limit: int = LATEST_LIMIT) -> None:
-    """打印最新 N 条原始数据。"""
+def show_latest(conn: Any, limit: int = LATEST_LIMIT, device: str = "") -> None:
+    """打印最新 N 条原始数据（全表口径下是各设备混排的最近 N 条）。"""
+    condition = device_condition(device)
+    where = f" WHERE {condition}" if condition else ""
     rows = run_query(
         conn,
-        f"SELECT ts, {', '.join(TD_COLUMNS)} FROM {TD_DB}.{TD_STABLE} "
+        f"SELECT ts, {', '.join(TD_COLUMNS)} FROM {TD_DB}.{TD_STABLE}{where} "
         f"ORDER BY ts DESC LIMIT {limit}",
     )
     if rows is None:      # 查询失败（错误已由 run_query 记录），不再误报成"无数据"
         return
-    LOGGER.info("最新 %d 条原始数据:", limit)
+    LOGGER.info("最新 %d 条原始数据（%s）:", limit, scope_note(device))
     for row in rows:
         LOGGER.info("  %s | %s", row[0], _format_values(row[1:]))
     if not rows:
@@ -117,17 +171,26 @@ def show_interval_avg(
     conn: Any,
     minutes: int = INTERVAL_MINUTES,
     window: str = INTERVAL_WINDOW,
+    device: str = "",
 ) -> None:
-    """打印 INTERVAL 时间聚合结果（环保平台"分钟均值"曲线的做法）。"""
+    """打印 INTERVAL 时间聚合结果（环保平台"分钟均值"曲线的做法）。
+
+    ⚠️ 多设备下不过滤时，同一个窗口会把两台设备的行一起聚合（每窗口条数 = 两台之和），
+    均值也是两台的混合 —— 只能当"全库有没有在写入"的证据，不能当单台设备的曲线。
+    """
+    condition = device_condition(device)
     averages = ", ".join(f"AVG({column}) AS avg_{column}" for column in TD_COLUMNS)
+    device_clause = f" AND {condition}" if condition else ""
     rows = run_query(
         conn,
         f"SELECT _wstart, {averages}, COUNT(*) AS n "
-        f"FROM {TD_DB}.{TD_STABLE} WHERE ts >= now - {minutes}m INTERVAL({window})",
+        f"FROM {TD_DB}.{TD_STABLE} WHERE ts >= now - {minutes}m{device_clause} "
+        f"INTERVAL({window})",
     )
     if rows is None:      # 查询失败，不再误报成"该时间段无数据"
         return
-    LOGGER.info("★ INTERVAL(%s) 各测点均值（最近 %d 分钟，每窗口一条）:", window, minutes)
+    LOGGER.info("★ INTERVAL(%s) 各测点均值（最近 %d 分钟，每窗口一条；%s）:",
+                window, minutes, scope_note(device))
     for row in rows:
         LOGGER.info("  窗口起点 %s | %s | 原始条数 %s", row[0], _format_values(row[1:-1]), row[-1])
     if not rows:
@@ -144,19 +207,40 @@ def _format_values(values: tuple[Any, ...]) -> str:
 
 # ==================== 4. 主流程 ====================
 
+def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+    """命令行参数：只有 `--device` 一个（默认空 = 保留排障用的全表读）。"""
+    parser = argparse.ArgumentParser(
+        description="TDengine 排障查询（总量 / 最新明细 / 窗口均值）",
+    )
+    parser.add_argument(
+        "--device",
+        default="",
+        help="可选：按设备 TAG 过滤（例如 device1）。不传 = 全表读，"
+        "输出里会显式提示'行数可能是多台设备之和'",
+    )
+    return parser.parse_args(argv)
+
+
 def main() -> None:
     """依次执行三类查询（总量 / 最新明细 / 窗口聚合），单项失败不影响其余查询。"""
     setup_logging()
+    args = parse_args()
+    device = (args.device or "").strip()
 
     conn = connect_td()
     if conn is None:
         LOGGER.error("TDengine 不可用，请确认容器已启动（docker start tdengine）后重试")
         return
 
+    # ★ 全表读（默认）必须显式提示口径：多设备下"每窗口 24 行 / 最新 5 条"很容易被
+    #   读成"单台设备采样正常"，而这正是本工具最容易误导人的地方。
+    if not device:
+        LOGGER.warning(NO_DEVICE_NOTICE)
+
     try:
-        show_total(conn)
-        show_latest(conn)
-        show_interval_avg(conn)
+        show_total(conn, device)
+        show_latest(conn, device=device)
+        show_interval_avg(conn, device=device)
     except Exception:
         LOGGER.exception("查询工具异常退出")
     finally:
