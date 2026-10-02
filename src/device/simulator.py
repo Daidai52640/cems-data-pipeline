@@ -352,9 +352,17 @@ def _local_seconds_of_day(moment: datetime) -> float:
 
     用本地时间而不是 UTC：厂区的白天就该是曲线的高位段
     （用 UTC 会让峰值整体偏 8 小时，报表上"中午最高"会变成"凌晨最高"）。
+
+    ⚠️ **必须先把 moment 转成容器本地时区**（2026-10-02 修）：
+    调用方 `sample_all()` 传进来的是 `datetime.now(timezone.utc)`（UTC-aware），
+    直接取 `.hour` 拿到的是 **UTC 小时** —— 实测容器 TZ=Asia/Shanghai 时
+    日周期峰值落在**当地 21 点**（设计应为 13~14 点），恰好就是上一段警告的这个偏差。
+    `astimezone()` 无参 = 转到系统本地时区；对 naive datetime 也安全
+    （naive 会被当作本地时间，结果不变）。
     """
+    local = moment.astimezone()
     return (
-        moment.hour * 3600.0 + moment.minute * 60.0 + moment.second + moment.microsecond / 1e6
+        local.hour * 3600.0 + local.minute * 60.0 + local.second + local.microsecond / 1e6
     )
 
 
