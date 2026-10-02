@@ -870,10 +870,20 @@ class AlarmTables:
         )
 
     def hour_rows_sql(self, hour_start: str, hour_end: str) -> str:
-        """取某小时的原始行（小时结算用；只取折算需要的列）。"""
+        """取某小时的原始行（小时结算用；只取折算需要的列）。
+
+        ⚠️ **必须按 plant/device 过滤**：`cems_data` 是多设备共用的超级表
+        （每台设备一条子表，TAG 为 `(plant, device)`）。不过滤的话，
+        第二台设备上线后**设备 1 的整点结算会把设备 2 的样本一起算进小时均值**，
+        小时结论（ok/over/insufficient）直接算错 —— 后果是**告警误报或漏报**。
+
+        plant/device 直接取自本对象的 TAG 字段，所以调用方（接入层 `settle_hour`）
+        不需要额外传参：它构造 `AlarmTables` 时已经带上了这台设备的身份。
+        """
         columns = ", ".join(("ts", "o2", *ZS_TARGETS))
         return (
             f"SELECT {columns} FROM {self.db}.{self.data_stable} "
             f"WHERE ts >= {sql_timestamp(hour_start)} AND ts < {sql_timestamp(hour_end)} "
+            f"AND plant = {sql_text(self.plant)} AND device = {sql_text(self.device)} "
             f"ORDER BY ts ASC"
         )
