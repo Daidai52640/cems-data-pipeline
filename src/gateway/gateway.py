@@ -54,7 +54,35 @@ MODBUS_RETRY_INTERVAL: Final[float] = float(os.getenv("MODBUS_RETRY_INTERVAL", "
 # 两个写者各写各的文件，靠"原子改名"交接，不存在整文件回写抹掉对方数据的情况。
 # 旧版在途文件叫 cache.jsonl.sending（固定名）；上一轮遗留的 .sending 仍会被读进来补发
 # （见 _read_segment_lines），保证版本升级不会把盘上已缓存的数据漏掉。
-DATA_DIR: Final[Path] = PROJECT_ROOT / "data"
+#
+# ★ 缓存目录必须**每实例一份**（多设备部署的关键约束）：
+#   网关上所有缓存/续传状态都落在 DATA_DIR 里的固定文件名上（cache.jsonl、
+#   inflight-<seq>.jsonl、.gateway_alive）。两个网关实例若共用同一个目录，
+#   后果不是"慢一点"，而是**两个实例互相把对方的数据发出去**：
+#     - 段号由目录内文件推导（_next_segment_path），A 实例会接着 B 实例的段号写；
+#     - 补传是"整目录接手"（_take_over_pending 扫 glob），A 会把 B 缓存的报文
+#       发到 A 自己的主题上 → 数据张冠李戴，且两边都以为发成功了；
+#     - `.gateway_alive` 心跳互相覆盖，healthcheck 判断的不再是本实例的采集循环。
+#   所以第二台设备必须给独立的 GATEWAY_DATA_DIR（compose 里挂在各自的卷上）。
+GATEWAY_DATA_DIR_ENV: Final[str] = os.getenv("GATEWAY_DATA_DIR", "").strip()
+
+
+def resolve_data_dir(raw: str) -> Path:
+    """把 GATEWAY_DATA_DIR 解析成绝对路径；空值回落历史默认值 PROJECT_ROOT/data。
+
+    - 未设置 → `PROJECT_ROOT/data`，与改造前**逐字节一致**（单设备现状不变）
+    - 绝对路径 → 原样使用（容器里的推荐写法，如 `/app/data-plant2`）
+    - 相对路径 → 相对**项目根**解析（不是 CWD）：容器里 PROJECT_ROOT 就是 /app，
+      所以 `data/plant2` 与 `/app/data/plant2` 指向同一处，本机运行与容器运行
+      不会因为启动目录不同而分叉。
+    """
+    if not raw:
+        return PROJECT_ROOT / "data"
+    candidate = Path(raw).expanduser()
+    return candidate if candidate.is_absolute() else (PROJECT_ROOT / candidate)
+
+
+DATA_DIR: Final[Path] = resolve_data_dir(GATEWAY_DATA_DIR_ENV)
 CACHE_FILE: Final[Path] = DATA_DIR / "cache.jsonl"
 SENDING_FILE: Final[Path] = DATA_DIR / "cache.jsonl.sending"   # 旧版固定名（只读兼容，不再写入）
 HEARTBEAT_FILE: Final[Path] = DATA_DIR / ".gateway_alive"   # 供容器 healthcheck 判断循环是否还在转
@@ -603,10 +631,15 @@ def main() -> None:
     setup_logging()
     check_data_dir_writable()     # 断网缓存目录不可写要立刻喊出来，别等丢数据才发现
     LOGGER.info(
-        "网关启动: 设备 %s:%d → MQTT %s:%d 主题 %s (QoS=%d)",
-        MODBUS_HOST, MODBUS_PORT, MQTT_HOST, MQTT_PORT, MQTT_TOPIC, MQTT_QOS,
+        "网关启动: 设备 %s:%d 从站%d → MQTT %s:%d 主题 %s (QoS=%d) client_id=%s",
+        MODBUS_HOST, MODBUS_PORT, MODBUS_UNIT, MQTT_HOST, MQTT_PORT, MQTT_TOPIC, MQTT_QOS,
+        MQTT_CLIENT_ID,
     )
-    LOGGER.info("断网续传已启用，缓存文件: %s", CACHE_FILE)
+    # 多实例部署时这一行是排查"缓存串味"的第一现场：它必须每实例一份、互不相同
+    LOGGER.info(
+        "断网续传已启用，缓存目录: %s（GATEWAY_DATA_DIR=%s）",
+        DATA_DIR, GATEWAY_DATA_DIR_ENV or "未设置，用默认 PROJECT_ROOT/data",
+    )
 
     # ---- 连 MQTT：connect_async + loop_start，broker 暂时不可用也会后台自动重连 ----
     mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=MQTT_CLIENT_ID)

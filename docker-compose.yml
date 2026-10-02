@@ -49,6 +49,107 @@ x-app: &app
     # 时区必须与 TDengine 容器一致，否则入库时间戳会整体偏移 8 小时
     TZ: Asia/Shanghai
 
+# =============================================================================
+# 多设备（多实例路线）：第一条（默认）与第二条（`--profile plant2`）共用下面这些锚点。
+#
+# 为什么是"两份 service 定义 + 锚点复用 + profiles"，而不是别的写法：
+#   - YAML 锚点只能把一份定义**合并进**某个服务，无法把一份定义展开成两个服务
+#     （服务名、container_name、从站号、主题、缓存目录都不同）→ 必须写两份定义。
+#   - 但"哪些键共用、哪些键每实例不同"必须一眼看得出来，所以共用部分抽成 x- 锚点
+#     （沿用项目既有的 x-app / *logging 风格），第二套只写差异键。
+#   - 用 profiles 而不是"默认把两套都起来"：默认启动面（8 个服务）是现状与验收基线；
+#     第二套属"能力已具备、按需开启"。若默认起来，两台设备的数据会同时进
+#     cems.cems_data，任何**不带设备过滤**的查询都会把两条曲线混在一起看
+#     （scripts/verify_pipeline_live.py 已按设备 TAG 过滤，可作为正例）。
+#   - 不用 `docker compose up --scale`：本链路的实例不是同构副本 ——
+#     从站号、主题、client_id、缓存目录各不相同，container_name / 端口也与 scale 冲突。
+#     要加第三台设备时，参照 gateway2 / subscriber2 复制一份即可；
+#     N≥3 或设备需要动态增减时再考虑"单实例订阅通配 + 从主题解析设备号"
+#     （取舍与边界见 docs/adr/0008-多设备多实例路线.md）。
+# =============================================================================
+
+# ---- 两个网关实例共用的环境（每实例只覆盖"这台设备是谁"那几个键）----
+x-gateway-env: &gateway-env
+  TZ: Asia/Shanghai
+  MQTT_HOST: emqx
+  MQTT_PORT: "1883"
+  MQTT_QOS: "1"
+  POLL_INTERVAL: "5.0"
+  PUBLISH_ACK_TIMEOUT: "5.0"      # 单条等 PUBACK 的秒数，超时就转本地缓存
+  RESEND_WINDOW: "100"             # 补传在途窗口条数
+  RESEND_RETRY_INTERVAL: "30.0"    # 补传部分失败后的重试间隔（秒）
+
+# ---- 网关健康检查的公共节奏（test 各实例不同：心跳文件在自己的缓存目录里）----
+x-gateway-healthcheck: &gateway-healthcheck
+  interval: 15s
+  timeout: 5s
+  retries: 3
+  start_period: 20s
+
+# ---- 两个网关实例共用的启动依赖 ----
+x-gateway-depends: &gateway-depends
+  emqx:
+    condition: service_healthy
+  device:
+    condition: service_started
+
+# ---- 两个接入实例共用的环境（每实例只覆盖 主题 / TD_PLANT / TD_DEVICE）----
+x-subscriber-env: &subscriber-env
+  TZ: Asia/Shanghai
+  MQTT_HOST: emqx
+  MQTT_PORT: "1883"
+  MQTT_QOS: "1"
+  # 0 = 持久会话（默认）：订阅端离线期间 broker 会为 QoS≥1 的消息排队，重连后补投
+  MQTT_CLEAN_SESSION: "0"
+  TD_URL: http://tdengine:6041
+  # 口令从 .env 读取，未配置时回落到本机演示默认值（见 .env.example）
+  TD_USER: ${TD_USER:-root}
+  TD_PASS: ${TD_PASS:-taosdata}
+  TD_DB: cems
+  TD_STABLE: cems_data
+  # ---- 排放超标告警（ADR-0002 方案乙：接入层逐条判**折算值**）----
+  # 判据实现见 src/common/alarm_judge.py；参数默认值即 ADR-0002 §2.2 4) 的那一组。
+  # 判定只在"入库成功"之后追加一次调用，不改拒收逻辑、不改契约、不加服务、不加依赖；
+  # 折算值仍然不给 cems_data 建列，事件表里存的是**判定快照**（判定证据）。
+  ALARM_ENABLE: ${ALARM_ENABLE:-1}
+  ALARM_WINDOW_SAMPLES: ${ALARM_WINDOW_SAMPLES:-6}          # 滑窗 M 条有效样本
+  ALARM_MIN_OVER_SAMPLES: ${ALARM_MIN_OVER_SAMPLES:-3}      # 其中至少 N 条越限才触发
+  ALARM_RECOVER_RATIO: ${ALARM_RECOVER_RATIO:-0.95}         # 恢复到 限值×该系数 才算回来
+  ALARM_RECOVER_SAMPLES: ${ALARM_RECOVER_SAMPLES:-6}        # 连续 K 条恢复才 END
+  ALARM_REMIND_SECONDS: ${ALARM_REMIND_SECONDS:-1800}       # 事件仍 OPEN 时的提醒间隔
+  ALARM_HOURLY_ENABLE: ${ALARM_HOURLY_ENABLE:-1}            # 小时结算（覆盖率三态结论）
+  ALARM_HOURLY_BACKFILL_HOURS: ${ALARM_HOURLY_BACKFILL_HOURS:-2}
+  ALARM_SETTLE_DELAY_SECONDS: ${ALARM_SETTLE_DELAY_SECONDS:-60}   # 整点后等补传收尾再结算
+  ALARM_COVERAGE_MIN: ${ALARM_COVERAGE_MIN:-0.75}           # 低于它判数据不足，绝不判达标
+  ALARM_INVALID_RATIO_MAX: ${ALARM_INVALID_RATIO_MAX:-0.10} # 无效样本占比上限（O2>=21%）
+  ALARM_POLL_INTERVAL: ${ALARM_POLL_INTERVAL:-5.0}          # 算 720 条/小时用，须与网关一致
+  ALARM_JUDGE_VERSION: ${ALARM_JUDGE_VERSION:-v1.0.0}
+  ALARM_PUSH_CHANNEL: ${ALARM_PUSH_CHANNEL:-log}
+  # channel=webhook 时真的 POST 告警到该地址；留空则自动降级为只落记录
+  ALARM_PUSH_URL: ${ALARM_PUSH_URL:-}
+  ALARM_PUSH_TIMEOUT: ${ALARM_PUSH_TIMEOUT:-3.0}
+  ALARM_STATS_LOG_SAMPLES: ${ALARM_STATS_LOG_SAMPLES:-60}
+  ALARM_EVENT_STABLE: ${ALARM_EVENT_STABLE:-cems_alarm_event}
+  ALARM_VERDICT_STABLE: ${ALARM_VERDICT_STABLE:-cems_hourly_verdict}
+  ALARM_PUSH_STABLE: ${ALARM_PUSH_STABLE:-cems_alarm_push}
+
+# ---- 两个接入实例共用的健康检查与启动依赖 ----
+# 订阅端是事件驱动的、没有自己的端口，这里探"能否连上 broker"：
+# 连不上就意味着数据进不来（进程本身死没死，看容器状态即可）
+x-subscriber-healthcheck: &subscriber-healthcheck
+  test: ["CMD", "python", "-c",
+         "import socket;socket.create_connection(('emqx',1883),3)"]
+  interval: 15s
+  timeout: 5s
+  retries: 3
+  start_period: 20s
+
+x-subscriber-depends: &subscriber-depends
+  emqx:
+    condition: service_healthy
+  tdengine:
+    condition: service_healthy
+
 services:
 
   # ---------------- 基础设施：MQTT Broker ----------------
@@ -126,8 +227,18 @@ services:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: "5020"
       SLAVE_ID: "1"
+      # ★ 多从站：一个 TCP 服务端上同时提供多个 unit id（如 "1,2"），第二台设备就是从站 2。
+      #   这对应现场最常见的形态——一条链路（一个 IP:端口）后面挂多台仪表，数采侧按 unit id 读，
+      #   所以第二台设备**不需要第二个端口、第二个容器**。
+      #   默认 "1" = 单从站（等价于原来的 SLAVE_ID=1，代码走 single=True 的原有路径）。
+      #   开启第二台：在 .env 里设 SLAVE_IDS=1,2（并配 --profile plant2 起第二个网关/接入实例）。
+      SLAVE_IDS: ${SLAVE_IDS:-1}
+      # 第 n 台（n≥2）相对第 1 台的仿真相位偏移（秒），默认 10800 = 3 小时：
+      # 让两台设备的曲线明显错开，一眼可辨是两台设备而不是同一条曲线。
+      SLAVE_PHASE_OFFSET: ${SLAVE_PHASE_OFFSET:-10800}
       # 仿真信号：种子/时间基准/时钟偏移。同种子 + 同时间参数 => 逐值一致的输出。
       # 不设 SIM_SEED 时设备层会用确定性默认值 20261001（不是随机种子）。
+      # 多从站时第 n 台的种子 = SIM_SEED + (n-1)（第 1 台仍是 SIM_SEED 本身，单设备读数不变）。
       SIM_SEED: ${SIM_SEED:-20261001}
       SIM_EPOCH: ${SIM_EPOCH:-2026-01-01T00:00:00+00:00}
       SIM_CLOCK_SKEW: ${SIM_CLOCK_SKEW:-0}
@@ -146,101 +257,97 @@ services:
       start_period: 5s
 
   # ---------------- 2 网关层：轮询设备 → 发 MQTT ----------------
+  # 第一套实例（现状）：从站 1 → 主题 cems/plant1/data → 缓存目录 ./data
   gateway:
     <<: *app
     container_name: cems-gateway
     command: python src/gateway/gateway.py
     environment:
-      TZ: Asia/Shanghai
+      <<: *gateway-env
       MODBUS_HOST: device          # 容器内用服务名互访
       MODBUS_PORT: "5020"
-      MODBUS_UNIT: "1"
-      MQTT_HOST: emqx
-      MQTT_PORT: "1883"
+      MODBUS_UNIT: "1"             # 从站地址：读设备层的第 1 个从站
       MQTT_TOPIC: cems/plant1/data
-      MQTT_QOS: "1"
-      POLL_INTERVAL: "5.0"
-      PUBLISH_ACK_TIMEOUT: "5.0"      # 单条等 PUBACK 的秒数，超时就转本地缓存
-      RESEND_WINDOW: "100"             # 补传在途窗口条数
-      RESEND_RETRY_INTERVAL: "30.0"    # 补传部分失败后的重试间隔（秒）
+      # ⚠️ client_id 两个实例必须不同：MQTT 同名 client_id 会互相踢下线（表现为两边反复重连）
+      MQTT_CLIENT_ID: cems-gateway-plant1
+      # 缓存目录：不设 GATEWAY_DATA_DIR ⇒ 用默认值 PROJECT_ROOT/data（= 容器内 /app/data）。
+      # 第二套实例必须显式另指一处，否则两个实例会共用 cache.jsonl / inflight-* 段文件。
     volumes:
       # 断网缓存落到宿主机，重启容器数据不丢，也方便直接看 cache.jsonl
       - ./data:/app/data
-    depends_on:
-      emqx:
-        condition: service_healthy
-      device:
-        condition: service_started
+    depends_on: *gateway-depends
     healthcheck:
       # 网关没有监听端口，靠"心跳文件是否新鲜"判断采集循环有没有卡死
+      <<: *gateway-healthcheck
       test: ["CMD", "python", "-c",
              "import sys,time,pathlib;p=pathlib.Path('/app/data/.gateway_alive');sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime<30 else 1)"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+
+  # ---------------- 2b 第二套网关实例（多设备：默认不启动，`--profile plant2` 开启） ----------------
+  # 与第一套的差异只有 5 个键：从站号、主题、client_id、缓存目录、容器名。
+  # 启用步骤（两步，缺一不可）：
+  #   1) .env 里设 SLAVE_IDS=1,2   —— 让设备层真的提供从站 2（否则本实例读不到数据）
+  #   2) docker compose --profile plant2 up -d
+  gateway2:
+    <<: *app
+    profiles: ["plant2"]
+    container_name: cems-gateway-plant2
+    command: python src/gateway/gateway.py
+    environment:
+      <<: *gateway-env
+      MODBUS_HOST: device
+      MODBUS_PORT: "5020"
+      MODBUS_UNIT: ${MODBUS_UNIT2:-2}                          # ← 同一 TCP 服务端上的从站 2
+      MQTT_TOPIC: ${MQTT_TOPIC2:-cems/plant2/data}             # 改 PLANT2 时要一起改这里
+      # ⚠️ 两个实例（含网关与接入）的 client_id 必须两两不同，否则会互相踢下线；
+      #    所以网关、接入各用一个独立变量，别共用同一个名字。
+      MQTT_CLIENT_ID: ${GATEWAY2_CLIENT_ID:-cems-gateway-plant2}
+      GATEWAY_DATA_DIR: /app/data-plant2                       # ★ 缓存每实例一份（见 gateway.py 配置区）
+    volumes:
+      - ./data/plant2:/app/data-plant2
+    depends_on: *gateway-depends
+    healthcheck:
+      <<: *gateway-healthcheck
+      test: ["CMD", "python", "-c",
+             "import sys,time,pathlib;p=pathlib.Path('/app/data-plant2/.gateway_alive');sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime<30 else 1)"]
 
   # ---------------- 3 平台接入层：订阅 MQTT → 写入 TDengine ----------------
+  # 第一套实例（现状）：主题 cems/plant1/data → 子表 plant1_device1
+  # ★ 为什么"每台设备一个接入实例"而不是"一个实例订阅通配、从主题解析设备号"：
+  #   本模块带状态的东西都是**每设备一份**——判据滑窗（AlarmJudge）、最近折算值快照、
+  #   持久会话 client_id，以及"一个实例只写一张子表"这个前提（_check_tags 的一致性校验
+  #   也建立在这个前提上）。多实例让这些状态天然各归各的，单设备代码路径**零改动**；
+  #   通配方案则要把写入器/告警表/判据状态全部改成按设备字典化，属于把现有正确路径重写一遍。
+  #   代价只是多一个容器，N=2 时明显划算；边界（N≥3 / 设备动态增减）见 ADR-0008。
   subscriber:
     <<: *app
     container_name: cems-subscriber
     command: python src/platform/subscriber_to_td.py
     environment:
-      TZ: Asia/Shanghai
-      MQTT_HOST: emqx
-      MQTT_PORT: "1883"
+      <<: *subscriber-env
       MQTT_TOPIC: cems/plant1/data
-      MQTT_QOS: "1"
-      # 0 = 持久会话（默认）：订阅端离线期间 broker 会为 QoS≥1 的消息排队，重连后补投
-      MQTT_CLEAN_SESSION: "0"
       MQTT_CLIENT_ID: cems-subscriber-plant1   # 持久会话靠它认人，不要改成随机值
-      TD_URL: http://tdengine:6041
-      # 口令从 .env 读取，未配置时回落到本机演示默认值（见 .env.example）
-      TD_USER: ${TD_USER:-root}
-      TD_PASS: ${TD_PASS:-taosdata}
-      TD_DB: cems
-      TD_STABLE: cems_data
       TD_PLANT: plant1
       TD_DEVICE: device1
-      # ---- 排放超标告警（ADR-0002 方案乙：接入层逐条判**折算值**）----
-      # 判据实现见 src/common/alarm_judge.py；参数默认值即 ADR-0002 §2.2 4) 的那一组。
-      # 判定只在"入库成功"之后追加一次调用，不改拒收逻辑、不改契约、不加服务、不加依赖；
-      # 折算值仍然不给 cems_data 建列，事件表里存的是**判定快照**（判定证据）。
-      ALARM_ENABLE: ${ALARM_ENABLE:-1}
-      ALARM_WINDOW_SAMPLES: ${ALARM_WINDOW_SAMPLES:-6}          # 滑窗 M 条有效样本
-      ALARM_MIN_OVER_SAMPLES: ${ALARM_MIN_OVER_SAMPLES:-3}      # 其中至少 N 条越限才触发
-      ALARM_RECOVER_RATIO: ${ALARM_RECOVER_RATIO:-0.95}         # 恢复到 限值×该系数 才算回来
-      ALARM_RECOVER_SAMPLES: ${ALARM_RECOVER_SAMPLES:-6}        # 连续 K 条恢复才 END
-      ALARM_REMIND_SECONDS: ${ALARM_REMIND_SECONDS:-1800}       # 事件仍 OPEN 时的提醒间隔
-      ALARM_HOURLY_ENABLE: ${ALARM_HOURLY_ENABLE:-1}            # 小时结算（覆盖率三态结论）
-      ALARM_HOURLY_BACKFILL_HOURS: ${ALARM_HOURLY_BACKFILL_HOURS:-2}
-      ALARM_SETTLE_DELAY_SECONDS: ${ALARM_SETTLE_DELAY_SECONDS:-60}   # 整点后等补传收尾再结算
-      ALARM_COVERAGE_MIN: ${ALARM_COVERAGE_MIN:-0.75}           # 低于它判数据不足，绝不判达标
-      ALARM_INVALID_RATIO_MAX: ${ALARM_INVALID_RATIO_MAX:-0.10} # 无效样本占比上限（O2>=21%）
-      ALARM_POLL_INTERVAL: ${ALARM_POLL_INTERVAL:-5.0}          # 算 720 条/小时用，须与网关一致
-      ALARM_JUDGE_VERSION: ${ALARM_JUDGE_VERSION:-v1.0.0}
-      ALARM_PUSH_CHANNEL: ${ALARM_PUSH_CHANNEL:-log}
-      # channel=webhook 时真的 POST 告警到该地址；留空则自动降级为只落记录
-      ALARM_PUSH_URL: ${ALARM_PUSH_URL:-}
-      ALARM_PUSH_TIMEOUT: ${ALARM_PUSH_TIMEOUT:-3.0}
-      ALARM_STATS_LOG_SAMPLES: ${ALARM_STATS_LOG_SAMPLES:-60}
-      ALARM_EVENT_STABLE: ${ALARM_EVENT_STABLE:-cems_alarm_event}
-      ALARM_VERDICT_STABLE: ${ALARM_VERDICT_STABLE:-cems_hourly_verdict}
-      ALARM_PUSH_STABLE: ${ALARM_PUSH_STABLE:-cems_alarm_push}
-    depends_on:
-      emqx:
-        condition: service_healthy
-      tdengine:
-        condition: service_healthy
-    healthcheck:
-      # 订阅端是事件驱动的、没有自己的端口，这里探"能否连上 broker"：
-      # 连不上就意味着数据进不来（进程本身死没死，看容器状态即可）
-      test: ["CMD", "python", "-c",
-             "import socket;socket.create_connection(('emqx',1883),3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+    depends_on: *subscriber-depends
+    healthcheck: *subscriber-healthcheck
+
+  # ---------------- 3b 第二套接入实例（多设备：默认不启动，`--profile plant2` 开启） ----------------
+  # 与第一套的差异只有 3 个键：主题、client_id、标签（TD_PLANT/TD_DEVICE）。
+  # 标签换成 plant2/device2 ⇒ 写入子表 plant2_device2，与第一套的 plant1_device1 互不覆盖；
+  # 每实例一份的判据状态与折算值快照也因此天然隔离。
+  subscriber2:
+    <<: *app
+    profiles: ["plant2"]
+    container_name: cems-subscriber-plant2
+    command: python src/platform/subscriber_to_td.py
+    environment:
+      <<: *subscriber-env
+      MQTT_TOPIC: ${MQTT_TOPIC2:-cems/plant2/data}
+      MQTT_CLIENT_ID: ${SUBSCRIBER2_CLIENT_ID:-cems-subscriber-plant2}   # 持久会话靠它认人
+      TD_PLANT: ${PLANT2:-plant2}
+      TD_DEVICE: ${DEVICE2:-device2}
+    depends_on: *subscriber-depends
+    healthcheck: *subscriber-healthcheck
 
   # ---------------- 基础设施：查询缓存（展示层专用） ----------------
   # 只被 web 服务使用：缓存"已闭合时间窗"的 TDengine 聚合结果。

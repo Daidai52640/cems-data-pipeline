@@ -92,6 +92,39 @@ CHILD_TABLE: Final[str] = f"{TD_PLANT}_{TD_DEVICE}".lower()
 # ---- 会被拼进 SQL 的标识符白名单（防注入）----
 SQL_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 
+# ---- 主题 ↔ 标签 一致性自检（多设备多实例部署的护栏）----
+# 推荐形态是"**每台设备一个订阅端实例**"：实例只订阅一个主题、只写一张子表，
+# 于是本模块里所有带状态的东西（判据滑窗、最近折算值快照、持久会话 client_id）
+# 天然是"每设备一份"。多实例的代价只是多一个容器，换来的是单设备代码路径**零改动**。
+# 代价对应的风险是配置写错：订阅了 B 厂区的主题，却写 TD_PLANT=A 厂区，
+# 数据会**静默**挂到 A 的标签下（入库成功、报表挂错名）—— 这正是 _check_tags 要挡的事。
+# 所以启动时把主题里的厂区段与 TD_PLANT 比一遍，不一致就留一条显眼的 WARNING。
+# ⚠️ 只告警、不拒绝启动：主题命名不是本项目的强制契约（允许自定义主题），
+#    把它升级成启动失败会挡住合法的自定义部署。
+TOPIC_PLANT_RE: Final[re.Pattern[str]] = re.compile(
+    r"^cems/(?P<plant>[A-Za-z_][A-Za-z0-9_]*)/"
+)
+
+
+def topic_plant_of(topic: str) -> Optional[str]:
+    """取主题里的厂区段（`cems/<plant>/...`，统一小写）；不是这个形态时返回 None。"""
+    match = TOPIC_PLANT_RE.match(topic.strip())
+    return match.group("plant").lower() if match else None
+
+
+def check_topic_matches_plant(topic: str, plant: str) -> bool:
+    """主题的厂区段与 TD_PLANT 是否一致；一致/无法判断返回 True，不一致告警并返回 False。"""
+    topic_plant = topic_plant_of(topic)
+    if topic_plant is None or topic_plant == plant.strip().lower():
+        return True
+    LOGGER.warning(
+        "主题 %s 的厂区段是 %r，但 TD_PLANT=%s：数据会挂到 %s 的标签下。"
+        "多设备部署时，同一实例内的主题、TD_PLANT、TD_DEVICE 必须指向同一台设备",
+        topic, topic_plant, plant, plant,
+    )
+    return False
+
+
 # ---- 测点契约 ----
 # 测点定义（MQTT 字段名 / TDengine 列名 / 量程）统一来自 src/common/points.py：
 #   NAMES   报文里应该出现的字段名集合
@@ -905,6 +938,14 @@ def main() -> None:
     except ValueError as exc:
         LOGGER.critical("配置非法，拒绝启动: %s", exc)
         return
+
+    # 0b. 主题 ↔ 标签 一致性自检 + 把"本实例负责哪台设备"打进日志
+    #     （多实例部署时，这行日志是判断"哪个容器管哪台设备"的第一现场）
+    check_topic_matches_plant(TOPIC, TD_PLANT)
+    LOGGER.info(
+        "本实例负责: 主题 %s → 子表 %s（plant=%s, device=%s）",
+        TOPIC, CHILD_TABLE, TD_PLANT, TD_DEVICE,
+    )
 
     # 1. 初始化 TDengine（失败不退出：收到数据时会自动重连重试）
     writer = TdWriter()

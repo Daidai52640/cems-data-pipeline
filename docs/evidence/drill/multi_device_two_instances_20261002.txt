@@ -1,0 +1,192 @@
+多设备（第二台设备 / 多实例路线）验证原始输出
+生成时间（本地）: 2026-10-02 21:03:12
+环境: 设备层多从站 SLAVE_IDS=1,2（一个 TCP 服务端、两个 unit id）；网关与接入各两套实例
+说明: 本文件是**原始产物**，只贴命令与输出，不写结论（结论见 docs/adr/0008-多设备多实例路线.md 与 docs/runbooks/故障台账.md）
+
+##############################################################################
+## 0.1 服务状态（默认 8 个 + 第二套 2 个）
+$ docker compose ps --format table {{.Name}}	{{.Service}}	{{.Status}}
+##############################################################################
+NAME                     SERVICE       STATUS
+cems-device              device        Up 7 minutes (healthy)
+cems-gateway             gateway       Up 7 minutes (healthy)
+cems-gateway-plant2      gateway2      Up 7 minutes (healthy)
+cems-nginx               nginx         Up 6 hours (healthy)
+cems-redis               redis         Up 6 hours (healthy)
+cems-subscriber          subscriber    Up 7 minutes (healthy)
+cems-subscriber-plant2   subscriber2   Up 7 minutes (healthy)
+cems-web                 web           Up 7 minutes (healthy)
+emqx                     emqx          Up 17 minutes (healthy)
+tdengine                 tdengine      Up 7 hours (healthy)
+
+##############################################################################
+## 0.2 设备层启动：一个服务端提供两个从站，各自独立种子/相位
+$ docker logs cems-device --tail 8
+##############################################################################
+2026-10-02 20:55:18 [INFO] device.modbus_server: Modbus 仿真设备启动: 0.0.0.0:5020 从站=1,2（多从站 single=False，按 unit id 分派）
+2026-10-02 20:55:18 [INFO] device.modbus_server: 从站1: 仿真种子=20261001 相位偏移=+0s
+2026-10-02 20:55:18 [INFO] device.modbus_server: 从站2: 仿真种子=20261002 相位偏移=+10800s
+2026-10-02 20:55:18 [INFO] device.modbus_server: 寄存器地图(×10): 地址0=Flow, 地址1=Dust, 地址2=SO2, 地址3=NOx, 地址4=O2, 地址5=Velocity, 地址6=Temp, 地址7=Humidity, 地址8=Pressure
+2026-10-02 20:55:18 [INFO] device.modbus_server: 仿真信号已启用: 种子=20261001 刷新=2.0s 时间基准=2026-01-01T00:00:00+00:00 时钟偏移=0s
+2026-10-02 20:55:18 [INFO] device.modbus_server: 污染物尖峰: 开关=True 概率=0.0040/周期 幅度=0.30~0.55 限值（只作用于 Dust/SO2/NOx）
+2026-10-02 20:55:18 [INFO] pymodbus.logging: Server listening.
+
+##############################################################################
+## 0.3 第一套网关启动（从站 1 / 主题 cems/plant1/data / 缓存 /app/data）
+$ docker logs cems-gateway --tail 4
+##############################################################################
+2026-10-02 21:00:15 [INFO] gateway: [补传完成] broker 已确认 8 条
+2026-10-02 21:00:15 [WARNING] gateway: [补传未完成] 1 条未确认，已放回缓存队首等待重试
+2026-10-02 21:00:40 [INFO] gateway: [补传] 开始补传 2 条，在途窗口 100 条
+2026-10-02 21:00:40 [INFO] gateway: [补传完成] broker 已确认 2 条
+
+##############################################################################
+## 0.4 第二套网关启动（从站 2 / 主题 cems/plant2/data / 缓存 /app/data-plant2）
+$ docker logs cems-gateway-plant2 --tail 6
+##############################################################################
+2026-10-02 21:00:20 [INFO] gateway: [缓存] 补传中，数据已入本地队列: 2026-10-02 21:00:20 Flow=30491.0 Dust=2.93 SO2=27.1 NOx=27.2 O2=7.4 Velocity=14.6 Temp=208.6 Humidity=47.7 Pressure=97.1 Flag=N
+2026-10-02 21:00:21 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-02 21:00:21 [INFO] gateway: [补传完成] broker 已确认 6 条
+2026-10-02 21:00:21 [WARNING] gateway: [补传未完成] 2 条未确认，已放回缓存队首等待重试
+2026-10-02 21:00:40 [INFO] gateway: [补传] 开始补传 4 条，在途窗口 100 条
+2026-10-02 21:00:40 [INFO] gateway: [补传完成] broker 已确认 4 条
+
+##############################################################################
+## 0.5 第二套接入启动（主题 cems/plant2/data → 子表 plant2_device2 + 标签校验）
+$ docker logs cems-subscriber-plant2 --tail 40
+##############################################################################
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 启动补结算 2 个已闭合小时: ['2026-10-02 18:00:00', '2026-10-02 19:00:00']
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结算已启用: 每小时整点后 60s 结算上一小时，启动补结算 2 个小时
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 等待 MQTT 数据...（Ctrl+C 停止）
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: MQTT 已连接: emqx:1883（会话恢复=True）
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 已订阅主题: cems/plant2/data (QoS=1)
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 告警表就绪: cems_alarm_event / cems_hourly_verdict / cems_alarm_push
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=dust judge_type=hourly event_id=dust|hourly|2026-10-02 18:00:00 ts=2026-10-02 18:00:00 trigger_ts=2026-10-02 18:00:00 converted=nan raw_value=nan limit_value=5.0000 o2=nan o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.000 < 门限 0.75）
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=so2 judge_type=hourly event_id=so2|hourly|2026-10-02 18:00:00 ts=2026-10-02 18:00:00 trigger_ts=2026-10-02 18:00:00 converted=nan raw_value=nan limit_value=35.0000 o2=nan o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.000 < 门限 0.75）
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=nox judge_type=hourly event_id=nox|hourly|2026-10-02 18:00:00 ts=2026-10-02 18:00:00 trigger_ts=2026-10-02 18:00:00 converted=nan raw_value=nan limit_value=50.0000 o2=nan o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.000 < 门限 0.75）
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 18:00:00 dust: verdict=insufficient n_total=0 n_valid=0 n_invalid=0 coverage=0.0000 conv_mean=nan limit=5.0 judge_version=v1.0.0
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 18:00:00 so2: verdict=insufficient n_total=0 n_valid=0 n_invalid=0 coverage=0.0000 conv_mean=nan limit=35.0 judge_version=v1.0.0
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 18:00:00 nox: verdict=insufficient n_total=0 n_valid=0 n_invalid=0 coverage=0.0000 conv_mean=nan limit=50.0 judge_version=v1.0.0
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 小时结算完成 2026-10-02 18:00:00: 结论 3 行，事件 3 行
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=dust judge_type=hourly event_id=dust|hourly|2026-10-02 19:00:00 ts=2026-10-02 19:00:00 trigger_ts=2026-10-02 19:00:00 converted=nan raw_value=nan limit_value=5.0000 o2=nan o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.000 < 门限 0.75）
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=so2 judge_type=hourly event_id=so2|hourly|2026-10-02 19:00:00 ts=2026-10-02 19:00:00 trigger_ts=2026-10-02 19:00:00 converted=nan raw_value=nan limit_value=35.0000 o2=nan o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.000 < 门限 0.75）
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=nox judge_type=hourly event_id=nox|hourly|2026-10-02 19:00:00 ts=2026-10-02 19:00:00 trigger_ts=2026-10-02 19:00:00 converted=nan raw_value=nan limit_value=50.0000 o2=nan o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.000 < 门限 0.75）
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 19:00:00 dust: verdict=insufficient n_total=0 n_valid=0 n_invalid=0 coverage=0.0000 conv_mean=nan limit=5.0 judge_version=v1.0.0
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 19:00:00 so2: verdict=insufficient n_total=0 n_valid=0 n_invalid=0 coverage=0.0000 conv_mean=nan limit=35.0 judge_version=v1.0.0
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 19:00:00 nox: verdict=insufficient n_total=0 n_valid=0 n_invalid=0 coverage=0.0000 conv_mean=nan limit=50.0 judge_version=v1.0.0
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 小时结算完成 2026-10-02 19:00:00: 结论 3 行，事件 3 行
+2026-10-02 20:55:19 [INFO] platform.subscriber_to_td: 下次小时结算: 2026-10-02 21:01:00（2026-10-02 21:00:00 起算，等待 341s = 到整点 + 60s 补传余量）
+2026-10-02 20:55:24 [INFO] platform.subscriber_to_td: 折算值抽样（第 1 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 20:55:24 O2=7.4000 -> dust=5.6471 so2=23.2721 nox=46.7647
+2026-10-02 20:56:34 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=end point=dust judge_type=instant event_id=dust|instant|2026-10-02 20:54:35 ts=2026-10-02 20:56:34 trigger_ts=2026-10-02 20:56:34 converted=4.0809 raw_value=3.7000 limit_value=5.0000 o2=7.4000 o2_reference=6.0000 over_samples=9 window_seconds=119.0000 judge_version=v1.0.0 reason=连续 6 条折算值 <= 限值×0.95（4.7500），事件结束
+2026-10-02 20:56:54 [INFO] platform.subscriber_to_td: 折算值抽样（第 20 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 20:56:54 O2=7.4000 -> dust=3.6287 so2=23.2721 nox=48.9706
+2026-10-02 20:57:29 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=end point=nox judge_type=instant event_id=nox|instant|2026-10-02 20:54:20 ts=2026-10-02 20:57:29 trigger_ts=2026-10-02 20:57:29 converted=41.8015 raw_value=37.9000 limit_value=50.0000 o2=7.4000 o2_reference=6.0000 over_samples=14 window_seconds=189.0000 judge_version=v1.0.0 reason=连续 6 条折算值 <= 限值×0.95（47.5000），事件结束
+2026-10-02 20:58:34 [INFO] platform.subscriber_to_td: 折算值抽样（第 40 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 20:58:34 O2=7.4000 -> dust=3.2316 so2=23.2721 nox=30.0000
+2026-10-02 21:00:21 [INFO] platform.subscriber_to_td: 折算值抽样（第 60 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 20:59:29 O2=7.5000 -> dust=3.2556 so2=23.6667 nox=30.2222
+2026-10-02 21:00:21 [INFO] platform.subscriber_to_td: 告警判据统计: {'samples': 50, 'duplicate': 10, 'events': 0, 'ends': 2, 'reminds': 0, 'invalid_samples': 0}
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=dust judge_type=hourly event_id=dust|hourly|2026-10-02 20:00:00 ts=2026-10-02 20:00:00 trigger_ts=2026-10-02 20:00:00 converted=3.6923 raw_value=3.2927 limit_value=5.0000 o2=7.6392 o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.212 < 门限 0.75）
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=so2 judge_type=hourly event_id=so2|hourly|2026-10-02 20:00:00 ts=2026-10-02 20:00:00 trigger_ts=2026-10-02 20:00:00 converted=27.9347 raw_value=24.8235 limit_value=35.0000 o2=7.6392 o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.212 < 门限 0.75）
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=nox judge_type=hourly event_id=nox|hourly|2026-10-02 20:00:00 ts=2026-10-02 20:00:00 trigger_ts=2026-10-02 20:00:00 converted=37.6182 raw_value=33.5634 limit_value=50.0000 o2=7.6392 o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.212 < 门限 0.75）
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 20:00:00 dust: verdict=insufficient n_total=153 n_valid=153 n_invalid=0 coverage=0.2125 conv_mean=3.6923 limit=5.0 judge_version=v1.0.0
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 20:00:00 so2: verdict=insufficient n_total=153 n_valid=153 n_invalid=0 coverage=0.2125 conv_mean=27.9347 limit=35.0 judge_version=v1.0.0
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 20:00:00 nox: verdict=insufficient n_total=153 n_valid=153 n_invalid=0 coverage=0.2125 conv_mean=37.6182 limit=50.0 judge_version=v1.0.0
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 小时结算完成 2026-10-02 20:00:00: 结论 3 行，事件 3 行
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 下次小时结算: 2026-10-02 22:01:00（2026-10-02 22:00:00 起算，等待 3600s = 到整点 + 60s 补传余量）
+2026-10-02 21:01:15 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=start point=so2 judge_type=instant event_id=so2|instant|2026-10-02 21:01:05 ts=2026-10-02 21:01:05 trigger_ts=2026-10-02 21:01:15 converted=35.7353 raw_value=32.4000 limit_value=35.0000 o2=7.4000 o2_reference=6.0000 over_samples=3 window_seconds=0.0000 judge_version=v1.0.0 reason=滑窗触发：最近 6/6 条有效样本里 3 条越限 >= 3（触发时刻 2026-10-02 21:01:15）
+2026-10-02 21:01:20 [INFO] platform.subscriber_to_td: 折算值抽样（第 80 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 21:01:20 O2=7.3000 -> dust=3.2080 so2=37.2263 nox=29.7810
+2026-10-02 21:02:40 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=end point=so2 judge_type=instant event_id=so2|instant|2026-10-02 21:01:05 ts=2026-10-02 21:02:40 trigger_ts=2026-10-02 21:02:40 converted=29.8889 raw_value=26.9000 limit_value=35.0000 o2=7.5000 o2_reference=6.0000 over_samples=11 window_seconds=95.0000 judge_version=v1.0.0 reason=连续 6 条折算值 <= 限值×0.95（33.2500），事件结束
+2026-10-02 21:03:00 [INFO] platform.subscriber_to_td: 折算值抽样（第 100 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 21:03:00 O2=7.5000 -> dust=4.2444 so2=27.3333 nox=30.2222
+
+##############################################################################
+## 0.6 第一套接入启动（子表标签一致性校验仍通过）
+$ docker logs cems-subscriber --tail 30
+##############################################################################
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 告警判据已启用: 判折算值；滑窗 6 条里 >= 3 条越限触发；连续 6 条 <= 限值×0.95 结束；小时覆盖率门限 0.75（低于则判数据不足）
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 启动补结算 2 个已闭合小时: ['2026-10-02 18:00:00', '2026-10-02 19:00:00']
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结算已启用: 每小时整点后 60s 结算上一小时，启动补结算 2 个小时
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 等待 MQTT 数据...（Ctrl+C 停止）
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: MQTT 已连接: emqx:1883（会话恢复=True）
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 已订阅主题: cems/plant1/data (QoS=1)
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 告警表就绪: cems_alarm_event / cems_hourly_verdict / cems_alarm_push
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 18:00:00 dust: verdict=ok n_total=716 n_valid=716 n_invalid=0 coverage=0.9944 conv_mean=3.3429 limit=5.0 judge_version=v1.0.0
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 18:00:00 so2: verdict=ok n_total=716 n_valid=716 n_invalid=0 coverage=0.9944 conv_mean=25.0813 limit=35.0 judge_version=v1.0.0
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 18:00:00 nox: verdict=ok n_total=716 n_valid=716 n_invalid=0 coverage=0.9944 conv_mean=39.2871 limit=50.0 judge_version=v1.0.0
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结算完成 2026-10-02 18:00:00: 结论 3 行，事件 0 行
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 19:00:00 dust: verdict=ok n_total=719 n_valid=719 n_invalid=0 coverage=0.9986 conv_mean=3.6577 limit=5.0 judge_version=v1.0.0
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 19:00:00 so2: verdict=ok n_total=719 n_valid=719 n_invalid=0 coverage=0.9986 conv_mean=23.0579 limit=35.0 judge_version=v1.0.0
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 19:00:00 nox: verdict=ok n_total=719 n_valid=719 n_invalid=0 coverage=0.9986 conv_mean=37.5530 limit=50.0 judge_version=v1.0.0
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 小时结算完成 2026-10-02 19:00:00: 结论 3 行，事件 0 行
+2026-10-02 20:55:18 [INFO] platform.subscriber_to_td: 下次小时结算: 2026-10-02 21:01:00（2026-10-02 21:00:00 起算，等待 341s = 到整点 + 60s 补传余量）
+2026-10-02 20:55:24 [INFO] platform.subscriber_to_td: 折算值抽样（第 1 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 20:55:24 O2=6.4000 -> dust=2.9692 so2=20.6507 nox=33.5959
+2026-10-02 20:55:49 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=end point=dust judge_type=instant event_id=dust|instant|2026-10-02 20:54:35 ts=2026-10-02 20:55:49 trigger_ts=2026-10-02 20:55:49 converted=2.9692 raw_value=2.8900 limit_value=5.0000 o2=6.4000 o2_reference=6.0000 over_samples=3 window_seconds=74.0000 judge_version=v1.0.0 reason=连续 6 条折算值 <= 限值×0.95（4.7500），事件结束
+2026-10-02 20:55:49 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=end point=nox judge_type=instant event_id=nox|instant|2026-10-02 20:54:20 ts=2026-10-02 20:55:49 trigger_ts=2026-10-02 20:55:49 converted=33.5959 raw_value=32.7000 limit_value=50.0000 o2=6.4000 o2_reference=6.0000 over_samples=3 window_seconds=89.0000 judge_version=v1.0.0 reason=连续 6 条折算值 <= 限值×0.95（47.5000），事件结束
+2026-10-02 20:56:54 [INFO] platform.subscriber_to_td: 折算值抽样（第 20 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 20:56:54 O2=6.4000 -> dust=2.9692 so2=28.7671 nox=33.5959
+2026-10-02 20:58:34 [INFO] platform.subscriber_to_td: 折算值抽样（第 40 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 20:58:34 O2=6.5000 -> dust=2.9897 so2=33.2069 nox=33.8276
+2026-10-02 21:00:15 [INFO] platform.subscriber_to_td: 折算值抽样（第 60 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 20:59:34 O2=6.6000 -> dust=3.0104 so2=26.3542 nox=34.0625
+2026-10-02 21:00:15 [INFO] platform.subscriber_to_td: 告警判据统计: {'samples': 49, 'duplicate': 11, 'events': 0, 'ends': 2, 'reminds': 0, 'invalid_samples': 0}
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 20:00:00 dust: verdict=ok n_total=704 n_valid=704 n_invalid=0 coverage=0.9778 conv_mean=3.6550 limit=5.0 judge_version=v1.0.0
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 20:00:00 so2: verdict=ok n_total=704 n_valid=704 n_invalid=0 coverage=0.9778 conv_mean=25.3167 limit=35.0 judge_version=v1.0.0
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 小时结论 2026-10-02 20:00:00 nox: verdict=ok n_total=704 n_valid=704 n_invalid=0 coverage=0.9778 conv_mean=40.5956 limit=50.0 judge_version=v1.0.0
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 小时结算完成 2026-10-02 20:00:00: 结论 3 行，事件 0 行
+2026-10-02 21:01:00 [INFO] platform.subscriber_to_td: 下次小时结算: 2026-10-02 22:01:00（2026-10-02 22:00:00 起算，等待 3600s = 到整点 + 60s 补传余量）
+2026-10-02 21:01:25 [INFO] platform.subscriber_to_td: 折算值抽样（第 80 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 21:01:25 O2=6.6000 -> dust=3.0104 so2=20.8333 nox=34.0625
+2026-10-02 21:03:05 [INFO] platform.subscriber_to_td: 折算值抽样（第 100 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-02 21:03:05 O2=6.5000 -> dust=3.7138 so2=20.6897 nox=33.8276
+
+##############################################################################
+## 1.1 演练 B：断 EMQX 链路 75 秒的时间线与两台缓存增长
+##############################################################################
+=== 多设备断网演练（断 EMQX 与 cems-net 的链路；EMQX 进程不重启）===
+T0(本地) = 2026-10-02 20:58:54
+data : cache.jsonl = 0 行
+data\plant2 : cache.jsonl = 0 行
+已断开 cems-net <-> emqx 链路, exit=0
+T1(本地) = 2026-10-02 21:00:09（断网 75 秒）
+data : cache.jsonl = 9 行
+data\plant2 : cache.jsonl = 8 行
+已恢复链路, exit=0  T2 = 2026-10-02 21:00:10
+
+##############################################################################
+## 1.2 演练 B：两台各自补传后逐条对账（网关缓存的每一条都在库里）
+##############################################################################
+对账窗口（本地时间）: 2026-10-02 20:58:50 ~ 2026-10-02 21:01:10
+
+--- cems-gateway -> device1 ---
+网关侧“已入本地队列”去重后 = 10 条：20:58:54, 20:59:04, 20:59:14, 20:59:24, 20:59:34, 20:59:44, 20:59:50, 20:59:55, 21:00:00, 21:00:10
+库里 device1 的行数 = 20 条：20:58:54, 20:59:04, 20:59:14, 20:59:24, 20:59:34, 20:59:44, 20:59:50, 20:59:55, 21:00:00, 21:00:10, 21:00:20, 21:00:25, 21:00:30, 21:00:35, 21:00:40, 21:00:45, 21:00:50, 21:00:55, 21:01:00, 21:01:05
+网关缓存过但库里没有（= 丢数据）: 无 —— 零丢失
+
+--- cems-gateway-plant2 -> device2 ---
+网关侧“已入本地队列”去重后 = 10 条：20:58:59, 20:59:09, 20:59:19, 20:59:29, 20:59:39, 20:59:49, 20:59:55, 21:00:00, 21:00:10, 21:00:20
+库里 device2 的行数 = 20 条：20:58:54, 20:58:59, 20:59:09, 20:59:19, 20:59:29, 20:59:39, 20:59:49, 20:59:55, 21:00:00, 21:00:10, 21:00:20, 21:00:25, 21:00:30, 21:00:35, 21:00:40, 21:00:45, 21:00:50, 21:00:55, 21:01:00, 21:01:05
+网关缓存过但库里没有（= 丢数据）: 无 —— 零丢失
+
+##############################################################################
+## 2.1 验证 5：查询/缓存的设备隔离（逐分钟对账 + Redis 条目隔离）
+##############################################################################
+=== 1. 逐分钟对账（接口 n vs 库里各设备每分钟条数）===
+分钟          接口n  device1  device2  判定
+20:45        12       12        0  = device1（本实例设备）
+20:46        12       12        0  = device1（本实例设备）
+20:47        12       12       10  = device1（本实例设备）
+20:48        10       10       11  = device1（本实例设备）
+20:49         8        8        7  = device1（本实例设备）
+20:50        11       11       10  = device1（本实例设备）
+20:51        12       12       12  = device1（本实例设备）
+20:52        12       12       12  = device1（本实例设备）
+20:53        11       11       12  = device1（本实例设备）
+20:54        12       12       12  = device1（本实例设备）
+20:55        12       12       12  = device1（本实例设备）
+20:56        12       12       12  = device1（本实例设备）
+20:57        12       12       12  = device1（本实例设备）
+20:58        11       11       12  = device1（本实例设备）
+20:59         7        7        6  = device1（本实例设备）
+结论 1： 读路径按设备过滤，未混第二台的数据
+
+=== 2. 同一时间窗 → 两个设备维度 → 两个独立缓存条目 ===
+起始 DBSIZE = 12
+web1(plant1/device1) 查 2026-10-02 20:30~2026-10-02 20:45 → DBSIZE=13（+1）
+web2(plant2/device2) 查**同一时间窗** → DBSIZE=14（+1）
+web1 再查一次（应命中自己的条目）→ DBSIZE=14（+0）
+web1 该窗口 SO2 序列 = [20.1, 22.28, 28.96, 31.79, 31.83, 26.73, 30.84, 29.55, 22.75, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]
+web2 该窗口 SO2 序列 = [None, None, None, None, None, None, None, None, None, None, None, None, None, 29.72, 25.92]
+结论 2： 同一时间窗按设备各存一份、互不命中
+结论 3（两台各自的数据不同）: 是
