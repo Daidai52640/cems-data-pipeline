@@ -166,6 +166,14 @@ services:
       # 队列是占内存的，按你的断网容忍时长调，别无限放大。
       EMQX_MQTT__MAX_MQUEUE_LEN: "20000"
       EMQX_MQTT__SESSION_EXPIRY_INTERVAL: "24h"
+      # ⚠️ 上面两条只解决"排队多久"，解决不了"broker 重启后队列还在不在"：
+      # EMQX 的会话默认是**内存态**（durable_sessions.enable=false），
+      # 容器重启/崩溃后离线队列直接消失 —— 而网关此时已拿到 broker 的 PUBACK、
+      # 认为"发成功了"，于是这批数据既不在网关缓存、也没进下游 = 真丢。
+      # 实测（2026-10-02，停 EMQX 容器）：两台各补传 29 条，device1 落库、
+      # device2 的 29 条被丢弃（订阅端重订阅与网关补传存在竞态）。
+      # 打开磁盘持久化后，会话与离线队列落到 /opt/emqx/data（已有 emqx-data 卷）。
+      EMQX_DURABLE_SESSIONS__ENABLE: "true"
     ports:
       - "${BIND_ADDR:-127.0.0.1}:1883:1883"      # MQTT 协议端口（网关发布、平台订阅）
       - "${BIND_ADDR:-127.0.0.1}:18083:18083"    # EMQX Dashboard 管理台

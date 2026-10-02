@@ -1,0 +1,48 @@
+EMQX 会话持久化（durable_sessions）修复实录 —— 2026-10-02
+============================================================
+
+## 问题（由多设备改造的验证发现）
+"断网续传"在**broker 容器重启**时会失效：
+- 网关发布 → broker 接受并回 PUBACK → 网关认为"已送达"、把该批从缓存移除
+- 但订阅端此时不在线，报文进了 broker 的**离线队列**
+- 该队列默认是**内存态**（durable_sessions.enable=false）→ **容器重启即丢**
+- 结果：这批数据**既不在网关缓存、也没进下游** = 真丢
+
+实测（停 EMQX 容器，非仅断网）：两台各补传 29 条，device1 落库、
+**device2 的 29 条被 broker 丢弃**（订阅端重订阅与网关补传存在竞态）。
+
+## 根因：配置只做了一半
+| 配置 | 值 | 作用 |
+|---|---|---|
+| MQTT_CLEAN_SESSION | 0 | 订阅端请求持久会话 ✅ |
+| EMQX_MQTT__SESSION_EXPIRY_INTERVAL | 24h | 会话有效期 ✅ |
+| EMQX_MQTT__MAX_MQUEUE_LEN | 20000 | 离线队列上限 ✅ |
+| **durable_sessions.enable** | **false** | ❌ **会话与队列只存内存** |
+
+即：前三条解决"排队多久"，**没解决"重启后队列还在不在"**。
+
+## 修复
+docker-compose.yml 的 emqx environment 增加：
+    EMQX_DURABLE_SESSIONS__ENABLE: "true"
+（会话与离线队列落到 /opt/emqx/data，已有 emqx-data 卷）
+
+验证配置生效：
+    docker exec emqx emqx ctl conf show durable_sessions
+    -> enable = true
+
+## 实测：修复前 vs 修复后（判据 = 订阅端重连时 session_present）
+修复前（旧会话在内存，随重启丢失）：
+    MQTT 已连接: emqx:1883（会话恢复=False）
+    broker 未恢复旧会话，离线超过会话有效期期间的报文已丢失
+修复后（会话已在磁盘，重启后恢复）：
+    MQTT 已连接: emqx:1883（会话恢复=True）      <- cems-subscriber
+    MQTT 已连接: emqx:1883（会话恢复=True）      <- cems-subscriber-plant2
+
+重启后数据流恢复：两台各 12 条/60s（= 5 秒一条，满速）。
+
+## 局限（诚实标注，未做的部分）
+本次验证的是"**会话能否恢复**"（session_present），**不是**"重启窗口内
+在途报文 100% 落库"的逐条对账 —— 后者需要一次受控的
+"停 broker → 发数据 → 起 broker → 逐条核对"实验，本轮未做。
+因此结论限于：**持久化已开启且会话确实恢复**；
+"重启期间零丢失"仍需专项演练确认（已列入待办）。
