@@ -37,6 +37,14 @@ x-app: &app
   pull_policy: never
   restart: unless-stopped
   networks: [cems]
+  # ⚠️ json-file 日志驱动默认【无上限】：容器一直输出就一直占宿主机的 Docker 盘。
+  # 这里给每个服务封顶（3 个 10MB 文件 ≈ 上限 30MB/容器）。
+  # 注意：YAML 合并键是逐 key 的浅合并，其余服务各自显式写一份同名配置。
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
   environment:
     # 时区必须与 TDengine 容器一致，否则入库时间戳会整体偏移 8 小时
     TZ: Asia/Shanghai
@@ -69,6 +77,8 @@ services:
       timeout: 5s
       retries: 20
       start_period: 15s
+    logging:
+      <<: *logging
     networks: [cems]
 
   # ---------------- 基础设施：时序数据库 ----------------
@@ -89,12 +99,20 @@ services:
     volumes:
       - tdengine-data:/var/lib/taos
       - tdengine-log:/var/log/taos
+      # 日志上限：容器内改 /etc/taos/* 不持久（重建就丢），所以落盘进仓库再挂进去。
+      # 这两个文件不是手抄的镜像默认值，而是由 deploy/tdengine/gen-log-limits-config.ps1
+      # 从镜像里取原文件 + 就地补丁生成（镜像升级后重跑该脚本即可同步）。
+      # ⚠️ 只读挂载：容器无法改它，避免跑起来后配置与仓库不一致。
+      - ./deploy/tdengine/taos-log-limits.cfg:/etc/taos/taos.cfg:ro
+      - ./deploy/tdengine/taosadapter-log-limits.toml:/etc/taos/taosadapter.toml:ro
     healthcheck:
       test: ["CMD-SHELL", "taos -s 'SHOW DATABASES;' >/dev/null 2>&1 || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 15s
+    logging:
+      <<: *logging
     networks: [cems]
 
   # ---------------- 1 设备层：Modbus 仿真设备 ----------------
@@ -235,6 +253,8 @@ services:
       timeout: 5s
       retries: 20
       start_period: 5s
+    logging:
+      <<: *logging
     networks: [cems]
 
   # ---------------- 基础设施：反向代理（对外唯一入口） ----------------
@@ -268,6 +288,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    logging:
+      <<: *logging
     networks: [cems]
 
   # ---------------- 4 展示层：Flask + ECharts 大屏 ----------------
