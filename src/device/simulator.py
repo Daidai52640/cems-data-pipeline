@@ -34,6 +34,13 @@
     - 时刻：`now` 参数显式传入（默认取本机时钟），测试时传假时钟即可
 所以「同种子 + 同时刻参数 => 逐值一致」是构造上成立的，不需要额外对齐状态。
 
+★ 多台设备（Modbus 多从站）如何做到"各自独立、肉眼可辨"：
+    每个从站一个 CemsSimulator 实例 = 一个独立的种子 + 一个相位偏移
+    （modbus_server 按 `SLAVE_IDS` 逐个派生，见该文件的 device_simulators()）。
+    种子不同 ⇒ 基线水平、日周期峰值时刻、漂移形状、尖峰幅度全都不同；
+    相位不同 ⇒ 即使种子相同，两条曲线也不会重合。
+    从站 1 沿用 SIM_SEED 且相位为 0 ⇒ **单设备形态与改造前逐值一致**。
+
 ============================ 参数标定（不是拍脑袋） ============================
 幅度都用**参照跨度比例**表示（污染物=限值，物理量=量程；两者用 span_ratio 换算）。
 以 SO2(量程 0~200、限值 35、span_ratio=0.175) 为例（量程 → 物理量要 ×200）：
@@ -457,7 +464,7 @@ def _build_params(point: Point, seed: int) -> PointSimParams:
     )
 
 
-def _seed_from_env() -> int:
+def seed_from_env() -> int:
     """读 SIM_SEED；非法值抛 ValueError（启动阶段就炸，别静默换成别的种子）。"""
     raw = os.getenv("SIM_SEED", "").strip()
     if not raw:
@@ -469,10 +476,16 @@ class CemsSimulator:
     """CEMS 测点仿真器：给定时刻，产出该时刻各测点的物理量（可复现）。
 
     seed=None → 读 SIM_SEED（未设置则用 DETERMINISTIC_DEFAULT_SEED）。
+
+    phase_offset_seconds：给本实例的仿真时钟加一个固定相位（秒），用于**多台设备**：
+        同一个种子 + 不同相位 ⇒ 两条曲线形状同源但错开，肉眼可分；
+        不同种子 + 不同相位 ⇒ 基线、日周期峰值时刻、漂移形状全都不同（默认做法）。
+    默认 0.0 = 与改造前逐值一致（单设备不受影响）；模块级 SIMULATOR 用的就是默认值。
     """
 
-    def __init__(self, seed: Optional[int] = None) -> None:
-        self.seed: int = _seed_from_env() if seed is None else seed
+    def __init__(self, seed: Optional[int] = None, phase_offset_seconds: float = 0.0) -> None:
+        self.seed: int = seed_from_env() if seed is None else seed
+        self.phase_offset_seconds: float = phase_offset_seconds
         self.params: tuple[PointSimParams, ...] = tuple(
             _build_params(point, self.seed) for point in POINTS
         )
@@ -578,9 +591,15 @@ class CemsSimulator:
         return {params.name: self.sample(params.name, moment) for params in self.params}
 
     def simulate_clock(self, now: Optional[datetime] = None) -> datetime:
-        """返回加了 SIM_CLOCK_SKEW 之后的仿真时刻（默认取本机 UTC 时刻）。"""
+        """返回加了 SIM_CLOCK_SKEW 与本实例相位偏移之后的仿真时刻（默认取本机 UTC 时刻）。
+
+        ⚠️ 相位偏移只改**读数**的时刻，不改网关上的报文时间戳（时间戳由网关自己打），
+        所以它只用于让多台设备的曲线错开，不会被误读成"设备时钟不准"。
+        """
         moment = now if now is not None else datetime.now(timezone.utc)
-        return moment + timedelta(seconds=SIM_CLOCK_SKEW_SECONDS)
+        return moment + timedelta(
+            seconds=SIM_CLOCK_SKEW_SECONDS + self.phase_offset_seconds
+        )
 
 
 # 模块级默认实例：modbus_server 直接用；验证脚本另建实例或另传时刻即可
