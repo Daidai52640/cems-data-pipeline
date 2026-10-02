@@ -1,0 +1,390 @@
+{
+  "tag": "acc_n10",
+  "started_at": "2026-10-03 00:56:59",
+  "config": {
+    "devices": 10,
+    "interval_seconds": 1.0,
+    "duration_seconds": 40.0,
+    "qos": 1,
+    "topic_prefix": "cems/loadtest",
+    "topic_example": "cems/loadtest/device1/data",
+    "mqtt": "127.0.0.1:1883",
+    "publisher_client_id": "cems-loadgen-acc_n10-19148",
+    "probe_client_id": "cems-loadgen-probe-acc_n10-19148",
+    "td_db_stable": "cems.cems_data",
+    "td_plant": "loadtest",
+    "td_device_tag": "lt<i>（i=1..10）",
+    "ingest_channels": 10,
+    "channel_device_ranges": {
+      "lt1": "device 1-1（子表 loadtest_lt1）",
+      "lt2": "device 2-2（子表 loadtest_lt2）",
+      "lt3": "device 3-3（子表 loadtest_lt3）",
+      "lt4": "device 4-4（子表 loadtest_lt4）",
+      "lt5": "device 5-5（子表 loadtest_lt5）",
+      "lt6": "device 6-6（子表 loadtest_lt6）",
+      "lt7": "device 7-7（子表 loadtest_lt7）",
+      "lt8": "device 8-8（子表 loadtest_lt8）",
+      "lt9": "device 9-9（子表 loadtest_lt9）",
+      "lt10": "device 10-10（子表 loadtest_lt10）"
+    },
+    "settle_seconds": 5.0,
+    "poll_interval_seconds": 0.3,
+    "parallel_publishers": 10,
+    "seed": 20261002,
+    "probe_subscribed": true,
+    "probe_suback_rc": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "probe_messages_received": 400,
+    "probe_keys_seen": 400,
+    "probe_key_sample": [
+      "1@2026-10-03 00:56:19",
+      "1@2026-10-03 00:56:20",
+      "1@2026-10-03 00:56:21"
+    ],
+    "ledger_key_sample": [
+      "1@2026-10-03 00:56:19",
+      "2@2026-10-03 00:56:19",
+      "3@2026-10-03 00:56:19"
+    ],
+    "ts_offset_seconds": [
+      0.0
+    ],
+    "ts_offset_note": "同一子表内多台设备共用一张表时，为避免 (子表, ts) 同秒覆盖，第 j 台的报文 ts 加了 j 秒的整数偏移（亚秒偏移无效：ts 只有秒级）；延迟口径不受影响（全部用宿主机时钟）"
+  },
+  "counts": {
+    "published_enqueued": 400,
+    "published_ok": 400,
+    "enqueue_failures": 0,
+    "ack_failures": 0,
+    "arrived_at_broker": 400,
+    "visible_in_db": 400
+  },
+  "throughput": {
+    "publish_window_seconds": 39.0,
+    "published_per_second": 10.256,
+    "visible_in_db_per_second": 10.256,
+    "nominal_per_second": 10.0,
+    "drain_seconds": 39.204,
+    "drain_complete": true,
+    "e2e_rows_per_second": 10.203,
+    "per_second_buckets": {
+      "0": 10,
+      "1": 10,
+      "2": 10,
+      "3": 10,
+      "4": 10,
+      "5": 10,
+      "6": 10,
+      "7": 10,
+      "8": 10,
+      "9": 10,
+      "10": 10,
+      "11": 10,
+      "12": 10,
+      "13": 10,
+      "14": 10,
+      "15": 10,
+      "16": 10,
+      "17": 10,
+      "18": 10,
+      "19": 10,
+      "20": 10,
+      "21": 10,
+      "22": 10,
+      "23": 10,
+      "24": 10,
+      "25": 10,
+      "26": 10,
+      "27": 10,
+      "28": 10,
+      "29": 10,
+      "30": 10,
+      "31": 10,
+      "32": 10,
+      "33": 10,
+      "34": 10,
+      "35": 10,
+      "36": 10,
+      "37": 10,
+      "38": 10,
+      "39": 10
+    }
+  },
+  "latency_ms": {
+    "note": "全部由宿主机时钟相减（不含跨容器时钟漂移）；lat_gen = 计划发布 → 实际发布；lat_broker = 发布 → 旁听端收到；lat_store = 旁听端收到 → 库内首次可见（含 ≤poll_interval 的轮询量化）；lat_e2e = 发布 → 库内首次可见",
+    "samples_observed": 400,
+    "gen_to_publish": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "min": 0.0,
+      "max": 16.0,
+      "mean": 0.0
+    },
+    "publish_to_broker": {
+      "p50": 0.0,
+      "p95": 16.0,
+      "p99": 16.0,
+      "min": 0.0,
+      "max": 32.0,
+      "mean": 2.5
+    },
+    "broker_to_db_visible": {
+      "p50": 172.0,
+      "p95": 328.0,
+      "p99": 329.1,
+      "min": 16.0,
+      "max": 344.0,
+      "mean": 168.2
+    },
+    "e2e_publish_to_db_visible": {
+      "p50": 172.0,
+      "p95": 329.0,
+      "p99": 344.0,
+      "min": 16.0,
+      "max": 360.0,
+      "mean": 170.7
+    }
+  },
+  "per_device": {
+    "lt1": {
+      "publish_topic": "cems/loadtest/device1/data",
+      "ingest_table": "loadtest_lt1",
+      "ingest_channel": 1,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "4d6bcdfcdba6",
+      "first_payload": "2026-10-03 00:56:19 Flow=19242.1 Dust=3.2 SO2=17.2 NOx=22.2 O2=4.7 Velocity=12.9 Temp=168.1 Humidity=22.3 Pressure=92.2 Flag=N"
+    },
+    "lt2": {
+      "publish_topic": "cems/loadtest/device2/data",
+      "ingest_table": "loadtest_lt2",
+      "ingest_channel": 2,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "ea0880f2e494",
+      "first_payload": "2026-10-03 00:56:19 Flow=23440.1 Dust=3.1 SO2=17.0 NOx=20.8 O2=5.2 Velocity=16.1 Temp=176.9 Humidity=50.3 Pressure=91.3 Flag=N"
+    },
+    "lt3": {
+      "publish_topic": "cems/loadtest/device3/data",
+      "ingest_table": "loadtest_lt3",
+      "ingest_channel": 3,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "8b7438e2bb45",
+      "first_payload": "2026-10-03 00:56:19 Flow=25936.3 Dust=3.0 SO2=18.0 NOx=37.8 O2=6.9 Velocity=17.7 Temp=145.8 Humidity=62.4 Pressure=93.2 Flag=N"
+    },
+    "lt4": {
+      "publish_topic": "cems/loadtest/device4/data",
+      "ingest_table": "loadtest_lt4",
+      "ingest_channel": 4,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "85d83f86a661",
+      "first_payload": "2026-10-03 00:56:19 Flow=42141.9 Dust=2.8 SO2=23.3 NOx=36.4 O2=4.2 Velocity=19.9 Temp=151.5 Humidity=45.8 Pressure=96.7 Flag=N"
+    },
+    "lt5": {
+      "publish_topic": "cems/loadtest/device5/data",
+      "ingest_table": "loadtest_lt5",
+      "ingest_channel": 5,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "ca180752f15a",
+      "first_payload": "2026-10-03 00:56:19 Flow=34158.9 Dust=2.6 SO2=17.8 NOx=26.8 O2=7.0 Velocity=12.9 Temp=135.9 Humidity=63.9 Pressure=92.1 Flag=N"
+    },
+    "lt6": {
+      "publish_topic": "cems/loadtest/device6/data",
+      "ingest_table": "loadtest_lt6",
+      "ingest_channel": 6,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "601144510530",
+      "first_payload": "2026-10-03 00:56:19 Flow=44815.4 Dust=3.5 SO2=17.0 NOx=32.3 O2=3.8 Velocity=15.1 Temp=133.3 Humidity=40.6 Pressure=94.6 Flag=N"
+    },
+    "lt7": {
+      "publish_topic": "cems/loadtest/device7/data",
+      "ingest_table": "loadtest_lt7",
+      "ingest_channel": 7,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "85500768ddff",
+      "first_payload": "2026-10-03 00:56:19 Flow=32302.6 Dust=2.8 SO2=16.3 NOx=26.5 O2=7.8 Velocity=18.4 Temp=195.8 Humidity=34.9 Pressure=93.4 Flag=N"
+    },
+    "lt8": {
+      "publish_topic": "cems/loadtest/device8/data",
+      "ingest_table": "loadtest_lt8",
+      "ingest_channel": 8,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "cb27e7be9aef",
+      "first_payload": "2026-10-03 00:56:19 Flow=33442.1 Dust=3.2 SO2=25.2 NOx=37.7 O2=4.6 Velocity=18.3 Temp=202.7 Humidity=36.7 Pressure=93.6 Flag=N"
+    },
+    "lt9": {
+      "publish_topic": "cems/loadtest/device9/data",
+      "ingest_table": "loadtest_lt9",
+      "ingest_channel": 9,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "96c0ca61b200",
+      "first_payload": "2026-10-03 00:56:19 Flow=41306.0 Dust=3.6 SO2=25.3 NOx=27.2 O2=6.0 Velocity=14.9 Temp=162.8 Humidity=67.4 Pressure=97.4 Flag=N"
+    },
+    "lt10": {
+      "publish_topic": "cems/loadtest/device10/data",
+      "ingest_table": "loadtest_lt10",
+      "ingest_channel": 10,
+      "published": 40,
+      "arrived_at_broker": 40,
+      "visible_in_db": 40,
+      "curve_digest": "490217a7f6eb",
+      "first_payload": "2026-10-03 00:56:19 Flow=46980.8 Dust=3.8 SO2=20.8 NOx=41.4 O2=4.8 Velocity=19.7 Temp=208.3 Humidity=57.3 Pressure=95.6 Flag=N"
+    }
+  },
+  "reconciliation": {
+    "per_device": {
+      "lt1": {
+        "published": 40,
+        "in_db_rows": 75,
+        "in_db_distinct_ts": 75,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 35,
+        "extra_examples": [
+          "2026-10-03 00:41:54",
+          "2026-10-03 00:41:55",
+          "2026-10-03 00:41:56",
+          "2026-10-03 00:41:57",
+          "2026-10-03 00:41:58"
+        ],
+        "duplicate_ts": 0
+      },
+      "lt10": {
+        "published": 40,
+        "in_db_rows": 40,
+        "in_db_distinct_ts": 40,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt2": {
+        "published": 40,
+        "in_db_rows": 75,
+        "in_db_distinct_ts": 75,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 35,
+        "extra_examples": [
+          "2026-10-03 00:41:54",
+          "2026-10-03 00:41:55",
+          "2026-10-03 00:41:56",
+          "2026-10-03 00:41:57",
+          "2026-10-03 00:41:58"
+        ],
+        "duplicate_ts": 0
+      },
+      "lt3": {
+        "published": 40,
+        "in_db_rows": 40,
+        "in_db_distinct_ts": 40,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt4": {
+        "published": 40,
+        "in_db_rows": 40,
+        "in_db_distinct_ts": 40,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt5": {
+        "published": 40,
+        "in_db_rows": 40,
+        "in_db_distinct_ts": 40,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt6": {
+        "published": 40,
+        "in_db_rows": 40,
+        "in_db_distinct_ts": 40,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt7": {
+        "published": 40,
+        "in_db_rows": 40,
+        "in_db_distinct_ts": 40,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt8": {
+        "published": 40,
+        "in_db_rows": 40,
+        "in_db_distinct_ts": 40,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      },
+      "lt9": {
+        "published": 40,
+        "in_db_rows": 40,
+        "in_db_distinct_ts": 40,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 0,
+        "extra_examples": [],
+        "duplicate_ts": 0
+      }
+    },
+    "totals": {
+      "published": 400,
+      "in_db_rows": 470,
+      "missing": 0,
+      "extra": 70,
+      "duplicate_ts": 0,
+      "loss_free": true,
+      "extra_note": "extra = 库内落在本次发布 ts 集合之外的行；常见成因是上一轮运行遗留在 EMQX 持久会话队列里的数据在本次被投递（用 client_id 区分运行可避免）"
+    },
+    "window": {
+      "published_ts_min": "2026-10-03 00:56:19",
+      "published_ts_max": "2026-10-03 00:56:58"
+    }
+  }
+}

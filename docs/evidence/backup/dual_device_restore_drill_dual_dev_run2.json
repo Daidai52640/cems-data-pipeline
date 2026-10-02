@@ -1,0 +1,241 @@
+{
+  "drill": "dual-device-restore",
+  "mode": "instance",
+  "backup_dir": "F:\\cems-backup\\manual\\cems_full_20261003_002857",
+  "backup_stamp": "20261003_002857",
+  "backup_kind": "taosdump-logical-full",
+  "backup_self_check": "rows_out_of_range",
+  "window_ms": [
+    1790785691000,
+    1790958537000
+  ],
+  "window_local": [
+    "2026-10-01 00:28:11",
+    "2026-10-03 00:28:57"
+  ],
+  "source": {
+    "container": "tdengine",
+    "db": "cems",
+    "stable": "cems_data"
+  },
+  "started_at": "2026-10-03 00:30:10",
+  "restore_output_tail": " be successfully dumped in!\n\u001b[0m\u001b[32mOK: [1] 6 row(s) of file(cems.3581917079102.30.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [3] 6 row(s) of file(cems.3581917079124.2.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [2] 8 row(s) of file(cems.3581917079195.28.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [0] 8 row(s) of file(cems.3581917079099.0.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [1] 8 row(s) of file(cems.3581917079113.1.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [0] 6 row(s) of file(cems.3581917079205.29.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: 19100 row(s) dumped in!\n\u001b[0m",
+  "tags": {
+    "src": [
+      [
+        "plant1",
+        "device1"
+      ],
+      [
+        "plant2",
+        "device2"
+      ]
+    ],
+    "dst": [
+      [
+        "plant1",
+        "device1"
+      ],
+      [
+        "plant2",
+        "device2"
+      ]
+    ],
+    "expected": [
+      [
+        "plant1",
+        "device1"
+      ],
+      [
+        "plant2",
+        "device2"
+      ]
+    ],
+    "same": true,
+    "matches_expected_two_devices": true,
+    "ok": true
+  },
+  "totals": {
+    "src_window_rows": 18570,
+    "dst_window_rows": 18570,
+    "sum_of_devices_restored": 18570,
+    "src_eq_dst": true,
+    "dst_eq_sum_of_devices": true,
+    "ok": true
+  },
+  "devices": {
+    "plant1/device1": {
+      "plant": "plant1",
+      "device": "device1",
+      "snapshot": {
+        "src": {
+          "plant": "plant1",
+          "device": "device1",
+          "rows": 15990,
+          "sums": {
+            "so2": 397261.355543375,
+            "nox": 682088.510995388,
+            "flow": 540721967.0,
+            "dust": 72411.9911289588,
+            "o2": 101956.949983783,
+            "temp": 3024397.20038012,
+            "humidity": 734935.400098361,
+            "pressure": 1558876.69652557,
+            "velocity": 212899.599930085
+          },
+          "bounds": {
+            "min": "2026-10-01 00:28:11",
+            "max": "2026-10-03 00:28:56"
+          }
+        },
+        "dst": {
+          "plant": "plant1",
+          "device": "device1",
+          "rows": 15990,
+          "sums": {
+            "so2": 397261.355543375,
+            "nox": 682088.510995388,
+            "flow": 540721967.0,
+            "dust": 72411.9911289588,
+            "o2": 101956.949983783,
+            "temp": 3024397.20038012,
+            "humidity": 734935.400098361,
+            "pressure": 1558876.69652557,
+            "velocity": 212899.599930085
+          },
+          "bounds": {
+            "min": "2026-10-01 00:28:11",
+            "max": "2026-10-03 00:28:56"
+          }
+        },
+        "cmp": {
+          "ok": true,
+          "diffs": []
+        }
+      },
+      "segments_1h": {
+        "ok": true,
+        "n_buckets_src": 26,
+        "n_buckets_dst": 26,
+        "total_rows_src": 15990,
+        "total_rows_dst": 15990,
+        "matched": 26,
+        "buckets_only_in_src": [],
+        "buckets_only_in_dst": [],
+        "buckets_with_count_diff": [],
+        "buckets_with_sum_diff": [],
+        "buckets_with_bounds_diff": []
+      },
+      "segments_1d": {
+        "ok": true,
+        "n_buckets_src": 3,
+        "n_buckets_dst": 3,
+        "total_rows_src": 15990,
+        "total_rows_dst": 15990,
+        "matched": 3,
+        "buckets_only_in_src": [],
+        "buckets_only_in_dst": [],
+        "buckets_with_count_diff": [],
+        "buckets_with_sum_diff": [],
+        "buckets_with_bounds_diff": []
+      },
+      "ok": true
+    },
+    "plant2/device2": {
+      "plant": "plant2",
+      "device": "device2",
+      "snapshot": {
+        "src": {
+          "plant": "plant2",
+          "device": "device2",
+          "rows": 2580,
+          "sums": {
+            "so2": 61524.5000591278,
+            "nox": 81315.0006561279,
+            "flow": 75510387.0,
+            "dust": 8561.10012507439,
+            "o2": 17751.7000055313,
+            "temp": 522648.399917603,
+            "humidity": 122028.500030518,
+            "pressure": 248466.197814941,
+            "velocity": 36244.1999692917
+          },
+          "bounds": {
+            "min": "2026-10-02 20:43:44",
+            "max": "2026-10-03 00:28:57"
+          }
+        },
+        "dst": {
+          "plant": "plant2",
+          "device": "device2",
+          "rows": 2580,
+          "sums": {
+            "so2": 61524.5000591278,
+            "nox": 81315.0006561279,
+            "flow": 75510387.0,
+            "dust": 8561.10012507439,
+            "o2": 17751.7000055313,
+            "temp": 522648.399917603,
+            "humidity": 122028.500030518,
+            "pressure": 248466.197814941,
+            "velocity": 36244.1999692917
+          },
+          "bounds": {
+            "min": "2026-10-02 20:43:44",
+            "max": "2026-10-03 00:28:57"
+          }
+        },
+        "cmp": {
+          "ok": true,
+          "diffs": []
+        }
+      },
+      "segments_1h": {
+        "ok": true,
+        "n_buckets_src": 5,
+        "n_buckets_dst": 5,
+        "total_rows_src": 2580,
+        "total_rows_dst": 2580,
+        "matched": 5,
+        "buckets_only_in_src": [],
+        "buckets_only_in_dst": [],
+        "buckets_with_count_diff": [],
+        "buckets_with_sum_diff": [],
+        "buckets_with_bounds_diff": []
+      },
+      "segments_1d": {
+        "ok": true,
+        "n_buckets_src": 2,
+        "n_buckets_dst": 2,
+        "total_rows_src": 2580,
+        "total_rows_dst": 2580,
+        "matched": 2,
+        "buckets_only_in_src": [],
+        "buckets_only_in_dst": [],
+        "buckets_with_count_diff": [],
+        "buckets_with_sum_diff": [],
+        "buckets_with_bounds_diff": []
+      },
+      "ok": true
+    }
+  },
+  "ok": true,
+  "rto": {
+    "definition": "RTO = t_seg − t0，即从发出「开始恢复」到「逐设备 + 分段校验全部通过」",
+    "clock": "time.perf_counter()（宿主机单调时钟）",
+    "RTO_seconds": 14.712,
+    "t_up_ready_s": 0.846,
+    "t_data_restored_s": 5.711,
+    "breakdown": {
+      "目标环境就绪": 0.846,
+      "实例 DDL 预热": 2.593,
+      "备份传入目标": 0.682,
+      "数据导入落盘": 1.589,
+      "校验": 9.001
+    }
+  },
+  "finished_at": "2026-10-03 00:30:25",
+  "cleanup": {
+    "leftovers": []
+  }
+}
