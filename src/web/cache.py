@@ -506,28 +506,36 @@ def _encode_cell(cell: Any) -> Any:
 #   只有**该分钟真的多了一条更晚的数据**才判脏；重复看到同一批行不会误杀。
 #
 # ---- 水位为什么**不**按设备分开（判断，含证据与耦合条件）----
-# 结论：现在保持全局一份；一旦"读路径按设备过滤"，水位**必须**同时按设备分开 ——
-#       这两件事要落在同一次改动里，只改一半比不改更危险。
+# ⚠️ 状态更新（2026-10-02）：下面第 1 条改造项（读路径按设备过滤）**已经落地**
+#    （commit d9e599d；report.py:257-261 与 547-551、web_dashboard.py:155-159 都用
+#    `cache.DEVICE_SCOPE_PARTS` 拼 `AND plant = '...' AND device = '...'`）。
+#    第 2、3 条（水位键按设备拆）**仍未做**，是已知的剩余项，不在本次改动范围内。
+#    所以本节原来的第一条论据（"观测流里没有设备维"）已经不成立，别照着它继续论证。
+#
+# 当前结论：水位（KEY_DATA_TS / KEY_MINMAX / KEY_MINMAX_TS）仍是**全局一份**。
 #
 # 证据（读代码即可复现，不需要起 Redis / 不需要造第二台设备的数据）：
-#   · 水位的**观测源**是 `/api/data`（web_dashboard.api_data → query_recent），它的 SQL 是
-#     `FROM {TD_DB}.{TD_STABLE} WHERE ts >= now - Nm AND ts <= now`，**没有任何 tag 过滤**
-#     （web_dashboard.py:149-153）；report.py 的聚合 SQL 同样没有（report.py:250-254）。
-#   · 也就是说，这条观测流里根本不存在"哪台设备"这一维。把 KEY_DATA_TS / KEY_MINMAX 按设备拆开，
-#     只能把同一份全局观测复制 N 份（或者更糟：拿别的设备的观测当自己的水位），既消不掉下面的
-#     失真，还会掩盖真正的根因（读路径没按设备过滤）。
+#   · 水位的**观测源**是 `/api/data`（web_dashboard.api_data → query_recent），它现在的 SQL 是
+#     `FROM {TD_DB}.{TD_STABLE} WHERE ts >= now - Nm AND ts <= now AND plant = '...'
+#      AND device = '...'`（web_dashboard.py:155-159），**已按设备过滤**；
+#     report.py 的聚合 SQL 同样带这一组 tag 条件（report.py:257-261）。
+#   · 也就是说，这条观测流里现在**有**"哪台设备"这一维，但存水位的 Redis 键没有：
+#     每个 web 实例观测的是自己那台设备，却把结果写进同一份全局键。
 #
-# 失真本身是真的，但它有前提：读路径按设备过滤之后，若仍共用一份全局 data_ts，
-# 设备 A 的新数据会把设备 B 还没写完的窗口判成"已闭合"（`_closure` 的 a 条件被放松），
-# 于是 B 的条目会返回偏旧的数据；而且这种偏旧**不会被写后失效兜住** —— B 的迟到行落在
-# 一个"全局分钟最大值本来就没变"的分钟里（A 在同一分钟里有更晚的行），signature 不变、判不出脏。
-# 这就是 observed_window_detail 那条注释里"窗口最大值不变 → 判据失灵"的同类漏洞，
-# 只不过这次是被别的设备的数据填住的。
+# 失真什么时候会真的发生（前提条件，不是"现在就有"）：
+#   若按设备起**多个 web 实例**并**共用一个 Redis DB**，共用一份全局 data_ts，
+#   设备 A 的新数据会把设备 B 还没写完的窗口判成"已闭合"（`_closure` 的 a 条件被放松），
+#   于是 B 的条目会返回偏旧的数据；而且这种偏旧**不会被写后失效兜住** —— B 的迟到行落在
+#   一个"全局分钟最大值本来就没变"的分钟里（A 在同一分钟里有更晚的行），signature 不变、判不出脏。
+#   这就是 observed_window_detail 那条注释里"窗口最大值不变 → 判据失灵"的同类漏洞，
+#   只不过这次是被别的设备的数据填住的。
+#   当前 docker-compose.yml 只有**一个** web 实例（web 的 TD_PLANT/TD_DEVICE 固定 plant1/device1），
+#   观测流里只有那台设备的行，所以这条失真尚未激活；多 web 实例共用一个 Redis 时才会激活。
 #
-# 届时的改法（一次改完）：
-#   1) 读路径加设备过滤（report.py 的聚合 SQL、web_dashboard.query_recent，按 tag 过滤）；
-#   2) KEY_DATA_TS / KEY_MINMAX / KEY_MINMAX_TS 三个键加设备维度；
-#   3) note_data_ts / note_minute_max / _closure / observed_window_detail / signature
+# 真要多实例前的改法（一次改完，别只改一半）：
+#   1) ✅ 读路径加设备过滤（report.py 的聚合 SQL、web_dashboard.query_recent，按 tag 过滤）—— 已做；
+#   2) ⏳ KEY_DATA_TS / KEY_MINMAX / KEY_MINMAX_TS 三个键加设备维度；
+#   3) ⏳ note_data_ts / note_minute_max / _closure / observed_window_detail / signature
 #      都带上设备参数（水位的语义变成"这台设备的库内数据的最新时间戳"）。
 KEY_MINMAX_TTL_SECONDS: Final[int] = int(os.getenv("CACHE_MINMAX_TTL_SECONDS", "86400"))
 
@@ -842,9 +850,9 @@ def source_of(cache_key: str) -> str:
 
 
 # 设备维度在这里打一条日志：多设备部署下"这台 web 给哪台设备做缓存"必须一眼可见。
-# ⚠️ 它必须与平台接入层的 TD_PLANT/TD_DEVICE 一致；当前读路径还没按设备过滤（见 §6），
-#    写错的后果只是缓存命名空间与真实 tag 对不上（表现是"缓存好像不生效"），
-#    但读路径一旦按设备过滤，写错就会变成"读的是别人的数据"。
+# ⚠️ 它必须与平台接入层的 TD_PLANT/TD_DEVICE 一致：读路径**已经**按这两个值过滤
+#    （report.py / web_dashboard.py 用 DEVICE_SCOPE_PARTS 拼 tag 条件，见 §6），
+#    所以这里写错就不只是"缓存命名空间对不上"，而是**读的是别人的数据**。
 # ⚠️ 本行与下面的 CLIENT.init() 都在**导入时**执行，那时日志系统可能还没配置
 #    （web_dashboard 是"先 import、后 setup_logging"），这类 INFO 记录会被丢弃 ——
 #    所以 web_dashboard.main() 在 setup_logging() 之后会再打一条同样的（保证 docker logs 里看得到）。

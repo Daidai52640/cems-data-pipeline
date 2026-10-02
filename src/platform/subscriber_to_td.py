@@ -97,13 +97,28 @@ SQL_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$
 # 于是本模块里所有带状态的东西（判据滑窗、最近折算值快照、持久会话 client_id）
 # 天然是"每设备一份"。多实例的代价只是多一个容器，换来的是单设备代码路径**零改动**。
 # 代价对应的风险是配置写错：订阅了 B 厂区的主题，却写 TD_PLANT=A 厂区，
-# 数据会**静默**挂到 A 的标签下（入库成功、报表挂错名）—— 这正是 _check_tags 要挡的事。
-# 所以启动时把主题里的厂区段与 TD_PLANT 比一遍，不一致就留一条显眼的 WARNING。
-# ⚠️ 只告警、不拒绝启动：主题命名不是本项目的强制契约（允许自定义主题），
-#    把它升级成启动失败会挡住合法的自定义部署。
+# 数据会**静默**挂到 A 的标签下（入库成功、报表挂错名）。
+#
+# ★ 这一条为什么**默认拒绝启动**（2026-10-02 升级，原来是只打 WARNING）：
+#   典型误配是"只改了 MQTT_TOPIC2 没改 PLANT2"：主题已经是 cems/plant2/data，
+#   TD_PLANT 还是 plant1、TD_DEVICE 被改成 device2 ⇒ 数据写进子表 `plant1_device2`。
+#   字面上 (plant1, device2) 是自洽的，所以**入库、报表、导出都不会报错**，只是归属错了 ——
+#   这类"静默张冠李戴"事后无法从数据里恢复，只能拒之门外。WARNING 在 10 个容器的日志里
+#   太容易被淹掉，所以在启动阶段就把它变成一条 CRITICAL + 非零退出（容器会重启并持续可见）。
+#   ⚠️ 放行开关：确实要用自定义厂区前缀的部署，显式设 TD_ALLOW_TOPIC_TAG_MISMATCH=1。
+#
+# ★ 关于"把 TD_DEVICE 也纳入这条校验"：**做不到，也不该假装做到**。
+#   主题契约是 `cems/<厂区>/<用途>`（如 cems/plant1/data），**没有设备段**——
+#   第三段是用途（data），不是设备号，拿它当设备比只会误报。设备维度的护栏在别处：
+#   ① 本模块 `_check_tags()` 在连库时核对已存在子表 `{plant}_{device}` 的真实 TAGS；
+#   ② 启动日志直接打印**最终子表名**，让"哪台设备写哪张表"一眼可查（见 main()）。
 TOPIC_PLANT_RE: Final[re.Pattern[str]] = re.compile(
     r"^cems/(?P<plant>[A-Za-z_][A-Za-z0-9_]*)/"
 )
+#: 主题厂区段与 TD_PLANT 不一致时是否还允许启动。默认 0（拒绝）。
+ALLOW_TOPIC_TAG_MISMATCH: Final[bool] = os.getenv(
+    "TD_ALLOW_TOPIC_TAG_MISMATCH", "0"
+).strip().lower() in ("1", "true", "yes", "on")
 
 
 def topic_plant_of(topic: str) -> Optional[str]:
@@ -112,17 +127,47 @@ def topic_plant_of(topic: str) -> Optional[str]:
     return match.group("plant").lower() if match else None
 
 
-def check_topic_matches_plant(topic: str, plant: str) -> bool:
-    """主题的厂区段与 TD_PLANT 是否一致；一致/无法判断返回 True，不一致告警并返回 False。"""
+def check_topic_matches_plant(topic: str, plant: str, device: str = "") -> bool:
+    """主题的厂区段与 TD_PLANT 是否一致；一致/无法判断返回 True，不一致记 ERROR 并返回 False。
+
+    只做判断与记录，不决定"要不要拒绝启动"——那个决策在 `enforce_topic_scope()` 里，
+    这样既有的调用方（如果只想拿一个 bool）行为不变。
+    """
     topic_plant = topic_plant_of(topic)
     if topic_plant is None or topic_plant == plant.strip().lower():
         return True
-    LOGGER.warning(
-        "主题 %s 的厂区段是 %r，但 TD_PLANT=%s：数据会挂到 %s 的标签下。"
-        "多设备部署时，同一实例内的主题、TD_PLANT、TD_DEVICE 必须指向同一台设备",
-        topic, topic_plant, plant, plant,
+    LOGGER.error(
+        "主题 %s 的厂区段是 %r，但 TD_PLANT=%s、TD_DEVICE=%s：本实例会把数据写进子表 %s，"
+        "归属与主题不一致（入库不报错，报表按错的厂区/设备出数）。"
+        "改法：主题的厂区段必须与 TD_PLANT 相同（或者反过来改 TD_PLANT/TD_DEVICE）",
+        topic, topic_plant, plant, device or TD_DEVICE, CHILD_TABLE,
     )
     return False
+
+
+def enforce_topic_scope(topic: str, plant: str, device: str = "") -> bool:
+    """启动期强制检查主题 ↔ 标签一致性：不一致**默认拒绝启动**（返回 True 才继续）。
+
+    - 一致、或主题不是 `cems/<厂区>/...` 形态（自定义主题）→ True，照常启动；
+    - 不一致 → 记 CRITICAL 并把最终子表名打出来，然后 `SystemExit`（非零退出，
+      由 compose 的 restart 策略放大成持续可见的故障，而不是被日志淹没的一条 WARNING）；
+    - `TD_ALLOW_TOPIC_TAG_MISMATCH=1` → 只记 CRITICAL 放行（给确实要自定义前缀的部署留口子）。
+    """
+    if check_topic_matches_plant(topic, plant, device):
+        return True
+    detail = (
+        f"主题 {topic} 的厂区段与 TD_PLANT={plant} 不一致：数据会静默写入子表 "
+        f"{CHILD_TABLE}（plant={plant}, device={device or TD_DEVICE}）"
+    )
+    if ALLOW_TOPIC_TAG_MISMATCH:
+        LOGGER.critical(
+            "%s。TD_ALLOW_TOPIC_TAG_MISMATCH=1：按配置放行，请自行确认这是有意为之", detail
+        )
+        return True
+    raise SystemExit(
+        f"拒绝启动：{detail}。"
+        f"要么让主题的厂区段与 TD_PLANT 一致，要么显式设 TD_ALLOW_TOPIC_TAG_MISMATCH=1 放行"
+    )
 
 
 # ---- 测点契约 ----
@@ -939,11 +984,12 @@ def main() -> None:
         LOGGER.critical("配置非法，拒绝启动: %s", exc)
         return
 
-    # 0b. 主题 ↔ 标签 一致性自检 + 把"本实例负责哪台设备"打进日志
-    #     （多实例部署时，这行日志是判断"哪个容器管哪台设备"的第一现场）
-    check_topic_matches_plant(TOPIC, TD_PLANT)
+    # 0b. 主题 ↔ 标签 一致性自检（默认拒绝启动，见 enforce_topic_scope）
+    #     + 把"本实例负责哪台设备、最终写哪张子表"打进日志：
+    #     多实例部署时，这行日志是判断"哪个容器管哪台设备"的第一现场。
+    enforce_topic_scope(TOPIC, TD_PLANT, TD_DEVICE)
     LOGGER.info(
-        "本实例负责: 主题 %s → 子表 %s（plant=%s, device=%s）",
+        "本实例负责: 主题 %s → 最终子表名 = %s（plant=%s, device=%s）",
         TOPIC, CHILD_TABLE, TD_PLANT, TD_DEVICE,
     )
 
