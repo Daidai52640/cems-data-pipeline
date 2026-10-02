@@ -10,6 +10,17 @@
 #    再把本轮新采的数据"[缓存] … 数据已入本地队列"。
 #    所以第 i 条入队的行，是在第 i+1 个补传周期被发出去的 → 滞后 = T(i+1) - T(i)。
 # 3) 环境：Windows 上先设 $env:PYTHONIOENCODING="utf-8"。
+#
+# 设备维度（必须按设备过滤）
+# -----------------------------------------------------------------------------
+#   "走补传路径占比"的分母是同窗口**库内条数**，而 `cems_data` 是多设备共用的超级表
+#   （TAG = plant/device），两台设备在同时写。不过滤的话分母 = 各设备条数之和，
+#   占比被系统性地算小 —— 实测同一个 5 分钟窗口：不过滤 290 行，device1 单独 59 行
+#   （同样 59 条缓存行，占比会从 100% 变成 20% 量级的假象）。
+#   默认 device1 ⇒ 单设备形态下与改造前逐位一致；多设备时用 --device 分开统计。
+#   ⚠️ 日志侧不用传设备：每个网关实例只读自己那台从站（container 各自一份日志），
+#      换设备时用 --container 指向对应实例（默认 cems-gateway = device1；
+#      device2 用 cems-gateway-plant2，见 docker-compose.yml 的 plant2 profile）。
 # =============================================================================
 """从网关日志量"缓存→补传"滞后（单时钟），并统计走补传路径的条目占比。"""
 
@@ -28,6 +39,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+
+from _device_scope import add_device_argument, device_predicate, resolve_device   # noqa: E402
+
 TD_REST_URL = "http://127.0.0.1:6041/rest/sql"
 TD_AUTH = "Basic " + base64.b64encode(b"root:taosdata").decode()
 LOCAL_TZ = timezone(timedelta(hours=8))
@@ -49,11 +65,17 @@ def parse_iso_utc(text: str) -> float:
     ).timestamp()
 
 
-def td_count_between(start_local: str, end_local: str) -> int:
+def td_count_between(start_local: str, end_local: str, device: str = "") -> int:
+    """同窗口**被测设备**的库内条数（"走补传路径占比"的分母）。
+
+    ⚠️ **必须带 device 谓词**：不过滤时分母是所有设备之和，占比被系统性算小
+    （见文件头的实测数字）。
+    """
     start = datetime.strptime(start_local, TS_FORMAT).replace(tzinfo=LOCAL_TZ).timestamp()
     end = datetime.strptime(end_local, TS_FORMAT).replace(tzinfo=LOCAL_TZ).timestamp()
     sql = (f"SELECT COUNT(*) FROM cems.cems_data "
-           f"WHERE ts >= {int(start * 1000)} AND ts <= {int(end * 1000)}")
+           f"WHERE ts >= {int(start * 1000)} AND ts <= {int(end * 1000)} "
+           f"AND {device_predicate(device)}")
     req = urllib.request.Request(TD_REST_URL, data=sql.encode(), headers={"Authorization": TD_AUTH})
     with urllib.request.urlopen(req, timeout=15) as resp:
         payload = json.loads(resp.read().decode("utf-8"))
@@ -73,10 +95,13 @@ def main() -> int:
     parser.add_argument("--container", default="cems-gateway")
     parser.add_argument("--since", default=None, help="只分析该本地时间之后的行（如 2026-10-01 13:26:00）")
     parser.add_argument("--tag", default="resend_lag")
+    add_device_argument(parser)
     parser.add_argument(
         "--out-prefix", default=str(PROJECT_ROOT / "docs" / "evidence" / "drill" / "gateway_resend")
     )
     args = parser.parse_args()
+
+    device = resolve_device(args.device)
 
     if args.log_file:
         text = Path(args.log_file).read_text(encoding="utf-8", errors="replace")
@@ -135,7 +160,7 @@ def main() -> int:
     if cache_events:
         first, last = cache_events[0]["payload_ts"], cache_events[-1]["payload_ts"]
         try:
-            rows = td_count_between(first, last)
+            rows = td_count_between(first, last, device)
             ratio = len(cache_events) / rows if rows else None
             window = {"first": first, "last": last, "db_rows": rows,
                       "cached_rows": len(cache_events)}
@@ -144,6 +169,7 @@ def main() -> int:
 
     summary = {
         "tag": args.tag,
+        "device": device,
         "log_window": {
             "first_cache_event": cache_events[0]["t"] if cache_events else None,
             "last_cache_event": cache_events[-1]["t"] if cache_events else None,
@@ -168,6 +194,7 @@ def main() -> int:
                          encoding="utf-8")
 
     print("===== 网关日志：缓存→补传 滞后（单时钟，无跨容器偏差）=====")
+    print(f"  被测设备 {device}（TAG 过滤，见 --device）")
     print(f"  补传周期数 {len(resend_events)}；入缓存行数 {len(cache_events)}；"
           f"每批条数 {summary['resend_batch_sizes']}")
     print(f"  入缓存原因分布: {cache_reasons}")

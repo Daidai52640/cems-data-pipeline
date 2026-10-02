@@ -32,6 +32,19 @@
 #    大屏和报表在它"变成过去"之前都看不到它；脚本会在它变成过去之前删掉。
 #    为把风险降到最低，脚本在插入前会先确认该分钟确实是空的，
 #    删除后会核对 count=0。
+#
+# 设备维度（必须按设备定位子表）
+# -----------------------------------------------------------------------------
+#   `cems_data` 是多设备共用的超级表（TAG = plant/device），两台设备在同时写。
+#   本脚本是这批测量里**唯一会写库**的，它靠 `{plant}_{device}` 子表名直接读写，
+#   写成裸的 `cems.plant1_device1` 就等于把"设备维度"硬编码成 device1 ——
+#   多设备时既没法给 device2 做演练，也没人看得出这里其实是有设备维度的。
+#   现在子表名由 `--device`（默认 env `TD_DEVICE` = device1）拼出来：
+#   默认 device1 ⇒ 现象与改造前逐位一致（子表仍是 `cems.plant1_device1`）。
+#   ⚠️ 展示层的读路径同样按设备过滤（`cache.DEVICE_SCOPE`，来自 web 容器的
+#      TD_PLANT/TD_DEVICE）。**写入的子表与展示层读的设备必须一致**，
+#      否则哨兵写进了 A 设备、展示层读的是 B 设备 → 永远观测不到"刷新"。
+#      脚本会先读 `/api/cache/stats` 的 `device_scope` 核对，不一致直接中止。
 # =============================================================================
 """实测"数据更新后缓存多久刷新"：向一个未来空分钟注入 1 行哨兵，测完删除。"""
 
@@ -40,10 +53,12 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -51,12 +66,21 @@ from pathlib import Path
 from typing import Any, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+
+from _device_scope import add_device_argument, resolve_device   # noqa: E402
+
 DOCS_DIR = PROJECT_ROOT / "docs" / "evidence" / "cache"
 
 NGINX_BASE = "http://127.0.0.1:80"
 DIRECT_BASE = "http://127.0.0.1:5001"
 TD_CONTAINER = "tdengine"
-CHILD_TABLE = "cems.plant1_device1"
+#: 厂区 TAG（子表名前缀）。与 docker-compose 的 TD_PLANT 默认值一致。
+TD_PLANT = os.getenv("TD_PLANT", "plant1")
+#: 目标子表 `{plant}_{device}`。**由 --device 在 main() 里重设**（见 set_child_table）：
+#: 默认留在 device1，保证单设备形态下与改造前逐位一致（`cems.plant1_device1`）。
+CHILD_TABLE = f"cems.{TD_PLANT}_{os.getenv('TD_DEVICE', 'device1')}"
 TS_FORMAT = "%Y-%m-%d %H:%M:%S"
 COLUMNS = ("so2", "nox", "dust", "o2", "humidity", "flow", "temp", "pressure", "velocity")
 TD_AUTH = "Basic cm9vdDp0YW9zZGF0YQ=="
@@ -70,8 +94,21 @@ def _margin_seconds() -> int:
     宿主侧不能直接 import src/web/cache.py —— 那会在导入时就去连 127.0.0.1:6379，
     而 Redis 只在内网暴露（有意如此）。所以这里只读环境变量。
     """
-    import os
     return int(os.getenv("CACHE_MARGIN_SECONDS", "60"))
+
+
+def set_child_table(device: str) -> str:
+    """按设备把目标子表切成 `{plant}_{device}`，返回切好之后的表名。
+
+    只在 `main()` 里调一次（`CHILD_TABLE` 是全模块共用的目标表）。设备名会做
+    白名单校验，避免把引号拼进 SQL / 表名（AGENTS.md §5）。
+    """
+    global CHILD_TABLE
+    scope = resolve_device(device)
+    if not all(char.isalnum() or char in "_-" for char in scope):
+        raise SystemExit(f"--device 取值非法（只允许字母/数字/下划线/中划线）: {scope!r}")
+    CHILD_TABLE = f"cems.{TD_PLANT}_{scope}"
+    return CHILD_TABLE
 
 
 # ==================== 1. TDengine 访问 ====================
@@ -237,6 +274,33 @@ def clear_cache(base: str = DIRECT_BASE) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
+def check_device_scope(device: str) -> Optional[str]:
+    """核对展示层读的设备与本次写入的子表是同一台；不一致返回提示串（调用方中止）。
+
+    多设备上线后，"缓存多久刷新"这件事**只在同一个设备维度内成立**：
+    哨兵写进 `cems.plant1_device2`、而 web 实例的 `cache.DEVICE_SCOPE` 还是
+    `plant1/device1` 的话，展示层永远不会看到这一分钟的库内最大值变化，
+    脚本会误报"写后失效没兜住"。所以这里先读 `/api/cache/stats` 的 device_scope。
+    读不到就返回 None（不中止）：Redis 缓存关闭时该接口仍可用，
+    但真连不上时说明 web 实例本身有问题，后面预热那一步会自然报错。
+    """
+    try:
+        payload = cache_stats(DIRECT_BASE)
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        print(f"⚠️ 读不到 {DIRECT_BASE}/api/cache/stats（{exc}）："
+              f"跳过设备维度一致性核对，请自行确认 web 实例读的是 {device}")
+        return None
+    scope = str(payload.get("device_scope", ""))
+    if scope and not (scope.endswith(f"/{device}") or scope == device):
+        return (
+            f"展示层设备维度 {scope} 与本次写入的子表 {CHILD_TABLE}（--device {device}）不一致；"
+            f"哨兵写进 A 设备、展示层读 B 设备时观测不到刷新。"
+            f"请把 web 容器的 TD_DEVICE 改成 {device}（或改 --device）后重跑。"
+        )
+    print(f"[0] 设备维度核对通过：web device_scope={scope or '(未下发)'}，写入子表={CHILD_TABLE}")
+    return None
+
+
 # ==================== 3. 主流程 ====================
 
 def main() -> int:
@@ -246,7 +310,22 @@ def main() -> int:
     parser.add_argument("--poll-interval", type=float, default=0.2)
     parser.add_argument("--sentinel-second", type=int, default=5,
                         help="哨兵行在目标分钟内的秒位（插在 :05，便于与 5 s 网格区分）")
+    add_device_argument(
+        parser,
+        help_text=(
+            "按设备定位目标子表 `{plant}_{device}` 并核对展示层设备维度"
+            "（默认 device1 ⇒ 子表 cems.plant1_device1，与改造前一致）"
+        ),
+    )
     args = parser.parse_args()
+
+    device = resolve_device(args.device)
+    table = set_child_table(device)
+    print(f"[0] 被测设备={device}，目标子表={table}")
+    mismatch = check_device_scope(device)
+    if mismatch:
+        print(f"⛔ {mismatch}")
+        return 2
 
     # ---- 选目标分钟（推导见下，**不要**随手改窗口）----
     # 四个条件必须同时满足（每一条都是实测撞出来的）：
