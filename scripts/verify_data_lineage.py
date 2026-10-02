@@ -243,13 +243,23 @@ class LineageRun:
             self._docker("unpause", name, check=False)
 
     def cleanup(self) -> None:
-        """删临时容器 + 清 trace 数据（TDengine 删行不删表，以 COUNT=0 为准）。"""
+        """删临时容器 + 清 trace 数据（TDengine 删行不删表，以 COUNT=0 为准）。
+
+        ⚠️ 必须清**四张表**，不能只清 `cems_data`（2026-10-03 修）：
+        临时接入层跑起来后会照常做**小时结算与告警判定**，于是
+        `cems_hourly_verdict` / `cems_alarm_event` / `cems_alarm_push` 里
+        也会按 `plant=trace` 写进结论与事件行。原先只删数据表 →
+        **每跑一次就残留几十行**（实测清理时一次删出 102/106/106 行）。
+        任何"用临时标签跑真实链路"的脚本都有这个坑。
+        """
         for name in self.names:
             self._docker("rm", "-f", name, check=False)
-        try:
-            td_query(f"DELETE FROM {TD_DB}.{TD_STABLE} WHERE plant = '{self.plant}';")
-        except Exception as exc:                        # noqa: BLE001
-            print(f"  ⚠️ 清理 trace 数据失败: {exc}")
+        for stable in ("cems_data", "cems_hourly_verdict",
+                       "cems_alarm_event", "cems_alarm_push"):
+            try:
+                td_query(f"DELETE FROM {TD_DB}.{stable} WHERE plant = '{self.plant}';")
+            except Exception as exc:                    # noqa: BLE001
+                print(f"  ⚠️ 清理 {stable} 的 trace 数据失败: {exc}")
 
     # ---- 取证 ----
 
@@ -595,11 +605,20 @@ def main() -> int:
         print("\n清理临时链路与 trace 数据…")
         run.unfreeze()          # ⚠️ pause 的容器要先恢复，否则 rm 可能带不走
         run.cleanup()
-        left = td_query(
-            f"SELECT COUNT(*) FROM {TD_DB}.{TD_STABLE} WHERE plant = '{run.plant}';"
-        )
-        remaining = int(left[0][0]) if left else -1
-        print(f"  trace 残留行数 = {remaining}（应为 0）")
+        # ⚠️ 残留复核必须覆盖**四张表**（临时链路会写结论与告警行，见 cleanup 的说明）
+        totals = {}
+        for stable in ("cems_data", "cems_hourly_verdict",
+                       "cems_alarm_event", "cems_alarm_push"):
+            try:
+                got = td_query(
+                    f"SELECT COUNT(*) FROM {TD_DB}.{stable} WHERE plant = '{run.plant}';"
+                )
+                totals[stable] = int(got[0][0]) if got else -1
+            except Exception:                           # noqa: BLE001
+                totals[stable] = -1
+        remaining = sum(v for v in totals.values() if v > 0)
+        detail = " ".join(f"{k.replace('cems_', '')}={v}" for k, v in totals.items())
+        print(f"  trace 残留行数 = {remaining}（应为 0）｜ 逐表 {detail}")
 
     print("\n" + "=" * 44)
     if FAILURES:
