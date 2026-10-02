@@ -44,6 +44,15 @@
 | 0006 | HJ212 出口与北向适配 | 网关侧实时分支的定位、**边界 6 条**、P1~P5 分期 |
 | 0007 | P3 出口与传输方案 | 🚧 **待产出**（出口/TCP/独立缓存设计 + 原子交接回归测试规格） |
 
+### 北向出口（P4/P5 最小实现，代码）
+| 文件 | 内容 |
+|---|---|
+| src/protocol/hj212/ | HJ212-2025 编解码 + SM4（P1/P2） |
+| src/protocol/adapter.py | **出口适配层**：ProtocolAdapter 接口 + HJ212/HTTP 两个实现 |
+| scripts/hj212_loopback_demo.py | P4 演示：真实 TCP 回环（编包→发→解码→回 9014） |
+| scripts/northbound_demo.py | P5 演示：一份数据走两个出口、各自独立解码 |
+| scripts/verify_atomic_handover.py | 补传原子交接回归测试（P1~P8 + 负向对照） |
+
 ### `runbooks/` — 手册与台账
 | 文件 | 内容 |
 |---|---|
