@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""平台接入：订阅 MQTT 上送报文，解析 9 个烟气测点后写入 TDengine 时序库 cems.cems_data 超级表。"""
+"""平台接入：订阅 MQTT 上送报文，解析 9 个烟气测点后写入 TDengine 时序库 cems.cems_data 超级表。
+
+★ 排放超标告警（2026-10-02 接入，依据 docs/adr/0002-告警判据选型.md 方案乙）：
+  入库成功 → 算折算值（全链路唯一一处）→ **接入层逐条判折算值超限** → 落告警事件表/推送记录。
+  判定不改拒收逻辑、不改契约、不加服务、不加依赖；
+  折算值仍然不给 cems_data 建列，事件表里存的是**判定快照**（判定证据，不是数据冗余列）。
+"""
 
 from __future__ import annotations
 
@@ -8,9 +14,11 @@ import math
 import os
 import re
 import sys
-from datetime import datetime
+import threading
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Final, Optional
+from typing import Any, Final, Iterable, Optional, Sequence
 
 import paho.mqtt.client as mqtt
 import taosrest
@@ -20,6 +28,14 @@ PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.common.alarm_judge import (   # noqa: E402
+    AlarmConfig,
+    AlarmEvent,
+    AlarmJudge,
+    AlarmTables,
+    hour_start_of,
+    normalize_ts,
+)
 from src.common.points import (   # noqa: E402
     COLUMNS,
     NAMES,
@@ -98,6 +114,34 @@ REFERENCE_LOG_EVERY: Final[int] = 20       # 折算值抽样日志周期（条�
 # ---- 收发/拒收计数（把上游数据质量问题量化出来）----
 STATS: Final[dict[str, int]] = {"received": 0, "accepted": 0, "rejected": 0}
 
+# ---- 排放超标告警（ADR-0002 方案乙：接入层逐条判折算值）----
+# 判据参数（窗口 M/N、恢复系数、覆盖率门限…）全部在 src/common/alarm_judge.py 里定义，
+# 这里只负责：绑定表名/标签、开关、以及"落库 + 推送记录 + 日志"这三件事。
+# ⚠️ 判定不改拒收逻辑、不改契约、不加服务、不加依赖；折算值仍然不给 cems_data 建列。
+try:
+    ALARM_CONFIG: Final[AlarmConfig] = AlarmConfig.from_env()
+except (ValueError, TypeError) as exc:      # 环境变量写错就拒绝启动，别带病运行
+    raise SystemExit(f"ALARM_* 配置无法解析，拒绝启动: {exc}") from exc
+
+ALARM_TABLES: Final[AlarmTables] = AlarmTables(
+    db=TD_DB,
+    plant=TD_PLANT,
+    device=TD_DEVICE,
+    event_stable=os.getenv("ALARM_EVENT_STABLE", "cems_alarm_event"),
+    verdict_stable=os.getenv("ALARM_VERDICT_STABLE", "cems_hourly_verdict"),
+    push_stable=os.getenv("ALARM_PUSH_STABLE", "cems_alarm_push"),
+    data_stable=TD_STABLE,
+)
+ALARM_RESTORE_LIMIT: Final[int] = 400            # 启动时折叠最近多少条事件行来恢复状态
+# 判据统计日志周期（条）：打印 已判/重投跳过/事件/无效样本 计数，
+# 让人一眼看出"判据是活的"（ADR-0002 §2.2 2) 可观测性）。
+ALARM_STATS_LOG_SAMPLES: Final[int] = int(os.getenv("ALARM_STATS_LOG_SAMPLES", "60"))
+# 整点后等多久再结算上一个小时：等网关补传收尾（补传实测最大滞后 32.1s，
+# 取 60s 与 web 侧 REPORT_INFLIGHT_GRACE_SECONDS 同一依据）。
+ALARM_SETTLE_DELAY_SECONDS: Final[float] = float(
+    os.getenv("ALARM_SETTLE_DELAY_SECONDS", "60")
+)
+
 # ---- 日志 ----
 LOG_LEVEL: Final[int] = logging.INFO
 LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -130,6 +174,17 @@ def validate_config() -> None:
         ("TD_STABLE", TD_STABLE),
         ("TD_PLANT", TD_PLANT),
         ("TD_DEVICE", TD_DEVICE),
+    ):
+        if not SQL_NAME_RE.match(value):
+            raise ValueError(
+                f"{label} 只能由字母、数字、下划线组成且以字母或下划线开头: {value!r}"
+            )
+    # 告警侧：判据参数自检 + 表名同样要能安全拼进 SQL
+    ALARM_CONFIG.validate()
+    for label, value in (
+        ("ALARM_EVENT_STABLE", ALARM_TABLES.event_stable),
+        ("ALARM_VERDICT_STABLE", ALARM_TABLES.verdict_stable),
+        ("ALARM_PUSH_STABLE", ALARM_TABLES.push_stable),
     ):
         if not SQL_NAME_RE.match(value):
             raise ValueError(
@@ -327,6 +382,256 @@ class TdWriter:
             self._safe_close(conn)
 
 
+# ==================== 4b. 告警表写入器 ====================
+
+class AlarmWriter:
+    """告警表读写器：建三张告警超级表，幂等写入事件行 / 推送记录 / 小时结论行。
+
+    为什么要独立一个写入器（而不是复用 TdWriter）：
+        - 小时结算跑在**独立线程**里，不能和 MQTT 回调线程抢同一个游标；
+        - 告警表的写失败绝不该影响入库，两条链路各自重连、各自重试。
+
+    幂等语义 = **`(子表, ts)` 覆盖**：子表名 = `plant_device_point_judgetype`，
+    同一子表写同一个 ts，TDengine 覆盖原行而不是新增（本机 3.3.6.13 实测：
+    `COUNT(*)` 不变、值被覆盖）。所以 QoS1 重投同一条报文只会覆盖同一行。
+    """
+
+    def __init__(self, tables: AlarmTables) -> None:
+        self._tables = tables
+        self._conn: Optional[Any] = None
+        self._cur: Optional[Any] = None
+
+    @property
+    def ready(self) -> bool:
+        """当前是否持有可用的数据库游标。"""
+        return self._cur is not None
+
+    def connect(self) -> bool:
+        """连接并保证三张告警超级表存在；成功返回 True（失败只记 error 不抛）。"""
+        conn: Optional[Any] = None
+        try:
+            conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
+            cur = conn.cursor()
+            for sql in self._tables.create_sql():
+                cur.execute(sql)
+        except Exception as exc:
+            LOGGER.error("告警表连接或建表失败: %s", exc)
+            self.close()
+            if conn is not None:
+                TdWriter._safe_close(conn)
+            return False
+
+        self.close()
+        self._conn, self._cur = conn, cur
+        LOGGER.info(
+            "告警表就绪: %s / %s / %s",
+            self._tables.event_stable, self._tables.verdict_stable, self._tables.push_stable,
+        )
+        return True
+
+    def execute(self, sql: str) -> bool:
+        """执行一条写语句；失败自动重连重试一次，仍失败返回 False。"""
+        if not self.ready and not self.connect():
+            return False
+        if self._execute(sql):
+            return True
+        LOGGER.error("告警写库失败，重连后重试一次")
+        if self.connect() and self._execute(sql):
+            return True
+        return False
+
+    def _execute(self, sql: str) -> bool:
+        if self._cur is None:
+            return False
+        try:
+            self._cur.execute(sql)
+            return True
+        except Exception as exc:
+            LOGGER.error("告警写库失败: %s | SQL: %s", exc, sql)
+            return False
+
+    def write(self, sqls: Iterable[str]) -> int:
+        """逐条写；返回成功条数（一条失败不影响其余，告警不能因为一行写坏就全丢）。"""
+        return sum(1 for sql in sqls if self.execute(sql))
+
+    def query(self, sql: str) -> list[list[Any]]:
+        """执行只读查询，返回行列表；失败返回空列表（调用方按"查不到"处理）。"""
+        if not self.ready and not self.connect():
+            return []
+        try:
+            self._cur.execute(sql)
+            return [list(row) for row in self._cur.fetchall()]
+        except Exception as exc:
+            LOGGER.error("告警查库失败: %s | SQL: %s", exc, sql)
+            return []
+
+    def close(self) -> None:
+        """释放当前连接（游标置空，下次操作会自动重连）。"""
+        conn, self._conn, self._cur = self._conn, None, None
+        if conn is not None:
+            TdWriter._safe_close(conn)
+
+
+def publish_alarm_events(
+    writer: AlarmWriter,
+    tables: AlarmTables,
+    events: Sequence[AlarmEvent],
+    channel: str,
+) -> tuple[int, int]:
+    """把告警事件落成**可验证的动作**：事件行 + 推送记录 + 结构化日志。
+
+    一期没有外部推送通道（没有邮件/Webhook 服务），所以"推送"被实现成两件可查的事：
+        1. `cems_alarm_push` 里一条推送记录（`channel`/`status`/`payload`，与事件行同 ts，
+           因此同样满足 `(子表, ts)` 幂等）；
+        2. 一行 `ALARM_PUSH ...` 结构化日志（可 grep、可进日志采集）。
+    ⚠️ 真实外部推送（Webhook / 短信 / 环保平台）**未接入**，属待接项（ADR-0002 §6 未决 5）。
+
+    返回 (成功的事件行数, 成功的推送记录数)。
+    """
+    if not events:
+        return 0, 0
+    event_sqls = [tables.event_insert_sql(event) for event in events]
+    push_sqls = [tables.push_insert_sql(event, channel) for event in events]
+    for event in events:
+        LOGGER.info(event.log_text(channel))
+    written_events = writer.write(event_sqls)
+    written_push = writer.write(push_sqls)
+    if written_events != len(event_sqls) or written_push != len(push_sqls):
+        LOGGER.error(
+            "告警落库不完整: 事件行 %d/%d，推送记录 %d/%d",
+            written_events, len(event_sqls), written_push, len(push_sqls),
+        )
+    return written_events, written_push
+
+
+def restore_judge_state(judge: AlarmJudge, writer: AlarmWriter, tables: AlarmTables) -> int:
+    """从事件表折叠出判据状态（§3.3「重启恢复」）。
+
+    恢复不成功**不阻止启动**：只是该测点的 OPEN 事件会从"当前"重新开始计（可能重复一次
+    START，但 `(子表, ts)` 覆盖语义保证不会多出事件行）。所以失败只记 warning。
+    """
+    rows = writer.query(tables.restore_select_sql(ALARM_RESTORE_LIMIT))
+    if not rows:
+        return 0
+    folded = judge.restore(rows)
+    LOGGER.info(
+        "判据状态已从事件表恢复: 折叠 %d 行；仍 OPEN 的测点 = %s（不会重发 START）",
+        folded, judge.open_points() or "无",
+    )
+    return folded
+
+
+# ==================== 4c. 小时结算（§3.4 覆盖率三态结论） ====================
+
+def settle_hour(
+    writer: AlarmWriter,
+    tables: AlarmTables,
+    judge: AlarmJudge,
+    hour_start: datetime,
+) -> tuple[int, int]:
+    """结算一个整点小时，返回 (写入的结论行数, 写入的事件行数)。
+
+    ⚠️ 折算值不落库，所以这里**回读原始行、用契约函数重算**（`points.to_reference_o2()`，
+    仍然是唯一一份公式）；覆盖率分母 = 3600 / ALARM_POLL_INTERVAL = 720 条/小时。
+    ⚠️ 覆盖率不足判 `insufficient`，**绝不判达标**（§3.4：最危险的漏报形态是"缺数据被当达标"）。
+    """
+    start_text = hour_start.strftime(TS_FORMAT)
+    end_text = (hour_start + timedelta(hours=1)).strftime(TS_FORMAT)
+    rows = writer.query(tables.hour_rows_sql(start_text, end_text))
+
+    samples: list[tuple[str, float, dict[str, float]]] = []
+    for row in rows:
+        # 列序由 AlarmTables.hour_rows_sql 固定：ts, o2, dust, so2, nox
+        o2 = row[1]
+        values = {column: row[2 + index] for index, column in enumerate(ZS_TARGETS)}
+        # 缺列（老数据/老库补列留下的 NULL）按"折算不出来"处理：不该混进有效样本
+        if o2 is None or any(value is None for value in values.values()):
+            LOGGER.warning("小时结算遇到缺列的行，按无效样本计入: %s", row[0])
+            samples.append((str(row[0]), float("nan"), {k: float("nan") for k in ZS_TARGETS}))
+            continue
+        samples.append((
+            str(row[0]), float(o2), {key: float(value) for key, value in values.items()},
+        ))
+
+    verdicts, events = judge.judge_hour(start_text, samples)
+    written_verdicts = writer.write(
+        [tables.verdict_insert_sql(verdict) for verdict in verdicts]
+    )
+    written_events = 0
+    if events:
+        written_events, _push = publish_alarm_events(
+            writer, tables, events, ALARM_CONFIG.push_channel,
+        )
+    for verdict in verdicts:
+        LOGGER.info(
+            "小时结论 %s %s: verdict=%s n_total=%d n_valid=%d n_invalid=%d "
+            "coverage=%.4f conv_mean=%s limit=%.1f judge_version=%s",
+            verdict.ts, verdict.point, verdict.verdict, verdict.n_total, verdict.n_valid,
+            verdict.n_invalid, verdict.coverage,
+            "nan" if not math.isfinite(verdict.conv_mean) else f"{verdict.conv_mean:.4f}",
+            verdict.limit_value, verdict.judge_version,
+        )
+    return written_verdicts, written_events
+
+
+def _settle_hours(
+    writer: AlarmWriter,
+    tables: AlarmTables,
+    judge: AlarmJudge,
+    hours: Sequence[datetime],
+) -> None:
+    """结算若干个小时，单个小时失败不影响其余（异常只记 error）。"""
+    for hour_start in hours:
+        try:
+            n_verdicts, n_events = settle_hour(writer, tables, judge, hour_start)
+            LOGGER.info(
+                "小时结算完成 %s: 结论 %d 行，事件 %d 行",
+                hour_start.strftime(TS_FORMAT), n_verdicts, n_events,
+            )
+        except Exception:
+            LOGGER.exception("小时结算异常 %s（继续下一个）", hour_start.strftime(TS_FORMAT))
+
+
+def hourly_settlement_loop(
+    writer: AlarmWriter,
+    tables: AlarmTables,
+    judge: AlarmJudge,
+    backfill_hours: int,
+    settle_delay_seconds: float,
+) -> None:
+    """小时结算线程主体：启动补结算 + 之后每个整点后结算上一个小时。
+
+    - 启动时补结算最近 `backfill_hours` 个**已闭合**小时（进程重启/首次上线不用等整点）
+    - 之后每次醒来的时刻 = 下一个整点 + `settle_delay_seconds`（等补传收尾）
+    - 重复结算同一个小时是安全的：结论表与事件行都按 `(子表, ts)` 覆盖
+    - 本线程是 daemon：主进程退出即结束；任何异常都吞掉并记录，绝不拖垮订阅
+    """
+    now = datetime.now()
+    current_hour = hour_start_of(now)
+    if backfill_hours > 0:
+        closed_hours = [
+            current_hour - timedelta(hours=offset)
+            for offset in range(backfill_hours, 0, -1)
+        ]
+        LOGGER.info("启动补结算 %d 个已闭合小时: %s", len(closed_hours), [
+            hour.strftime(TS_FORMAT) for hour in closed_hours
+        ])
+        _settle_hours(writer, tables, judge, closed_hours)
+
+    while True:
+        now = datetime.now()
+        next_hour = hour_start_of(now) + timedelta(hours=1)
+        sleep_seconds = (next_hour - now).total_seconds() + settle_delay_seconds
+        LOGGER.info(
+            "下次小时结算: %s（%s 起算，等待 %.0fs = 到整点 + %.0fs 补传余量）",
+            (next_hour + timedelta(seconds=settle_delay_seconds)).strftime(TS_FORMAT),
+            next_hour.strftime(TS_FORMAT), sleep_seconds, settle_delay_seconds,
+        )
+        time.sleep(max(1.0, sleep_seconds))
+        target = hour_start_of(datetime.now()) - timedelta(hours=1)
+        _settle_hours(writer, tables, judge, [target])
+
+
 # ==================== 5. 折算值（标干 → 基准氧含量） ====================
 #
 # 折算值分**两层**，职责不同，别混：
@@ -388,14 +693,25 @@ def transmit_reference_values(values: dict[str, float]) -> dict[str, float]:
     }
 
 
-def record_reference(ts: str, values: dict[str, float]) -> dict[str, float]:
+def record_reference(
+    ts: str,
+    values: dict[str, float],
+    math_references: Optional[dict[str, float]] = None,
+) -> dict[str, float]:
     """算一次折算值、编码成传输值，并记成"最近一条"快照；返回本次结果。
 
     只在写入 TDengine **成功之后**调用：进不了库的数据不配当"最近一条"。
     每条报文只调 reference_values() 一次（折算值全链路只在一处算），
     快照存的是**传输编码后**的值（下游/验证脚本看到的应与上报出去的一致）。
+
+    `math_references`：调用方已经算好的**数学层**折算值（`reference_values()` 的结果）。
+    告警判定要的正是这一份（`O2 >= 21%` 时是 nan），接入层算一次后同时喂给
+    "协议编码"和"判据"两处 —— 既有"公式只算一次"，也避免判定拿到哨兵值。
     """
-    snapshot = transmit_reference_values(values)
+    references = reference_values(values) if math_references is None else math_references
+    snapshot = {
+        column: to_transmit_value(value) for column, value in references.items()
+    }
     LAST_REFERENCE["values"] = snapshot
     LAST_REFERENCE["ts"] = ts
     return snapshot
@@ -488,8 +804,9 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
     STATS["accepted"] += 1
     writer: TdWriter = userdata["writer"]
     if writer.write(ts, values):
-        # 写入成功后算折算值（全链路唯一一处），并留一份"最近值"给下游/验证脚本
-        references = record_reference(ts, values)
+        # 折算值全链路只在这里算一次：数学层（nan 语义）留给判定，协议层（哨兵值）留给出站
+        math_references = reference_values(values)
+        references = record_reference(ts, values, math_references)
         if STATS["accepted"] == 1 or STATS["accepted"] % REFERENCE_LOG_EVERY == 0:
             # 抽样打 INFO 而不是每条都打（首条也打：重启后立刻能看到折算出口是活的）
             # 打的是**传输值**：O2 >= 21% 时应当看到哨兵值，而不是 nan
@@ -504,6 +821,21 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
                 values[O2_FIELD_NAME],
                 " ".join(f"{column}={references[column]:.4f}" for column in ZS_TARGETS),
             )
+        # ★ 排放超标告警：逐条判**折算值**（吃上面算好的数学层结果，不同帧不判、不重算公式）
+        #   O2 >= 21% 时数学层是 nan → 判"数据无效"，绝不拿哨兵值去比限值
+        if ALARM_CONFIG.enable:
+            try:
+                events = userdata["judge"].on_sample(ts, values, math_references)
+                if events:
+                    publish_alarm_events(
+                        userdata["alarm_writer"], ALARM_TABLES, events,
+                        ALARM_CONFIG.push_channel,
+                    )
+            except Exception:
+                # 告警链路出问题绝不影响入库与订阅（判定只是入库后的附加动作）
+                LOGGER.exception("告警判定/落库异常（入库与订阅不受影响）")
+            if STATS["accepted"] % ALARM_STATS_LOG_SAMPLES == 0:
+                LOGGER.info("告警判据统计: %s", userdata["judge"].stats)
         # 高频成功降到 debug；只在排查数据问题时才需要开
         LOGGER.debug("已入库: %s %s", ts, " ".join(f"{k}={v}" for k, v in values.items()))
 
@@ -526,6 +858,48 @@ def main() -> None:
     if not writer.connect():
         LOGGER.error("首次连接 TDengine 失败，将在收到数据时自动重试")
 
+    # 1b. 初始化告警链路：判据状态从事件表折叠恢复 + 独立的告警表写入器
+    alarm_writer = AlarmWriter(ALARM_TABLES)
+    if not alarm_writer.connect():
+        LOGGER.error("首次连接告警表失败，将在需要写入时自动重试")
+    judge = AlarmJudge(ALARM_CONFIG)
+    if ALARM_CONFIG.enable:
+        if alarm_writer.ready:
+            restore_judge_state(judge, alarm_writer, ALARM_TABLES)
+        else:
+            LOGGER.warning(
+                "告警表不可用，判据状态未能恢复：该测点若原本 OPEN，重启后会重新计一次 START"
+                "（(子表, ts) 覆盖语义保证不会多出事件行）"
+            )
+        LOGGER.info(
+            "告警判据已启用: 判折算值；滑窗 %d 条里 >= %d 条越限触发；"
+            "连续 %d 条 <= 限值×%.2f 结束；小时覆盖率门限 %.2f（低于则判数据不足）",
+            ALARM_CONFIG.window_samples, ALARM_CONFIG.min_over_samples,
+            ALARM_CONFIG.recover_samples, ALARM_CONFIG.recover_ratio,
+            ALARM_CONFIG.coverage_min,
+        )
+    else:
+        LOGGER.warning("ALARM_ENABLE=0：本次不判超标（只入库、只算折算值）")
+
+    # 1c. 小时结算线程（独立连接，daemon，异常不影响订阅）
+    if ALARM_CONFIG.hourly_enable and ALARM_CONFIG.enable:
+        settlement_writer = AlarmWriter(ALARM_TABLES)
+        threading.Thread(
+            target=hourly_settlement_loop,
+            args=(
+                settlement_writer, ALARM_TABLES, judge,
+                ALARM_CONFIG.hourly_backfill_hours, ALARM_SETTLE_DELAY_SECONDS,
+            ),
+            name="alarm-hourly-settlement",
+            daemon=True,
+        ).start()
+        LOGGER.info(
+            "小时结算已启用: 每小时整点后 %.0fs 结算上一小时，启动补结算 %d 个小时",
+            ALARM_SETTLE_DELAY_SECONDS, ALARM_CONFIG.hourly_backfill_hours,
+        )
+    elif not ALARM_CONFIG.hourly_enable:
+        LOGGER.info("ALARM_HOURLY_ENABLE=0：本次不跑小时结算")
+
     # 2. 连 MQTT（用 userdata 把写入器传给回调）
     # clean_session=False → 持久会话，broker 为离线期间的消息排队（配合固定 client_id）
     client = mqtt.Client(
@@ -533,7 +907,9 @@ def main() -> None:
         client_id=MQTT_CLIENT_ID,
         clean_session=MQTT_CLEAN_SESSION,
     )
-    client.user_data_set({"writer": writer})
+    client.user_data_set({
+        "writer": writer, "judge": judge, "alarm_writer": alarm_writer,
+    })
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
     client.on_message = on_message
@@ -557,6 +933,7 @@ def main() -> None:
         except Exception as exc:
             LOGGER.debug("断开 MQTT 时出错（忽略）: %s", exc)
         writer.close()
+        alarm_writer.close()
 
 
 if __name__ == "__main__":

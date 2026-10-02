@@ -202,6 +202,28 @@ services:
       TD_STABLE: cems_data
       TD_PLANT: plant1
       TD_DEVICE: device1
+      # ---- 排放超标告警（ADR-0002 方案乙：接入层逐条判**折算值**）----
+      # 判据实现见 src/common/alarm_judge.py；参数默认值即 ADR-0002 §2.2 4) 的那一组。
+      # 判定只在"入库成功"之后追加一次调用，不改拒收逻辑、不改契约、不加服务、不加依赖；
+      # 折算值仍然不给 cems_data 建列，事件表里存的是**判定快照**（判定证据）。
+      ALARM_ENABLE: ${ALARM_ENABLE:-1}
+      ALARM_WINDOW_SAMPLES: ${ALARM_WINDOW_SAMPLES:-6}          # 滑窗 M 条有效样本
+      ALARM_MIN_OVER_SAMPLES: ${ALARM_MIN_OVER_SAMPLES:-3}      # 其中至少 N 条越限才触发
+      ALARM_RECOVER_RATIO: ${ALARM_RECOVER_RATIO:-0.95}         # 恢复到 限值×该系数 才算回来
+      ALARM_RECOVER_SAMPLES: ${ALARM_RECOVER_SAMPLES:-6}        # 连续 K 条恢复才 END
+      ALARM_REMIND_SECONDS: ${ALARM_REMIND_SECONDS:-1800}       # 事件仍 OPEN 时的提醒间隔
+      ALARM_HOURLY_ENABLE: ${ALARM_HOURLY_ENABLE:-1}            # 小时结算（覆盖率三态结论）
+      ALARM_HOURLY_BACKFILL_HOURS: ${ALARM_HOURLY_BACKFILL_HOURS:-2}
+      ALARM_SETTLE_DELAY_SECONDS: ${ALARM_SETTLE_DELAY_SECONDS:-60}   # 整点后等补传收尾再结算
+      ALARM_COVERAGE_MIN: ${ALARM_COVERAGE_MIN:-0.75}           # 低于它判数据不足，绝不判达标
+      ALARM_INVALID_RATIO_MAX: ${ALARM_INVALID_RATIO_MAX:-0.10} # 无效样本占比上限（O2>=21%）
+      ALARM_POLL_INTERVAL: ${ALARM_POLL_INTERVAL:-5.0}          # 算 720 条/小时用，须与网关一致
+      ALARM_JUDGE_VERSION: ${ALARM_JUDGE_VERSION:-v1.0.0}
+      ALARM_PUSH_CHANNEL: ${ALARM_PUSH_CHANNEL:-log}
+      ALARM_STATS_LOG_SAMPLES: ${ALARM_STATS_LOG_SAMPLES:-60}
+      ALARM_EVENT_STABLE: ${ALARM_EVENT_STABLE:-cems_alarm_event}
+      ALARM_VERDICT_STABLE: ${ALARM_VERDICT_STABLE:-cems_hourly_verdict}
+      ALARM_PUSH_STABLE: ${ALARM_PUSH_STABLE:-cems_alarm_push}
     depends_on:
       emqx:
         condition: service_healthy
