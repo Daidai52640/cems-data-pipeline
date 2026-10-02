@@ -505,18 +505,33 @@ class LoadGen:
             thread.join()
 
         published_end = time.monotonic()
-        # 收尾：让在飞的消息落地、入库被观测到
-        deadline = published_end + args.settle + ARRIVAL_GRACE_S
-        while time.monotonic() < deadline:
+        # 收尾：必须等**发布出去的每一条都在库内可见**才能收工。
+        # ⚠️ 不能只等固定秒数：高并发下 broker 队列 + 接入层单线程入库会明显滞后
+        #    （实测 N=10、50 条/秒 时，发布结束还有上千条排在队列里没入库；
+        #     此时若按固定 settle 收工，汇总里的"库内可见"会远小于"已发布"，
+        #     看起来像丢数，其实只是还没查完）。
+        #    这里的判据是"库内可见条数 = 已发布条数"，另加 idle 上限防止无限等。
+        remaining_wait = max(args.settle, 10.0)
+        idle = 0.0
+        last_seen = -1
+        drain_deadline = published_end + args.visibility_timeout
+        while idle < remaining_wait and time.monotonic() < drain_deadline:
             with self._lock:
-                done = sum(1 for item in self.sent if item.seen > 0)
                 total = len(self.sent)
-            if done >= total and time.monotonic() > published_end + args.settle:
+                seen = self.db_visible
+            if total and seen >= total:
                 break
+            if seen != last_seen:
+                idle = 0.0
+                last_seen = seen
+            else:
+                idle += 0.2
             time.sleep(0.2)
+        self.drain_end = time.monotonic()
+        self.drain_complete = bool(self.sent) and self.db_visible >= len(self.sent)
 
         stop_seen.set()
-        poller.join(timeout=5.0)
+        poller.join(timeout=10.0)
         publisher.disconnect()
         publisher.loop_stop()
         probe.disconnect()
@@ -540,6 +555,30 @@ class LoadGen:
         args = self.args
         interval = args.interval
         start, end = self.publish_window
+        burst = interval < 1.0
+        if burst:
+            # ★ interval < 1 s 必须改成"**整周期突发**"：报文 ts 只有秒级精度，
+            #   一个周期内发完 N 条（同一秒），每个周期换一个秒，
+            #   于是"每设备每周期恰好一条、ts 全局唯一"。
+            #   若沿用"每周期只发 1 条"，一周期要跨 N 秒，下一周期的 ts 会与上一周期重叠，
+            #   子表主键 (子表, ts) 直接把上一条覆盖掉（实测 106 条唯一 ts 只留 90 行）。
+            cycle = 0
+            while not self.stop_publisher.is_set():
+                cycle_start = start + cycle * interval
+                if cycle_start >= end:
+                    break
+                delay = cycle_start - time.monotonic()
+                if delay > 0:
+                    time.sleep(delay)
+                # 突发周期：base 秒 = 窗口起点 + 周期序号（唯一），每台按 ts_offset 再错开
+                cycle_base = self.publish_base_epoch + int(round(cycle * interval))
+                for index in range(worker_index, len(self.curves), workers):
+                    if self.stop_publisher.is_set():
+                        break
+                    self._emit(publisher, self.curves[index], cycle_base, cycle)
+                cycle += 1
+            return
+
         cycle = 0
         while not self.stop_publisher.is_set():
             cycle_start = start + cycle * interval
@@ -560,55 +599,57 @@ class LoadGen:
             for index in range(worker_index, len(self.curves), workers):
                 if self.stop_publisher.is_set():
                     break
-                curve = self.curves[index]
-                planned = time.monotonic()
-                payload, payload_ts = curve.payload_at(
-                    datetime.now(tz=LOCAL_TZ), ts_base=cycle_base,
-                )
-                if args.debug_probe:
-                    print(f"[dbg] w{worker_index} cycle={cycle} base={cycle_base} "
-                          f"dev={curve.index} off={int(curve.ts_offset)} ts={payload_ts}",
-                          file=sys.stderr, flush=True)
-
-                with self._lock:
-                    self._seq += 1
-                    item = Sent(
-                        seq=self._seq, device=curve.index, device_name=curve.name,
-                        payload_ts=payload_ts, planned=planned, payload=payload,
-                    )
-                    self.sent.append(item)
-
-                item.published = time.monotonic()
-                try:
-                    info = publisher.publish(self.topics[curve.index], payload, qos=args.qos)
-                except Exception:                       # 边界异常不能掀翻发布线程
-                    with self._lock:
-                        self.enqueue_failures += 1
-                    item.rc = -1
-                else:
-                    item.rc = int(info.rc)
-                    if info.rc != mqtt.MQTT_ERR_SUCCESS:
-                        with self._lock:
-                            self.enqueue_failures += 1
-                    else:
-                        with self._lock:
-                            self.published_count += 1
-                            bucket = int(item.published - self.publish_window[0])
-                            self.rate_buckets[bucket] = self.rate_buckets.get(bucket, 0) + 1
-                        if args.ack_timeout > 0:
-                            try:
-                                info.wait_for_publish(timeout=args.ack_timeout)
-                            except (ValueError, RuntimeError):
-                                pass
-                            if not info.is_published():
-                                with self._lock:
-                                    self.ack_failures += 1
+                self._emit(publisher, self.curves[index], cycle_base, cycle)
 
             cycle += 1
-            # 周期已经过去很久（例如被 PUBACK 拖慢）：追上当前周期，别把落后的周期全补发一遍
-            now = time.monotonic()
-            if now > cycle_start + interval:
-                cycle = int((now - start) / interval)
+            # ⚠️ 这里**绝不能**按墙上时间把 cycle 往前跳（写成 cycle = (now-start)/interval）：
+            #    那样会把已经发过的 cycle 号再算一遍，cycle_base 重复 → 同一台同一秒发两条 →
+            #    子表主键 (子表, ts) 直接覆盖。实测正是它把 100 条压成 21 行。
+            #    cycle 只增 1；落后是 delay 的分内事（<0 就不睡，立刻追）。
+
+    def _emit(self, publisher: mqtt.Client, curve: DeviceCurve,
+              cycle_base: int, cycle: int) -> None:
+        """发一条该设备的报文（含台账/计数/等 PUBACK）。"""
+        args = self.args
+        planned = time.monotonic()
+        payload, payload_ts = curve.payload_at(datetime.now(tz=LOCAL_TZ), ts_base=cycle_base)
+        if args.debug_probe:
+            print(f"[dbg] cycle={cycle} base={cycle_base} dev={curve.index} "
+                  f"off={int(curve.ts_offset)} ts={payload_ts}", file=sys.stderr, flush=True)
+
+        with self._lock:
+            self._seq += 1
+            item = Sent(
+                seq=self._seq, device=curve.index, device_name=curve.name,
+                payload_ts=payload_ts, planned=planned, payload=payload,
+            )
+            self.sent.append(item)
+
+        item.published = time.monotonic()
+        try:
+            info = publisher.publish(self.topics[curve.index], payload, qos=args.qos)
+        except Exception:                       # 边界异常不能掀翻发布线程
+            with self._lock:
+                self.enqueue_failures += 1
+            item.rc = -1
+            return
+        item.rc = int(info.rc)
+        if info.rc != mqtt.MQTT_ERR_SUCCESS:
+            with self._lock:
+                self.enqueue_failures += 1
+            return
+        with self._lock:
+            self.published_count += 1
+            bucket = int(item.published - self.publish_window[0])
+            self.rate_buckets[bucket] = self.rate_buckets.get(bucket, 0) + 1
+        if args.ack_timeout > 0:
+            try:
+                info.wait_for_publish(timeout=args.ack_timeout)
+            except (ValueError, RuntimeError):
+                pass
+            if not info.is_published():
+                with self._lock:
+                    self.ack_failures += 1
 
     # ---- 4.3 库内可见性轮询 ----
     def _poll_visibility(self, stop: threading.Event) -> None:
@@ -788,6 +829,11 @@ class LoadGen:
                 "published_per_second": round(self.published_count / window, 3),
                 "visible_in_db_per_second": round(self.db_visible / window, 3),
                 "nominal_per_second": round(args.devices / args.interval, 3),
+                "drain_seconds": round(getattr(self, "drain_end", published_end) - first_pub, 3),
+                "drain_complete": getattr(self, "drain_complete", False),
+                "e2e_rows_per_second": round(
+                    self.db_visible / max(getattr(self, "drain_end", published_end) - first_pub, 1e-9), 3
+                ),
                 "per_second_buckets": {
                     str(second): count for second, count in sorted(self.rate_buckets.items())
                 },
@@ -998,7 +1044,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--ack-timeout", type=float, default=5.0,
                         help="等 PUBACK 的秒数；0 = 不等（只测发送侧吞吐）")
     parser.add_argument("--settle", type=float, default=5.0,
-                        help="停止发布后最多再等多少秒，等尾包入库")
+                        help="停止发布后，'本轮无新行入库'持续多少秒就算收尾完成")
+    parser.add_argument("--visibility-timeout", type=float, default=180.0,
+                        help="收尾阶段最长等多少秒等'库内可见 = 已发布'（硬上限）")
     parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_S,
                         help="库内可见性轮询间隔（秒）：lat_store 的量化误差等于它")
     parser.add_argument("--parallel-publishers", type=int, default=16,
@@ -1089,6 +1137,9 @@ def print_report(summary: dict[str, Any], csv_path: Path, json_path: Path) -> No
     print(f"发布窗口={throughput['publish_window_seconds']}s  "
           f"实际发布速率={throughput['published_per_second']} 条/秒  "
           f"库内可见速率={throughput['visible_in_db_per_second']} 条/秒")
+    print(f"端到端排空={throughput['drain_seconds']}s（发布结束到全部可见）  "
+          f"端到端吞吐={throughput['e2e_rows_per_second']} 条/秒  "
+          f"排空完成={throughput['drain_complete']}")
     print(f"入队={counts['published_enqueued']}  成功={counts['published_ok']}  "
           f"入队失败={counts['enqueue_failures']}  无PUBACK={counts['ack_failures']}  "
           f"旁听到达={counts['arrived_at_broker']}  库内可见={counts['visible_in_db']}")
