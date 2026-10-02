@@ -21,9 +21,26 @@
     python scripts/verify_report_coverage.py --base-url http://127.0.0.1:5001
     python scripts/verify_report_coverage.py --gap-start "2026-10-01 21:24" --gap-end "2026-10-01 21:29"
 
-前置：断档区间必须真的在库里（先跑一次
+设备维度（这段的 SQL 必须按设备过滤）
+-----------------------------------------------------------------------------
+`cems_data` 是多设备共用的超级表（TAG = plant/device），两台设备在同时写。
+下面那段**前置核查 SQL 必须带 `device = '<scope>'`**：不带过滤时同一分钟的
+COUNT(*) 会把两台设备（外加压测标签）的行一起算上，断档分钟被另一台的数据填满，
+"确认 21:26 那一分钟不返回"的核查结论会直接反过来
+（实测同一个 5 分钟窗口：不过滤 290 行，device1 单独 59 行）。
+
+⚠️ 本脚本验的是**展示层接口**，而接口的查询在服务端就已经按设备过滤了
+（`src/web/report.py` 从 `cache.DEVICE_SCOPE_PARTS` 取 plant/device，
+值来自 web 容器的 `TD_PLANT`/`TD_DEVICE`）。所以这里**没有**、也不该有
+`AND device = ...` —— HTTP 层压根没有设备参数，加了只会制造"以为按设备查了"的假象。
+替代做法：用 `--device` 声明"我期望验的是哪台设备"，脚本会读 web 实例
+`/api/cache/stats` 的 `device_scope` 核对，**不一致就直接失败**，
+避免拿着 device1 的接口结果去证明 device2 的覆盖率。
+
+前置：断档区间必须真的在**被测设备**的库里（先跑一次
       docker exec tdengine taos -s "SELECT _wstart, COUNT(*) FROM cems.cems_data
-        WHERE ts >= '2026-10-01 21:24:00' AND ts < '2026-10-01 21:29:00' INTERVAL(1m)"
+        WHERE ts >= '2026-10-01 21:24:00' AND ts < '2026-10-01 21:29:00'
+          AND device = 'device1' INTERVAL(1m)"
       确认 21:26 那一分钟不返回）。
 """
 
@@ -32,6 +49,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -41,16 +59,22 @@ from typing import Any, Final
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+if str(PROJECT_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 # 期望的表头真源取自导出模块本身，脚本里不再抄第三份列名
 from src.common.points import COLUMNS, POINTS          # noqa: E402
 from src.web import report_export                      # noqa: E402
+
+from _device_scope import add_device_argument, resolve_device   # noqa: E402
 
 DEFAULT_BASE_URL: Final[str] = "http://127.0.0.1"          # 对外入口（nginx:80）
 DIRECT_BASE_URL: Final[str] = "http://127.0.0.1:5001"      # 直连 web 容器端口（对照）
 DEFAULT_GAP_START: Final[str] = "2026-10-01 21:24"
 DEFAULT_GAP_END: Final[str] = "2026-10-01 21:29"
 TIMEOUT_SECONDS: Final[float] = 20.0
+#: 直连 web 容器读它的设备维度（nginx 不转发 /api/cache/stats，实测 403）
+STATS_BASE_URL: Final[str] = os.getenv("WEB_DIRECT_BASE_URL", DIRECT_BASE_URL)
 
 FAILURES: list[str] = []
 
@@ -97,6 +121,32 @@ def _minute(start_text: str, offset: int) -> str:
     from datetime import datetime, timedelta
     moment = datetime.strptime(start_text[:16], "%Y-%m-%d %H:%M")
     return (moment + timedelta(minutes=offset)).strftime("%Y-%m-%d %H:%M:00")
+
+
+def section_0_device_scope(device: str) -> None:
+    """0. 设备维度自检：接口服务端实际查的是哪台设备，必须与 --device 一致。
+
+    多设备上线后，`cems_data` 里两台设备同时在写，展示层的查询按
+    `TD_PLANT`/`TD_DEVICE`（⇒ `cache.DEVICE_SCOPE`）过滤。如果只看 HTTP 结果、
+    不核对服务端 scope，就可能拿 device1 的接口结果去声称"device2 覆盖率达标"。
+
+    读 `/api/cache/stats` 的 `device_scope`（直连 web 容器：nginx 不转发该路径）。
+    取不到就**跳过**而不是判失败 —— 直接连 5001 的场景是可选的，
+    缺这条元数据不代表覆盖率断言本身失效（诚实写明，不假装验过）。
+    """
+    print("\n=== 0. 设备维度自检（HTTP 接口的服务端 scope）===")
+    url = f"{STATS_BASE_URL.rstrip('/')}/api/cache/stats"
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as response:
+            stats = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        print(f"  [SKIP] 读不到 {url}（{exc}）；"
+              f"无法核对服务端设备维度，请自行确认接口确为 {device}")
+        return
+    scope = str(stats.get("device_scope", ""))
+    print(f"  期望设备={device}；web 实例 device_scope={scope or '(未下发)'}")
+    _check(scope.endswith(f"/{device}") or scope == device,
+           f"0. web 实例的 device_scope({scope}) 与 --device({device}) 一致")
 
 
 def section_a_gap_visible(base_url: str, start: str, end: str) -> dict[str, Any]:
@@ -282,9 +332,22 @@ def main() -> int:
                         help=f"接口入口（默认 nginx: {DEFAULT_BASE_URL}；直连: {DIRECT_BASE_URL}）")
     parser.add_argument("--gap-start", default=DEFAULT_GAP_START, help="断档区间起点")
     parser.add_argument("--gap-end", default=DEFAULT_GAP_END, help="断档区间终点")
+    add_device_argument(
+        parser,
+        help_text=(
+            "期望验的是哪台设备（默认 device1）。"
+            "本脚本走 HTTP，查询由展示层按它自己的 TD_PLANT/TD_DEVICE 过滤，"
+            "这里用来自检二者一致（不一致直接失败）"
+        ),
+    )
     args = parser.parse_args()
 
-    print(f"报表覆盖率验收：base_url={args.base_url} 断档区间={args.gap_start} ~ {args.gap_end}")
+    device = resolve_device(args.device)
+    print(
+        f"报表覆盖率验收：base_url={args.base_url} 断档区间={args.gap_start} ~ {args.gap_end} "
+        f"设备={device}（HTTP 侧由展示层按设备过滤，本脚本核对一致）"
+    )
+    section_0_device_scope(device)
     envelope = section_a_gap_visible(args.base_url, args.gap_start, args.gap_end)
     section_d_summary(envelope)
     section_e_three_units(args.base_url, args.gap_start, args.gap_end)

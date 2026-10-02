@@ -38,6 +38,17 @@
 #   所以逐样本仍带 ±0.5 s 的均匀量化偏差；报告里给的是：
 #     - P50/P95/max 的**原始观测值**（工程上可直接引用，偏保守）
 #     - 去偏估计（减 0.5 s）以及"仅直发样本"的固定段中值（min/max 中点法）
+#
+# 设备维度（必须按设备过滤）
+# -----------------------------------------------------------------------------
+#   `cems_data` 是多设备共用的超级表（TAG = plant/device），两台设备在同时写。
+#   本脚本的轮询 SQL 是 `ORDER BY ts DESC LIMIT n` —— 不过滤时取回的是**所有设备
+#   混排**的最近 n 行，"库内可查"样本里会混进别的设备（实测 5 分钟窗口混读 290 行、
+#   device1 只有 59 行），逐条延迟与 P95 都不再属于被测设备。
+#   默认 device1 ⇒ 单设备形态下与改造前逐位一致；多设备时用 --device 分开测。
+#   ⚠️ MQTT 旁听侧不用改：主题本身就是按厂区分的（device1 → cems/plant1/data、
+#      device2 → cems/plant2/data，见 docker-compose.yml），默认只旁听 plant1，
+#      所以 arrivals 字典天然只含被测设备；换设备时要把 MQTT_TOPIC 一起改。
 # =============================================================================
 """测量端到端延迟（设备读数时间戳 → TDengine 可查），输出逐条原始数据 CSV。"""
 
@@ -59,6 +70,10 @@ from pathlib import Path
 import paho.mqtt.client as mqtt
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+
+from _device_scope import add_device_argument, device_predicate, resolve_device   # noqa: E402
 
 TD_REST_URL = os.getenv("TD_REST_URL", "http://127.0.0.1:6041/rest/sql")
 TD_USER = os.getenv("TD_USER", "root")
@@ -228,6 +243,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=600, help="每轮回看的最近行数")
     parser.add_argument("--tag", default="run", help="本次运行标签")
     parser.add_argument("--recompute", default=None, help="只从已有 CSV 重新汇总，不测")
+    add_device_argument(parser)
     parser.add_argument(
         "--out",
         default=str(PROJECT_ROOT / "docs" / "evidence" / "perf" / "latency_raw.csv"),
@@ -244,7 +260,12 @@ def main() -> int:
     probe.start()
     time.sleep(2.0)
 
-    print(f"[run] tag={args.tag} 时长={args.minutes} 分钟 轮询间隔={args.poll}s", flush=True)
+    device = resolve_device(args.device)
+    print(
+        f"[run] 设备={device}（TAG 过滤）tag={args.tag} 时长={args.minutes} 分钟 "
+        f"轮询间隔={args.poll}s",
+        flush=True,
+    )
 
     # ts -> (首次被查到时刻, 当时的时钟校正量 delta_ms, 是否落在时钟跳变窗口)
     seen: dict[int, tuple[float, float, bool]] = {}
@@ -253,8 +274,10 @@ def main() -> int:
     clock_offsets: list[float] = []
     jump_count = 0
     prev_delta: float | None = None
+    # ⚠️ 必须带 device 谓词：不加的话 LIMIT n 取回的是各设备混排的行（见文件头说明）
     sql = (
         f"SELECT NOW() AS t_now, ts FROM {TD_DB}.{TD_STABLE} "
+        f"WHERE {device_predicate(device)} "
         f"ORDER BY ts DESC LIMIT {args.limit}"
     )
 
@@ -397,6 +420,7 @@ def main() -> int:
 
     summary = {
         "tag": args.tag,
+        "device": device,
         "minutes": args.minutes,
         "poll_interval_s": args.poll,
         "rows_in_db_window": len(records),

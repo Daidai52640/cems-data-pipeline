@@ -21,6 +21,15 @@
 # -----------------------------------------------------------------------------
 #   --auto 会扫描 --since 之后的所有时间戳，自动取**最长的一段无断档连续窗口**，
 #   并把被排除的时段（断档、停机）一并打印出来，避免"拿断链期算完整率"。
+#
+# 设备维度（必须按设备过滤）
+# -----------------------------------------------------------------------------
+#   `cems_data` 是多设备共用的超级表（TAG = plant/device），两台设备在同时写。
+#   不过滤的话「实际条数」= 各设备条数之和，完整率的分子被放大、
+#   断档判据也会因为"另一台的数据把缺口填上"而失效 ——
+#   实测同一个 5 分钟窗口：不过滤 290 条，按 device1 单独统计 59 条
+#   （device1 与 device2 各 12 条/分钟，多出来的 172 条是并发压测的 loadtest 标签）。
+#   默认 device1 ⇒ 单设备形态下与改造前逐位一致；多设备时用 --device 分开统计。
 # =============================================================================
 """数据完整率测量：实际入库条数 / 理论应有条数，含断档检测与窗口自动选取。"""
 
@@ -38,7 +47,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
+from _device_scope import add_device_argument, device_predicate, resolve_device   # noqa: E402
 TD_REST_URL = "http://127.0.0.1:6041/rest/sql"
 TD_AUTH = "Basic " + base64.b64encode(b"root:taosdata").decode()
 TD_DB = "cems"
@@ -84,14 +96,20 @@ def td_query(sql: str, timeout: float = 15.0) -> list[list[str]]:
     return payload.get("data") or []
 
 
-def fetch_timestamps(since: float, until: float) -> list[float]:
-    """按 ts 游标分页取回窗口内全部时间戳（秒，整数）。"""
+def fetch_timestamps(since: float, until: float, device: str = "") -> list[float]:
+    """按 ts 游标分页取回窗口内**指定设备**的全部时间戳（秒，整数）。
+
+    ⚠️ **必须带 device 谓词**：超级表里两台设备（外加压测标签）同时在写，
+    不带过滤时"实际条数"是所有设备之和，完整率会被算到 100% 以上。
+    """
     out: list[float] = []
     cursor = since
+    where = device_predicate(device)
     while True:
         sql = (
             f"SELECT ts FROM {TD_DB}.{TD_STABLE} "
             f"WHERE ts > {int(cursor * 1000)} AND ts <= {int(until * 1000)} "
+            f"AND {where} "
             f"ORDER BY ts LIMIT {PAGE}"
         )
         rows = td_query(sql)
@@ -182,16 +200,21 @@ def main() -> int:
     parser.add_argument("--gap-factor", type=float, default=3.0, help="断档判据倍数")
     parser.add_argument("--auto", action="store_true", help="自动选取最长连续窗口")
     parser.add_argument("--tag", default="window")
+    add_device_argument(parser)
     parser.add_argument(
         "--out-prefix",
         default=str(PROJECT_ROOT / "docs" / "evidence" / "perf" / "completeness"),
     )
     args = parser.parse_args()
 
+    device = resolve_device(args.device)
     since = parse_local(args.since)
     until = time.time() if args.until == "now" else parse_local(args.until)
-    stamps = fetch_timestamps(since, until)
-    print(f"[input] 窗口 {fmt_local(since)} → {fmt_local(until)}，取回 {len(stamps)} 条时间戳")
+    stamps = fetch_timestamps(since, until, device)
+    print(
+        f"[input] 设备 {device}（TAG 过滤）窗口 {fmt_local(since)} → {fmt_local(until)}，"
+        f"取回 {len(stamps)} 条时间戳"
+    )
 
     all_stats = analyze(stamps, args.interval, args.gap_factor)
 

@@ -23,6 +23,17 @@
 #   补传成功率   = M / N
 #   另外单独报：快照里"其实已在库"的条数（paho 自身重投导致的重复投递）、
 #              排空耗时、以及残留未补条数（队列没排空说明没补完）。
+#
+# 设备维度（必须按设备过滤）
+# -----------------------------------------------------------------------------
+#   `cems_data` 是多设备共用的超级表（TAG = plant/device），两台设备在同时写。
+#   本脚本的三处读库（基线 MAX(ts)、窗口内 ts 集合、COUNT(*)）不过滤时都是**全设备**口径：
+#   基线会取到"任意设备里最新的那条"，窗口内 ts 集合会把另一台设备的行算成"已补上"，
+#   COUNT(*) 的增量又混了别的设备 —— 补传成功率与对账恒等式都不可分设备。
+#   实测同一个 5 分钟窗口：不过滤 290 行，按 device1 单独统计 59 行。
+#   默认 device1 ⇒ 单设备形态下与改造前逐位一致；多设备时用 --device 分开对账。
+#   ⚠️ 缓存快照侧（data/cache.jsonl）**没有设备维度**：`GATEWAY_DATA_DIR` 是每实例一份，
+#      演练时请确认快照目录属于被测设备那一套实例（见 docker-compose.yml 的 plant2 profile）。
 # =============================================================================
 """补传成功率演练：停 emqx → 恢复 → 按"该补条数"对账。"""
 
@@ -41,6 +52,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+
+from _device_scope import add_device_argument, device_predicate, resolve_device   # noqa: E402
+
 DATA_DIR = PROJECT_ROOT / "data"
 CACHE_FILE = DATA_DIR / "cache.jsonl"
 SENDING_FILE = DATA_DIR / "cache.jsonl.sending"
@@ -86,21 +102,48 @@ def td_query(sql: str, timeout: float = 15.0) -> list[list[str]]:
     return payload.get("data") or []
 
 
-def td_max_ts() -> float:
-    """库内最新时间戳。注意 TDengine 3.3.6 不支持 MAX(ts)（报 Invalid data type: max），
-    用 ORDER BY ts DESC LIMIT 1 取。"""
-    rows = td_query(f"SELECT ts FROM {TD_DB}.{TD_STABLE} ORDER BY ts DESC LIMIT 1")
+def td_max_ts(device: str = "") -> float:
+    """**被测设备**在库内最新的时间戳。
+
+    注意 TDengine 3.3.6 不支持 MAX(ts)（报 Invalid data type: max），
+    用 ORDER BY ts DESC LIMIT 1 取。
+
+    ⚠️ **必须带 device 谓词**：超级表里两台设备在同时写，不过滤时"最新一条"
+    可能是另一台设备的，基线一偏，后面"该补条数 N"的分子分母全偏。
+    """
+    rows = td_query(
+        f"SELECT ts FROM {TD_DB}.{TD_STABLE} WHERE {device_predicate(device)} "
+        f"ORDER BY ts DESC LIMIT 1"
+    )
     if not rows:
         raise RuntimeError("库内没有任何数据，无法建立演练基线")
     return parse_iso_utc(rows[0][0])
 
 
-def fetch_ts_between(start: float, end: float) -> set[int]:
+def fetch_ts_between(start: float, end: float, device: str = "") -> set[int]:
+    """取窗口内**被测设备**的全部时间戳集合。
+
+    ⚠️ **必须带 device 谓词**：不过滤时另一台设备的行会被算进"恢复后补上了"，
+    补传成功率就会被虚高（实测混读 290 行 vs device1 单独 59 行）。
+    """
     rows = td_query(
         f"SELECT ts FROM {TD_DB}.{TD_STABLE} "
-        f"WHERE ts >= {int(start * 1000)} AND ts <= {int(end * 1000)} ORDER BY ts"
+        f"WHERE ts >= {int(start * 1000)} AND ts <= {int(end * 1000)} "
+        f"AND {device_predicate(device)} ORDER BY ts"
     )
     return {int(parse_iso_utc(row[0])) for row in rows}
+
+
+def count_device_rows(device: str = "") -> int:
+    """**被测设备**在库内的总条数（用于基线/恢复后的增量对照）。
+
+    ⚠️ **必须带 device 谓词**：不过滤的 COUNT(*) 是所有设备之和，
+    "库内新增条数"会把别的设备一并算进去，对账恒等式失真。
+    """
+    rows = td_query(
+        f"SELECT COUNT(*) FROM {TD_DB}.{TD_STABLE} WHERE {device_predicate(device)}"
+    )
+    return int(rows[0][0])
 
 
 def in_flight_files() -> list[Path]:
@@ -168,30 +211,38 @@ def main() -> int:
     parser.add_argument("--outage", type=float, default=180.0, help="断开时长（秒）")
     parser.add_argument("--drain-timeout", type=float, default=420.0, help="等待排空的上限（秒）")
     parser.add_argument("--tag", default="resend")
+    add_device_argument(parser)
     parser.add_argument(
         "--out",
         default=str(PROJECT_ROOT / "docs" / "evidence" / "drill" / "resend_reconciliation.json"),
     )
     args = parser.parse_args()
 
-    result: dict[str, object] = {"tag": args.tag, "outage_target_s": args.outage, "events": {}}
+    device = resolve_device(args.device)
+    result: dict[str, object] = {
+        "tag": args.tag,
+        "device": device,
+        "outage_target_s": args.outage,
+        "events": {},
+    }
     emqx_stopped = False
 
     print("=== 前置检查 ===", flush=True)
+    print(f"  被测设备: {device}（TAG 过滤，见 --device）", flush=True)
     for name in SERVICES:
         print(f"  {name:16s} {container_state(name)}")
 
-    baseline_max = td_max_ts()
-    baseline_rows = td_query(f"SELECT COUNT(*) FROM {TD_DB}.{TD_STABLE}")[0][0]
+    baseline_max = td_max_ts(device)
+    baseline_rows = count_device_rows(device)
     result["baseline"] = {
         "at": now_local(),
         "max_ts": datetime.fromtimestamp(baseline_max, LOCAL_TZ).strftime(TS_FORMAT),
-        "rows": int(baseline_rows),
+        "rows": baseline_rows,
         "cache_bytes": cache_bytes(),
         "cache_lines": len(read_cache_lines()),
     }
     print(
-        f"  基线: 库内 {baseline_rows} 条，MAX(ts)="
+        f"  基线: [{device}] 库内 {baseline_rows} 条，MAX(ts)="
         f"{result['baseline']['max_ts']}，缓存 {result['baseline']['cache_lines']} 行"
     )
     if result["baseline"]["cache_lines"]:
@@ -280,11 +331,11 @@ def main() -> int:
         counts: list[int] = []
         deadline = time.time() + 150.0
         while time.time() < deadline and len(counts) < 2:
-            sample = int(td_query(f"SELECT COUNT(*) FROM {TD_DB}.{TD_STABLE}")[0][0])
+            sample = int(count_device_rows(device))
             label = now_local()
             if not counts or sample > counts[-1]:
                 counts.append(sample)
-                print(f"  第 {len(counts)} 次 COUNT(*) = {sample} @ {label}", flush=True)
+                print(f"  第 {len(counts)} 次 [{device}] COUNT(*) = {sample} @ {label}", flush=True)
             if len(counts) < 2:
                 time.sleep(12.0)
         result["recovery_count_check"] = {
@@ -327,7 +378,7 @@ def main() -> int:
         if should_resend:
             window_start = min(should_resend) - 1
             window_end = after_epoch + 1
-            db_ts = fetch_ts_between(window_start, window_end)
+            db_ts = fetch_ts_between(window_start, window_end, device)
         else:
             window_start, window_end, db_ts = 0.0, 0.0, set()
         snapshot_set = set(unique_ts)
@@ -350,7 +401,7 @@ def main() -> int:
         )
         result["after"] = {
             "at": now_local(),
-            "rows": int(td_query(f"SELECT COUNT(*) FROM {TD_DB}.{TD_STABLE}")[0][0]),
+            "rows": count_device_rows(device),
             "cache_lines": len(read_cache_lines()),
         }
 
