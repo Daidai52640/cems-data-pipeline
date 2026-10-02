@@ -49,14 +49,29 @@ POLL_INTERVAL: Final[float] = float(os.getenv("POLL_INTERVAL", "5.0"))          
 MODBUS_RETRY_INTERVAL: Final[float] = float(os.getenv("MODBUS_RETRY_INTERVAL", "5.0"))  # 断线重连间隔（秒）
 
 # ---- 断网缓存：单写者所有权模型（相对项目根目录推导，换机器不用改）----
-# cache.jsonl         只由采集主循环追加写：新采集到的数据
-# cache.jsonl.sending 只由补传线程持有：正在补传的在途批次
-# 两个文件各有一个写者，靠"原子改名"交接，不存在整文件回写抹掉对方数据的情况。
+# cache.jsonl          只由采集主循环追加写：新采集到的数据
+# inflight-<seq>.jsonl 只由补传线程持有：正在补传的在途批次（段名唯一，见下）
+# 两个写者各写各的文件，靠"原子改名"交接，不存在整文件回写抹掉对方数据的情况。
+# 旧版在途文件叫 cache.jsonl.sending（固定名）；上一轮遗留的 .sending 仍会被读进来补发
+# （见 _read_segment_lines），保证版本升级不会把盘上已缓存的数据漏掉。
 DATA_DIR: Final[Path] = PROJECT_ROOT / "data"
 CACHE_FILE: Final[Path] = DATA_DIR / "cache.jsonl"
-SENDING_FILE: Final[Path] = DATA_DIR / "cache.jsonl.sending"
+SENDING_FILE: Final[Path] = DATA_DIR / "cache.jsonl.sending"   # 旧版固定名（只读兼容，不再写入）
 HEARTBEAT_FILE: Final[Path] = DATA_DIR / ".gateway_alive"   # 供容器 healthcheck 判断循环是否还在转
 CACHE_LOCK: Final[threading.Lock] = threading.Lock()   # 保护两个缓存文件的换手动作
+
+# ---- 在途批次的段名（★ 唯一，只增不减；永不被第二次改名覆盖）----
+# 旧写法用固定名 cache.jsonl.sending，每次取批都要"覆盖"上一轮残留：
+# 覆盖完成 → 合并批写回之间，残留只在内存里，此时被硬杀就永久丢那批数据（见 _take_over_pending）。
+# 改成段名之后没有任何覆盖动作：spool 改名成一个新的段，旧段原封不动留在盘上、按 seq 升序优先发送。
+# ⚠️ 崩溃恢复不需要额外状态文件：段列表与下一个段号都由文件名推导。
+SEGMENT_PREFIX: Final[str] = "inflight-"
+SEGMENT_SUFFIX: Final[str] = ".jsonl"
+SEGMENT_GLOB: Final[str] = f"{SEGMENT_PREFIX}*{SEGMENT_SUFFIX}"
+#: 本批落在哪些段（`_take_over_pending` 维护）
+#:  - `[0]` = 本批自己的段（滚动回写/收尾只动它）
+#:  - 其余 = 被合并进来的更老残留段（数据已并入 `[0]` 后即删除，避免下轮重复补发）
+BATCH_SEGMENTS: list[Path] = []
 
 # 缓存容量上限：长期断网时文件会一直涨，写满磁盘后每条数据都会静默丢。
 # 超过上限就按"丢最旧、保最新"裁剪，并升 CRITICAL —— 宁可丢最早的，也别把盘写满。
@@ -293,50 +308,138 @@ def publish(client: mqtt.Client, payload: str, tag: str) -> bool:
     return info is not None and _wait_published(info, payload, tag)
 
 
-def _take_over_pending() -> list[str]:
-    """接管待补传数据：把 cache.jsonl 原子改名成 .sending，返回按时序的批次。
+def _segment_seq(path: Path) -> int:
+    """段文件名里的序号；名字不合规范返回 -1（新段号从 max+1 起，不受歪名字影响）。"""
+    name = path.name
+    if not (name.startswith(SEGMENT_PREFIX) and name.endswith(SEGMENT_SUFFIX)):
+        return -1
+    digits = name[len(SEGMENT_PREFIX):-len(SEGMENT_SUFFIX)]
+    return int(digits) if digits.isdigit() else -1
 
-    改名之后，主循环新采的数据继续追加到全新的 cache.jsonl，补传线程只动 .sending，
-    两个写者各写各的文件 —— 这样才不会出现"补传结束整文件回写、把期间新追加的数据抹掉"。
-    上次补传中断残留的 .sending 内容排在本批队首，保证旧数据永远先于新数据重发。
+
+def _in_flight_segments() -> list[Path]:
+    """全部在途段，按 seq 升序（= 时间序，最老的先发）。目录不存在时返回空列表。"""
+    if not DATA_DIR.is_dir():
+        return []
+    return sorted(DATA_DIR.glob(SEGMENT_GLOB), key=_segment_seq)
+
+
+def _next_segment_path() -> Path:
+    """下一个段名 = 现有最大 seq + 1（不读任何状态文件，纯由文件名推导）。"""
+    seqs = [_segment_seq(path) for path in _in_flight_segments()]
+    return DATA_DIR / f"{SEGMENT_PREFIX}{max(seqs, default=0) + 1:06d}{SEGMENT_SUFFIX}"
+
+
+def _read_segment_lines(path: Optional[Path]) -> list[str]:
+    """读一个段的行；路径为 None 或文件不存在时返回空列表。
+
+    ⚠️ 必须用 `_read_lines` 的"逐行 strip"口径读——它顺带兼容旧版 `cache.jsonl.sending`
+    里 EOF 行缺 `\\n` 的写法（`splitlines` 不要求末行有换行符）。
     """
+    return _read_lines(path) if path is not None else []
+
+
+def _collect_leftover_segments() -> list[Path]:
+    """收集"上一轮遗留、需要并入本批"的段（旧版固定名 `.sending` 也在内）。"""
+    segments: list[Path] = []
+    if SENDING_FILE.exists():
+        segments.append(SENDING_FILE)
+    segments.extend(_in_flight_segments())
+    return [path for path in segments if _read_lines(path)]
+
+
+def _leftover_lines_in(segments: Sequence[Path]) -> list[str]:
+    """按给定顺序读残留段的内容（旧数据在前 = 发送顺序）。"""
+    merged: list[str] = []
+    for segment in segments:
+        merged.extend(_read_segment_lines(segment))
+    return merged
+
+
+def _drop_segments(segments: Sequence[Path]) -> list[str]:
+    """数据已并入本批段之后，删掉这些残留段（避免下一轮重复补发）。返回失败的名字。
+
+    ⚠️ 调用时机只有一个：数据**已经**落到本批段之后。删早了会丢，删晚了只是重复发。
+    """
+    failed: list[str] = []
+    for segment in segments:
+        try:
+            segment.unlink(missing_ok=True)
+        except OSError as exc:
+            LOGGER.error("[补传] 删除残留段 %s 失败: %s", segment.name, exc)
+            failed.append(segment.name)
+    return failed
+
+
+def _take_over_pending() -> list[str]:
+    """接管待补传数据：把 cache.jsonl 原子改名成唯一段名，返回按时序的批次。
+
+    改名之后，主循环新采的数据继续追加到全新的 cache.jsonl，补传线程只动段文件，
+    两个写者各写各的文件 —— 这样才不会出现"补传结束整文件回写、把期间新追加的数据抹掉"。
+    上次补传中断残留的段排在本批队首，保证旧数据永远先于新数据重发。
+
+    ★ 段名唯一（`inflight-<seq>.jsonl`，seq 只增不减）：**没有任何一次改名会覆盖已有文件**。
+    旧写法把 cache.jsonl 改名成固定的 .sending，会**覆盖**上一轮残留的 .sending；而合并批
+    要等 `_write_lines` 才落盘，于是在"覆盖完成 → 合并批写完"之间，上一轮的残留只存在于内存里，
+    此时进程被硬杀（SIGKILL / 断电 / 容器 kill -9）那批数据就永久消失（实测 2 条全丢）。
+    段方案从结构上消除了这个窗口：改名只新建文件，旧段原封不动留在盘上。
+    """
+    global BATCH_SEGMENTS
     with CACHE_LOCK:
-        leftover = _read_lines(SENDING_FILE)
+        leftovers = _collect_leftover_segments()
+        if not CACHE_FILE.exists() and not leftovers:
+            BATCH_SEGMENTS = []
+            return []
+
         if CACHE_FILE.exists():
+            segment = _next_segment_path()
             try:
-                os.replace(CACHE_FILE, SENDING_FILE)     # ★ 原子交接
+                os.replace(CACHE_FILE, segment)   # ★ 原子交接（目标名唯一，不覆盖任何已有文件）
             except OSError as exc:
                 LOGGER.error("[补传] 接管缓存文件失败: %s", exc)
                 return []
-            current = _read_lines(SENDING_FILE)
+            current = _read_lines(segment)
+            if leftovers:
+                # 把残留段并进本批段，**写成功之后**才删残留：任何一步被杀都不会丢数据
+                #（被杀在写之前 → 残留段还在；被杀在删之前 → 最坏下一轮重复发一次）。
+                # ⚠️ 写失败时绝不能删残留段——那才是把数据唯一副本抹掉。
+                merged = _leftover_lines_in(leftovers) + current
+                if _write_lines(segment, merged):
+                    _drop_segments(leftovers)
+                else:
+                    LOGGER.error(
+                        "[补传] 合并残留段到 %s 失败，保留残留段（本轮照发，不删任何副本）",
+                        segment.name,
+                    )
+            BATCH_SEGMENTS = [segment]
         else:
-            current = []
-        batch = leftover + current
-        if batch:
-            # 在途批次落盘：补传途中进程被杀，下次启动还能接着补
-            _write_lines(SENDING_FILE, batch)
+            # 没有新数据可接管：直接接着补残留段（它们就是本批）
+            BATCH_SEGMENTS = list(leftovers)
+
+        batch = _leftover_lines_in(BATCH_SEGMENTS)
         return batch
 
 
 def _finish_resend(remaining: list[str], confirmed: int) -> None:
-    """补传收尾：未确认的行放回 cache.jsonl 队首，写成功后才删 .sending。
+    """补传收尾：未确认的行放回 cache.jsonl 队首，写成功后才删本批的段文件。
 
-    ★ 回写失败时绝不能删 .sending —— 它是这批数据当下唯一的副本，
+    ★ 回写失败时绝不能删段文件 —— 它是这批数据当下唯一的副本，
     删掉就等于整批永久丢失。失败就原样留着，等下次补传接着处理。
     """
+    global BATCH_SEGMENTS
     with CACHE_LOCK:
         # 始终重写 cache.jsonl：remaining 为空时就是清空成空文件。
         # 保持这个文件一直存在（哪怕是空的），避免"文件突然消失"让人以为数据丢了。
         if not _write_lines(CACHE_FILE, remaining + _read_lines(CACHE_FILE)):
             LOGGER.critical(
-                "[补传] 回写 %s 失败，保留 %s（本批 %d 条未确认）等待下次重试",
-                CACHE_FILE.name, SENDING_FILE.name, len(remaining),
+                "[补传] 回写 %s 失败，保留段文件（本批 %d 条未确认）等待下次重试: %s",
+                CACHE_FILE.name, len(remaining),
+                ", ".join(path.name for path in BATCH_SEGMENTS) or SENDING_FILE.name,
             )
             return
-        try:
-            SENDING_FILE.unlink(missing_ok=True)
-        except OSError as exc:
-            LOGGER.error("[补传] 删除 %s 失败: %s", SENDING_FILE.name, exc)
+        segments = BATCH_SEGMENTS
+        BATCH_SEGMENTS = []
+        _drop_segments(segments)
 
     if confirmed:
         LOGGER.info("[补传完成] broker 已确认 %d 条", confirmed)
@@ -378,9 +481,9 @@ def resend_cache(client: mqtt.Client) -> int:
                 confirmed += 1
             else:
                 remaining.append(line)
-        # 滚动压缩：把"未确认 + 还没发"的写回 .sending。
+        # 滚动压缩：把"未确认 + 还没发"写回**本批自己的段**（`BATCH_SEGMENTS[0]`）。
         # 任一时刻被杀进程，最多只影响正在飞的那一窗，其余数据都还在盘上。
-        _write_lines(SENDING_FILE, remaining + batch[offset + len(chunk):])
+        _write_lines(BATCH_SEGMENTS[0], remaining + batch[offset + len(chunk):])
         LOGGER.debug(
             "[补传] 进度 %d/%d，未确认 %d 条",
             min(offset + RESEND_WINDOW, len(batch)), len(batch), len(remaining),
@@ -441,8 +544,8 @@ class ResendWorker:
         thread.join(timeout=timeout)
         if thread.is_alive():
             LOGGER.warning(
-                "[补传] 线程未在 %.0f 秒内收尾，未确认的数据保留在 %s",
-                timeout, SENDING_FILE.name,
+                "[补传] 线程未在 %.0f 秒内收尾，未确认的数据保留在段文件 %s 里",
+                timeout, SEGMENT_GLOB,
             )
 
 
