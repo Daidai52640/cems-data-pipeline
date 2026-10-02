@@ -48,8 +48,13 @@
      而"一个窗口只有一条缓存、命中判定（写后失效）比对的就是那一条"是这套判据能成立的前提
      （见 `query_cached` 的三道命中判定）。为一次可接受的缓存失效引入双写，是本末倒置。
 
-   ⚠️ 设备维度的取值**只进哈希、不进 SQL**，所以不需要转义/白名单校验；
-      一旦它被用作查询过滤条件，必须先按 tag 字符集校验（见 §6 末尾）。
+   ⚠️ 设备维度**同时**进缓存键哈希与 SQL 的 tag 过滤（读路径见 §6 末尾列出的三处），
+      所以取值必须按 tag 字符集做白名单校验：规则与平台接入层共用
+      `src/common/sql_safety.py` 的 `SQL_NAME_RE`，非法值在**导入期**直接拒绝启动
+      （`device_tag_parts()`，见 §1 设备维度配置区）。
+      过程记录：早先"只进哈希、不进 SQL"的前提已经不成立 —— 读路径确实拿它做了过滤，
+      而当时没有校验，`TD_DEVICE="Device1"` 这种大小写不符会让三个读路径全部命中 0 行、
+      接口仍 200、容器仍 healthy，没有任何报错（静默全绿）。
 ============================================================================
 
 Redis 不可用时本模块**整体退化为空操作**：所有查询直连 TDengine，结果与加缓存前逐字节一致。
@@ -71,6 +76,9 @@ from typing import Any, Callable, Final, Optional
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+# tag 值白名单（唯一真源，与平台接入层共用；只依赖标准库，不拖 paho 之类的重依赖进 Web）
+from src.common.sql_safety import check_sql_name   # noqa: E402
 
 # ==================== 1. 配置区 ====================
 
@@ -160,13 +168,37 @@ def _device_scope(plant: str, device: str) -> str:
 
 
 DEVICE_SCOPE: Final[str] = _device_scope(TD_PLANT, TD_DEVICE)
-#: `DEVICE_SCOPE` 的拆解形式 `(plant, device)`，给需要把它拼进 SQL tag 过滤的调用方用
-#: （`report.query_aggregate` / `report.query_raw` / `web_dashboard.query_recent`）。
-#: ⚠️ CSV SQL 的 tag 值用这两个、算缓存键用 `DEVICE_SCOPE`，**必须同源** ——
-#: 否则会出现"查询按 A 设备、键按 B 设备"。两边都从这里取，不各自解析 env。
-#: 从 `DEVICE_SCOPE` 拆回来而不是再解析一次 env：保证与缓存键用的是同一份取值
-#: （含空值回落后的结果）。
+#: `DEVICE_SCOPE` 的拆解形式 `(plant, device)`。
+#: ⚠️ 这是**未校验的原始拆解**，仅供诊断/展示用；要拼进 SQL 的调用方一律用
+#: `device_tag_parts()`（唯一带白名单校验的出口，见下）。
 DEVICE_SCOPE_PARTS: Final[tuple[str, str]] = tuple(DEVICE_SCOPE.split("/", 1))  # type: ignore[assignment]
+
+
+def device_tag_parts() -> tuple[str, str]:
+    """返回**已通过 tag 白名单校验**的 `(plant, device)`，供拼 SQL tag 过滤的读路径使用。
+
+    ★ 为什么三个读路径统一走这个函数而不是直接读 `DEVICE_SCOPE_PARTS`：
+      `report.query_aggregate` / `report.query_raw` / `web_dashboard.query_recent`
+      都把它拼成 `AND plant = '{plant}' AND device = '{device}'`。这两个值来自环境变量，
+      不校验就有两条真实后果（都不是理论风险）：
+        · `device1' OR '1'='1` ⇒ 条件被 OR 短路，注入成立；
+        · `Device1`（大小写不符）⇒ SQL 合法但命中 0 行：11 条路由全空报表、
+          接口 200、容器 healthy，**一条报错都没有**（现场更难查的就是这条）。
+      校验规则与平台接入层同源（`src/common/sql_safety.py`），非法值 `SystemExit`。
+
+    ⚠️ 本函数在**每次调用时**重新校验（正则可忽略不计的代价），这样"校验"与
+      "拼进 SQL"在代码上是同一处，而不是靠"别处已经校验过了"的约定维持。
+      实践中非法值在下面那次导入期调用就已经拦下，请求路径走不到这里。
+    """
+    plant, device = DEVICE_SCOPE_PARTS
+    check_sql_name(plant, what="展示层查询 tag plant", env_var="TD_PLANT")
+    check_sql_name(device, what="展示层查询 tag device", env_var="TD_DEVICE")
+    return plant, device
+
+
+#: 导入期自检：非法 tag 值**拒绝启动**（`SystemExit`），与平台接入层同一口径。
+#: 单设备默认值 plant1 / device1 合法，所以正常部署零行为变化。
+device_tag_parts()
 
 
 # ==================== 2. 客户端（懒连接 + 全链路降级） ====================
@@ -507,8 +539,9 @@ def _encode_cell(cell: Any) -> Any:
 #
 # ---- 水位为什么**不**按设备分开（判断，含证据与耦合条件）----
 # ⚠️ 状态更新（2026-10-02）：下面第 1 条改造项（读路径按设备过滤）**已经落地**
-#    （commit d9e599d；report.py:257-261 与 547-551、web_dashboard.py:155-159 都用
-#    `cache.DEVICE_SCOPE_PARTS` 拼 `AND plant = '...' AND device = '...'`）。
+#    （commit d9e599d；report.py 的聚合/原始点 SQL、web_dashboard.py:155-159 都用
+#    `cache.device_tag_parts()` 拼 `AND plant = '...' AND device = '...'`，
+#    该函数同时做 tag 白名单校验，见 §1）。
 #    第 2、3 条（水位键按设备拆）**仍未做**，是已知的剩余项，不在本次改动范围内。
 #    所以本节原来的第一条论据（"观测流里没有设备维"）已经不成立，别照着它继续论证。
 #
@@ -851,7 +884,7 @@ def source_of(cache_key: str) -> str:
 
 # 设备维度在这里打一条日志：多设备部署下"这台 web 给哪台设备做缓存"必须一眼可见。
 # ⚠️ 它必须与平台接入层的 TD_PLANT/TD_DEVICE 一致：读路径**已经**按这两个值过滤
-#    （report.py / web_dashboard.py 用 DEVICE_SCOPE_PARTS 拼 tag 条件，见 §6），
+#    （report.py / web_dashboard.py 用 device_tag_parts() 拼 tag 条件，见 §6），
 #    所以这里写错就不只是"缓存命名空间对不上"，而是**读的是别人的数据**。
 # ⚠️ 本行与下面的 CLIENT.init() 都在**导入时**执行，那时日志系统可能还没配置
 #    （web_dashboard 是"先 import、后 setup_logging"），这类 INFO 记录会被丢弃 ——

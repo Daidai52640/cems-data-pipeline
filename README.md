@@ -81,7 +81,8 @@
 ### 4. 展示层 `src/web/web_dashboard.py`
 - 功能：Flask 后端 + ECharts 前端实时曲线（9 测点 / 4 组 Y 轴）
 - 接口：`GET /api/data` 返回最近 10 分钟数据（JSON）
-- 健康检查：`GET /api/health` 返回 Web 与 TDengine 是否都通
+- 健康检查：`GET /api/health` 判**数据新鲜度**（最近 1 分钟有条数、且最近一条样本距今 ≤ `POLL_INTERVAL × HEALTH_STALE_POLL_FACTOR`，默认 15 s）；
+  满足返回 200，库不可达 / 最近 1 分钟 0 条 / 数据陈旧一律返回 **503** + `reason` 字段（容器的 healthcheck 按状态码判成败，不再吞 503）
 - 刷新：前端每 5 秒自动拉取
 - 监听：0.0.0.0:5000（局域网可访问）
 - 依赖：flask、taospy

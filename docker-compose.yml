@@ -122,6 +122,10 @@ x-subscriber-env: &subscriber-env
   ALARM_SETTLE_DELAY_SECONDS: ${ALARM_SETTLE_DELAY_SECONDS:-60}   # 整点后等补传收尾再结算
   ALARM_COVERAGE_MIN: ${ALARM_COVERAGE_MIN:-0.75}           # 低于它判数据不足，绝不判达标
   ALARM_INVALID_RATIO_MAX: ${ALARM_INVALID_RATIO_MAX:-0.10} # 无效样本占比上限（O2>=21%）
+  # 折算分母下限：21-O2 小于它 ⇒ 该样本折算放大不可信（O2=20% ⇒ 15 倍），
+  # 小时结算把它并入**无效样本**（与 O2>=21% 同一条路径），不新造第四种状态。
+  # 默认 2.0 ⇒ 放大倍数上限 15/2 = 7.5 倍。设 0 等于关掉这条判据。
+  ALARM_O2_DENOM_MIN: ${ALARM_O2_DENOM_MIN:-2.0}
   ALARM_POLL_INTERVAL: ${ALARM_POLL_INTERVAL:-5.0}          # 算 720 条/小时用，须与网关一致
   ALARM_JUDGE_VERSION: ${ALARM_JUDGE_VERSION:-v1.0.0}
   ALARM_PUSH_CHANNEL: ${ALARM_PUSH_CHANNEL:-log}
@@ -470,6 +474,11 @@ services:
       # 覆盖率的分母来源：应有条数 = 窗口秒数 / 采集周期。
       # ⚠️ 必须与 gateway 的 POLL_INTERVAL 一致（上面 gateway 当前固定 "5.0"）。
       POLL_INTERVAL: ${POLL_INTERVAL:-5.0}
+      # 健康判据：最近一条样本距今超过 POLL_INTERVAL × 该因子（默认 5.0 × 3 = 15 s）
+      # 即判不健康（/api/health 返回 503，容器变 unhealthy，见 src/web/web_dashboard.py §4）。
+      # 依据：本机实测 11~12 条/分钟（间隔均值 5.15 s），15 s 允许连续丢 2 条样本不误报。
+      # ⚠️ 调大等于放宽容忍断流的时间（"绿着但没数据"的窗口变长），调小会在抖动时误报。
+      HEALTH_STALE_POLL_FACTOR: ${HEALTH_STALE_POLL_FACTOR:-3}
       # 门限（0~1）：低于它判 insufficient，绝不判达标。默认 0.75 =
       # docs/告警判据设计.md §3.4 的 ALARM_COVERAGE_MIN；调到 0.84 以上会误标正常数据
       # （实测天花板 5.0/5.154 = 97.0%，干净 1 分钟窗口覆盖率 P05=91.7% / 最差 83.3%）。
@@ -498,10 +507,14 @@ services:
         # 用 healthy 会把"Redis 慢一点"升级成"大屏起不来"，是本末倒置。
         condition: service_started
     healthcheck:
-      # 探自己的 /api/health：只要 HTTP 有响应（200 或 503）就说明 Web 在正常服务；
-      # 503 表示 Web 活着但查库失败，那属于依赖问题，不该判 Web 死了
+      # 探自己的 /api/health，并且**按 HTTP 状态判成败**：
+      #   · 200 ⇒ 库连得上 **且** 数据新鲜（最近一条样本距今 <= POLL_INTERVAL × 因子）
+      #   · 503 ⇒ Web 活着，但库不可达 / 最近 1 分钟无数据 / 数据陈旧 ⇒ 判**不健康**
+      # ⚠️ 原来这里有一句 `except HTTPError: pass`，把 500/502/404/503 全吞成退出码 0，
+      #    于是"网关断流、订阅端不入库、tag 拼错恒 0 行"这些故障全都 healthy。现在去掉了：
+      #    任何异常（含 HTTPError）都让探针非零退出，容器变 unhealthy。
       test: ["CMD", "python", "-c",
-             "import urllib.request as u,urllib.error as e\ntry:\n    u.urlopen('http://127.0.0.1:5000/api/health',timeout=3)\nexcept e.HTTPError:\n    pass"]
+             "import urllib.request as u\nu.urlopen('http://127.0.0.1:5000/api/health',timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 3

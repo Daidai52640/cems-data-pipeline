@@ -50,6 +50,9 @@ from src.common.points import (   # noqa: E402
     to_reference_o2,
     to_transmit_value,
 )
+# 会被拼进 SQL 的标识符/tag 值白名单：**唯一真源**在 src/common/sql_safety.py，
+# 展示层读路径（src/web/cache.py 的 device_tag_parts）共用同一条正则。
+from src.common.sql_safety import SQL_NAME_RE, SQL_NAME_RULE   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
@@ -90,7 +93,11 @@ TD_DURATION_DAYS: Final[int] = 30          # 每 30 天一个分片
 CHILD_TABLE: Final[str] = f"{TD_PLANT}_{TD_DEVICE}".lower()
 
 # ---- 会被拼进 SQL 的标识符白名单（防注入）----
-SQL_NAME_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+# ⚠️ 正则本体**不再定义在这里**：唯一真源是 `src.common.sql_safety.SQL_NAME_RE`
+#    （本文件顶部 import 进来，名字保持 `SQL_NAME_RE` 不变，供既有调用点与外部引用）。
+#    原因：展示层读路径也要用它（`src/web/cache.py` 的 `device_tag_parts()`），
+#    常量放在平台层会把 paho.mqtt 这类重依赖拖进 Web 容器，所以下沉到 src/common。
+#    规则文案 `SQL_NAME_RULE` 同源，保证两边的错误提示逐字一致。
 
 # ---- 主题 ↔ 标签 一致性自检（多设备多实例部署的护栏）----
 # 推荐形态是"**每台设备一个订阅端实例**"：实例只订阅一个主题、只写一张子表，
@@ -257,9 +264,7 @@ def validate_config() -> None:
         ("TD_DEVICE", TD_DEVICE),
     ):
         if not SQL_NAME_RE.match(value):
-            raise ValueError(
-                f"{label} 只能由字母、数字、下划线组成且以字母或下划线开头: {value!r}"
-            )
+            raise ValueError(f"{label} {SQL_NAME_RULE}: {value!r}")
     # 告警侧：判据参数自检 + 表名同样要能安全拼进 SQL
     ALARM_CONFIG.validate()
     for label, value in (
@@ -268,9 +273,7 @@ def validate_config() -> None:
         ("ALARM_PUSH_STABLE", ALARM_TABLES.push_stable),
     ):
         if not SQL_NAME_RE.match(value):
-            raise ValueError(
-                f"{label} 只能由字母、数字、下划线组成且以字母或下划线开头: {value!r}"
-            )
+            raise ValueError(f"{label} {SQL_NAME_RULE}: {value!r}")
 
 
 def parse_timestamp(text: str) -> str:

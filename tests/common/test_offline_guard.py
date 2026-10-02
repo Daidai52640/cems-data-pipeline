@@ -187,7 +187,10 @@ def test_blocked_socket_would_actually_fail():
     )
     collected.assert_outcomes()                     # 收集期零 error / 零 failure
     stdout = collected.stdout.str()
-    assert "104 tests collected" in stdout          # 条数是硬编码的：改测试必须同步这里
+    # ⚠️ 2026-10-02 由 104 更新为 109：本次为"折算分母下限"（ALARM_O2_DENOM_MIN）
+    #    新增了 5 条小时结算用例（TestO2DenominatorFloor）。这个数字锁的是"被收集到的测试
+    #    条数"而不是任何判定口径，按本行原来的约定同步即可；口径断言一条未动。
+    assert "109 tests collected" in stdout          # 条数是硬编码的：改测试必须同步这里
     assert "test_alarm_judge.py::" in stdout
 
 

@@ -179,6 +179,11 @@ if _OVERFLOW:
 ZS_TARGETS: Final[tuple[str, ...]] = ("dust", "so2", "nox")
 O2_COLUMN: Final[str] = "o2"
 
+#: 折算分母的基准常数：`21 - 实测干基氧含量`（HJ 75-2017 式(C8) 里的 21）。
+#: ★ 单独取个名字是为了让"分母 = 21 - O2"这件事在**调用方**（小时结算的下限判据，
+#:   见 `alarm_judge.judge_hour`）也能引用同一个常数，而不是各写一个字面量 21.0。
+O2_DRY_BASIS: Final[float] = 21.0
+
 
 def to_reference_o2(value: float, o2: float, o2_ref: float = O2_REFERENCE) -> float:
     """把**标干浓度**折算到**基准氧含量**下的浓度。
@@ -202,11 +207,16 @@ def to_reference_o2(value: float, o2: float, o2_ref: float = O2_REFERENCE) -> fl
       4. 干湿基须先用 HJ 75 式(C5) 统一；本项目数据本身即"标干"，故不再做干湿换算
 
     对照（基准氧 6%）：O2=6% → 折算=标干；O2=9% → 折算放大；O2=3% → 折算缩小。
+
+    ⚠️ **本函数只处理"分母 <= 0"这一种不可用**（O2 ≥ 21% ⇒ nan）。分母很小但为正时
+      （O2=20% ⇒ 15 倍；20.99% ⇒ 1500 倍）本函数照算不误 —— 这是**数学语义**，不动。
+      "分母过小 ⇒ 折算结果不可信"属于**判定语义**，下限判据在 `alarm_judge.judge_hour`
+      里（`ALARM_O2_DENOM_MIN`），它把这类样本并入"无效样本"，见那边的说明。
     """
-    denominator = 21.0 - o2
+    denominator = O2_DRY_BASIS - o2
     if denominator <= 0.0:
         return float("nan")
-    return value * (21.0 - o2_ref) / denominator
+    return value * (O2_DRY_BASIS - o2_ref) / denominator
 
 
 # ---- 传输编码：无法折算时的哨兵值（**协议层**，不是数学层）----
