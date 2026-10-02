@@ -4,9 +4,10 @@
 35、36、37、38；页脚 32、33、34、35）。本模块**只收录本项目实际用到的 9 个编码**，
 不复制整张附录表（该附录 80+ 页，见 ADR-0006 §8 第 3 条）。
 
-⚠️ **本项目测点契约里已有的 ``code`` 字段与原文不一致**，逐条见 :data:`CODE_REVIEW`。
-本模块不修改 ``src/common/points.py``（硬约束 #1），而是在这一层做**显式**的
-"项目编码 → 标准编码"映射，并把差异留痕，供出口层决策。
+⚠️ **本项目测点契约（``src/common/points.py``）的 ``code`` 字段曾在 2026-10-02 之前 9 个全错**
+（按顺序往下抄、整体抄错一位，其中 ``Dust`` 被写成 ``a21001`` = 原文的「氨（氨气）」）。
+**已在契约侧修正**，历史与逐条对照见 :data:`CODE_REVIEW`；
+两处取值的一致性由 :func:`check_consistency` 断言（同一条信息存在两处，这是本模块唯一被保留的冗余）。
 
 单位差异同样留痕：原文的缺省计量单位与本项目的工程单位不同（例：``a01012`` 废气温度
 原文缺省 ``℃``，本项目 ``degC``；``a00000`` 废气流量原文缺省 ``m3/s``，本项目 ``m3/h``）。
@@ -119,29 +120,46 @@ class CodeReview:
     detail: str
 
 
-#: ⚠️ 对照结论：``src/common/points.py`` 的 ``Point.code``（注释自称 "HJ 212 风格"）
-#: 与附录 B.2 原文的差异。**本模块不改那些值**，只如实登记。
+#: ⚠️ 历史留痕：``src/common/points.py`` 的 ``Point.code`` 曾在 2026-10-02 之前**9 个全错**
+#: （错法：按顺序往下抄、整体抄错一位）。当时本模块不改 ``points.py``（不在协议层职责内），
+#: 只如实登记；**2026-10-02 已在 ``points.py`` 侧修正**，现两边取值一致（见 :func:`check_consistency`）。
 CODE_REVIEW: Final[tuple[CodeReview, ...]] = (
-    CodeReview("Flow", "B01", "a00000", "错误",
-               "B01 是附录 B.1（水）废水流量 a00000 的「原编码」列值；"
-               "气监测废气流量的编码是 a00000。"),
-    CodeReview("Dust", "a21001", "a34013", "错误",
+    CodeReview("Flow", "B01 -> a00000", "a00000", "已修正",
+               "B01 是附录 B.1（水）废水流量 a00000 的「原编码」列值，被误当成气监测编码。"),
+    CodeReview("Dust", "a21001 -> a34013", "a34013", "已修正",
                "原文 a21001 是「氨（氨气）」；颗粒物（烟尘）是 a34013。此为最严重的一处错配。"),
-    CodeReview("SO2", "a21002", "a21026", "错误",
+    CodeReview("SO2", "a21002 -> a21026", "a21026", "已修正",
                "原文 a21002 是「氮氧化物」；二氧化硫是 a21026。"),
-    CodeReview("NOx", "a21003", "a21002", "错误",
+    CodeReview("NOx", "a21003 -> a21002", "a21002", "已修正",
                "原文 a21003 是「一氧化氮」；氮氧化物是 a21002。"),
-    CodeReview("O2", "a21008", "a19001", "错误",
+    CodeReview("O2", "a21008 -> a19001", "a19001", "已修正",
                "附录 B.2 无 a21008；氧含量是 a19001（原编码 S01）。"),
-    CodeReview("Velocity", "B02", "a01011", "错误",
-               "原文 a00000 的「原编码」是 B02，不是 a01011；废气流速是 a01011。"),
-    CodeReview("Temp", "B03", "a01012", "错误",
+    CodeReview("Velocity", "B02 -> a01011", "a01011", "已修正",
+               "B02 是原文 a00000 的「原编码」列值；废气流速是 a01011。"),
+    CodeReview("Temp", "B03 -> a01012", "a01012", "已修正",
                "附录 B.2 无 B03；废气温度是 a01012（原编码 S03）。"),
-    CodeReview("Humidity", "B04", "a01014", "错误",
+    CodeReview("Humidity", "B04 -> a01014", "a01014", "已修正",
                "附录 B.2 无 B04；废气含湿量是 a01014（原编码 S05）。"),
-    CodeReview("Pressure", "B05", "a01013", "错误",
+    CodeReview("Pressure", "B05 -> a01013", "a01013", "已修正",
                "附录 B.2 无 B05；废气压力是 a01013（原编码 S08）。"),
 )
+
+
+def check_consistency() -> tuple[str, ...]:
+    """核对测点契约的 ``code`` 与本模块的 ``FACTORS`` 是否一致，返回不一致的测点名。
+
+    ⚠️ 保留这个检查的原因：**同一条信息存在两处**（契约里的 ``code`` + 本模块的权威表），
+    历史上正是"两处各自维护"导致了 9 个编码全错却长期无人发现。
+    现在把它变成可断言的检查——**任何一侧被改而另一侧没跟，都会在检查里暴露。**
+    """
+    from src.common.points import CODES
+
+    mismatched: list[str] = []
+    for point, code in CODES.items():
+        factor = BY_POINT.get(point)
+        if factor is None or factor.code != code:
+            mismatched.append(point)
+    return tuple(mismatched)
 
 
 class UnknownFactorError(KeyError):
