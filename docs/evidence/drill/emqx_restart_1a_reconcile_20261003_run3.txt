@@ -1,0 +1,310 @@
+[2026-10-03 00:50:38] TC-E2E-002 演练 1a 开始；结果文件 emqx_restart_1a_reconcile_20261003.json / .txt
+
+[2026-10-03 00:50:38] ========================================================================
+[2026-10-03 00:50:38] 基线（1a 故障前）
+[2026-10-03 00:50:38] ========================================================================
+[2026-10-03 00:50:38] --- docker compose ps ---
+[2026-10-03 00:50:38] cems-device	device	Up 54 seconds (healthy)
+cems-gateway	gateway	Up 39 seconds (healthy)
+cems-gateway-plant2	gateway2	Up 36 seconds (healthy)
+cems-nginx	nginx	Up 10 hours (healthy)
+cems-redis	redis	Up 10 hours (healthy)
+cems-subscriber	subscriber	Up 5 minutes (healthy)
+cems-subscriber-plant2	subscriber2	Up 5 minutes (healthy)
+cems-web	web	Up About an hour (healthy)
+emqx	emqx	Up 2 minutes (healthy)
+tdengine	tdengine	Up 10 hours (healthy)
+[2026-10-03 00:50:38] --- 缓存快照 ---
+[2026-10-03 00:50:38] {
+  "device1": {
+    "dir": "F:\\Project1\\cems-data-pipeline\\data",
+    "cache_lines": 0,
+    "legacy_sending_lines": 0,
+    "inflight_files": {
+      "inflight-000001.jsonl": 0,
+      "inflight-000002.jsonl": 0,
+      "inflight-000003.jsonl": 0,
+      "inflight-000004.jsonl": 0,
+      "inflight-000005.jsonl": 0,
+      "inflight-000006.jsonl": 0,
+      "inflight-000007.jsonl": 0
+    },
+    "inflight_lines": 0,
+    "pending_total": 0
+  },
+  "device2": {
+    "dir": "F:\\Project1\\cems-data-pipeline\\data\\plant2",
+    "cache_lines": 0,
+    "legacy_sending_lines": 0,
+    "inflight_files": {
+      "inflight-000001.jsonl": 0,
+      "inflight-000002.jsonl": 0,
+      "inflight-000003.jsonl": 0,
+      "inflight-000004.jsonl": 0
+    },
+    "inflight_lines": 0,
+    "pending_total": 0
+  }
+}
+[2026-10-03 00:50:38] 库内总数=19023 最近时间戳={'device1': '2026-10-03 00:50:34', 'device2': '2026-10-03 00:50:38'}
+[2026-10-03 00:50:40] --- EMQX 会话/订阅状态（故障前） ---
+[2026-10-03 00:50:40] Client(cems-subscriber-plant1, username=undefined, peername=172.18.0.12:47691, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=53, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790946991507, connected_at=1790959698278)
+Client(cems-probe-697811974, username=undefined, peername=172.18.0.1:59702, clean_start=false, keepalive=30, session_expiry_interval=86400, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790959831772, connected_at=1790959831785)
+Client(cems-subscriber-plant2, username=undefined, peername=172.18.0.13:52681, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=54, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790946991508, connected_at=1790959698375)
+Client(cems-gateway-plant1, username=undefined, peername=172.18.0.3:40371, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790959799322, connected_at=1790959799322)
+Client(cems-gateway-plant2, username=undefined, peername=172.18.0.8:54999, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790959802594, connected_at=1790959802594)
+
+No subscriptions.
+
+[2026-10-03 00:50:40] ========================================================================
+[2026-10-03 00:50:40] 故障注入：docker stop emqx
+[2026-10-03 00:50:40] ========================================================================
+[2026-10-03 00:50:42] --- docker stop emqx ---
+[2026-10-03 00:50:42] emqx
+[2026-10-03 00:50:42] EVENT emqx_stopped_at = 2026-10-03 00:50:42
+[2026-10-03 00:51:02]   离线 20 秒: pending={'device1': 4, 'device2': 4}
+[2026-10-03 00:51:22]   离线 40 秒: pending={'device1': 8, 'device2': 8}
+[2026-10-03 00:51:42]   离线 60 秒: pending={'device1': 12, 'device2': 12}
+[2026-10-03 00:52:02]   离线 80 秒: pending={'device1': 16, 'device2': 16}
+[2026-10-03 00:52:22]   离线 100 秒: pending={'device1': 20, 'device2': 20}
+[2026-10-03 00:52:42]   离线 120 秒: pending={'device1': 24, 'device2': 24}
+[2026-10-03 00:53:02]   离线 140 秒: pending={'device1': 28, 'device2': 28}
+
+[2026-10-03 00:53:02] ========================================================================
+[2026-10-03 00:53:02] 离线窗口快照
+[2026-10-03 00:53:02] ========================================================================
+[2026-10-03 00:53:02] --- device1 缓存快照（cache.jsonl=28 行，在途段=0 行，旧版 .sending=0 行） ---
+[2026-10-03 00:53:02] {"cache_ts": ["2026-10-03 00:50:44", "2026-10-03 00:50:50", "2026-10-03 00:50:55", "2026-10-03 00:51:00", "2026-10-03 00:51:05", "2026-10-03 00:51:10", "2026-10-03 00:51:15", "2026-10-03 00:51:20", "2026-10-03 00:51:25", "2026-10-03 00:51:30", "2026-10-03 00:51:35", "2026-10-03 00:51:40", "2026-10-03 00:51:45", "2026-10-03 00:51:50", "2026-10-03 00:51:55", "2026-10-03 00:52:00", "2026-10-03 00:52:05", "2026-10-03 00:52:10", "2026-10-03 00:52:15", "2026-10-03 00:52:20", "2026-10-03 00:52:25", "2026-10-03 00:52:30", "2026-10-03 00:52:35", "2026-10-03 00:52:40", "2026-10-03 00:52:46", "2026-10-03 00:52:51", "2026-10-03 00:52:56", "2026-10-03 00:53:01"], "inflight_ts": [], "legacy_ts": []}
+[2026-10-03 00:53:02] --- device1 网关日志（缓存/补传相关） ---
+[2026-10-03 00:53:02] 2026-10-03 00:50:45 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:50:44 Flow=30768.0 Dust=2.88 SO2=19.7 NOx=32.1 O2=5.2 Velocity=11.6 Temp=176.0 Humidity=42.2 Pressure=96.5 Flag=N
+2026-10-03 00:50:50 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:50:50 Flow=30850.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.7 Temp=176.4 Humidity=42.2 Pressure=96.4 Flag=N
+2026-10-03 00:50:55 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:50:55 Flow=30787.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.6 Temp=176.6 Humidity=42.1 Pressure=96.4 Flag=N
+2026-10-03 00:51:00 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:00 Flow=30671.0 Dust=2.88 SO2=19.7 NOx=32.1 O2=5.3 Velocity=11.6 Temp=176.2 Humidity=41.8 Pressure=96.5 Flag=N
+2026-10-03 00:51:05 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:05 Flow=30735.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.7 Temp=176.8 Humidity=42.3 Pressure=96.5 Flag=N
+2026-10-03 00:51:10 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:10 Flow=30819.0 Dust=2.88 SO2=19.7 NOx=32.1 O2=5.2 Velocity=11.7 Temp=176.5 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:51:15 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:15 Flow=30828.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.6 Temp=176.6 Humidity=42.2 Pressure=96.5 Flag=N
+2026-10-03 00:51:20 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:20 Flow=30896.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.7 Temp=176.0 Humidity=42.0 Pressure=96.4 Flag=N
+2026-10-03 00:51:25 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:25 Flow=30714.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.6 Temp=175.7 Humidity=42.0 Pressure=96.5 Flag=N
+2026-10-03 00:51:30 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:30 Flow=30756.0 Dust=2.88 SO2=19.7 NOx=32.1 O2=5.2 Velocity=11.6 Temp=175.3 Humidity=42.0 Pressure=96.4 Flag=N
+2026-10-03 00:51:35 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:35 Flow=30643.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.7 Temp=175.7 Humidity=42.2 Pressure=96.5 Flag=N
+2026-10-03 00:51:40 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:40 Flow=30820.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.6 Temp=175.6 Humidity=41.9 Pressure=96.5 Flag=N
+2026-10-03 00:51:45 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:45 Flow=30855.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.7 Temp=175.6 Humidity=42.2 Pressure=96.5 Flag=N
+2026-10-03 00:51:50 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:50 Flow=30652.0 Dust=2.88 SO2=19.7 NOx=32.1 O2=5.3 Velocity=11.7 Temp=175.8 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:51:55 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:55 Flow=30820.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.7 Temp=176.0 Humidity=41.9 Pressure=96.5 Flag=N
+2026-10-03 00:52:00 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:00 Flow=30810.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.6 Temp=175.5 Humidity=41.9 Pressure=96.4 Flag=N
+2026-10-03 00:52:05 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:05 Flow=30733.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.6 Temp=175.4 Humidity=41.9 Pressure=96.5 Flag=N
+2026-10-03 00:52:10 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:10 Flow=30856.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.6 Temp=175.5 Humidity=42.0 Pressure=96.5 Flag=N
+2026-10-03 00:52:15 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:15 Flow=30748.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.6 Temp=175.6 Humidity=42.0 Pressure=96.5 Flag=N
+2026-10-03 00:52:20 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:20 Flow=30845.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.6 Temp=176.3 Humidity=42.1 Pressure=96.5 Flag=N
+2026-10-03 00:52:25 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:25 Flow=30990.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.7 Temp=176.4 Humidity=42.0 Pressure=96.4 Flag=N
+2026-10-03 00:52:30 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:30 Flow=30827.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.7 Temp=175.6 Humidity=41.9 Pressure=96.5 Flag=N
+2026-10-03 00:52:35 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:35 Flow=30893.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.6 Temp=176.4 Humidity=42.1 Pressure=96.5 Flag=N
+2026-10-03 00:52:40 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:40 Flow=30962.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.7 Temp=176.3 Humidity=41.8 Pressure=96.5 Flag=N
+2026-10-03 00:52:46 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:46 Flow=30779.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.6 Temp=175.1 Humidity=42.2 Pressure=96.5 Flag=N
+2026-10-03 00:52:51 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:51 Flow=31025.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.7 Temp=176.3 Humidity=42.2 Pressure=96.4 Flag=N
+2026-10-03 00:52:56 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:56 Flow=31011.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.7 Temp=175.9 Humidity=42.1 Pressure=96.5 Flag=N
+2026-10-03 00:53:01 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:53:01 Flow=30766.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.7 Temp=174.9 Humidity=41.9 Pressure=96.5 Flag=N
+[2026-10-03 00:53:02]   device1 日志口径入队 28 条，原因分布 {'断网': 28}
+[2026-10-03 00:53:02] --- device2 缓存快照（cache.jsonl=28 行，在途段=0 行，旧版 .sending=0 行） ---
+[2026-10-03 00:53:02] {"cache_ts": ["2026-10-03 00:50:43", "2026-10-03 00:50:48", "2026-10-03 00:50:53", "2026-10-03 00:50:58", "2026-10-03 00:51:03", "2026-10-03 00:51:08", "2026-10-03 00:51:13", "2026-10-03 00:51:18", "2026-10-03 00:51:23", "2026-10-03 00:51:28", "2026-10-03 00:51:34", "2026-10-03 00:51:39", "2026-10-03 00:51:44", "2026-10-03 00:51:48", "2026-10-03 00:51:53", "2026-10-03 00:51:58", "2026-10-03 00:52:03", "2026-10-03 00:52:08", "2026-10-03 00:52:13", "2026-10-03 00:52:19", "2026-10-03 00:52:24", "2026-10-03 00:52:29", "2026-10-03 00:52:34", "2026-10-03 00:52:39", "2026-10-03 00:52:44", "2026-10-03 00:52:49", "2026-10-03 00:52:54", "2026-10-03 00:52:59"], "inflight_ts": [], "legacy_ts": []}
+[2026-10-03 00:53:02] --- device2 网关日志（缓存/补传相关） ---
+[2026-10-03 00:53:02] 2026-10-03 00:50:43 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:50:43 Flow=26998.0 Dust=2.91 SO2=25.0 NOx=27.1 O2=6.4 Velocity=12.8 Temp=186.8 Humidity=46.8 Pressure=95.5 Flag=N
+2026-10-03 00:50:48 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:50:48 Flow=27010.0 Dust=2.91 SO2=25.4 NOx=27.1 O2=6.4 Velocity=12.9 Temp=186.5 Humidity=46.7 Pressure=95.5 Flag=N
+2026-10-03 00:50:53 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:50:53 Flow=26964.0 Dust=2.91 SO2=26.1 NOx=27.1 O2=6.4 Velocity=12.8 Temp=186.7 Humidity=46.6 Pressure=95.5 Flag=N
+2026-10-03 00:50:58 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:50:58 Flow=27255.0 Dust=2.91 SO2=26.6 NOx=27.1 O2=6.3 Velocity=12.8 Temp=186.2 Humidity=46.6 Pressure=95.5 Flag=N
+2026-10-03 00:51:03 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:03 Flow=27058.0 Dust=2.91 SO2=27.2 NOx=27.1 O2=6.4 Velocity=12.8 Temp=186.2 Humidity=46.9 Pressure=95.5 Flag=N
+2026-10-03 00:51:08 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:08 Flow=27172.0 Dust=2.91 SO2=27.7 NOx=27.9 O2=6.4 Velocity=12.8 Temp=185.7 Humidity=46.8 Pressure=95.5 Flag=N
+2026-10-03 00:51:13 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:13 Flow=27262.0 Dust=2.91 SO2=28.4 NOx=29.0 O2=6.3 Velocity=13.0 Temp=185.9 Humidity=46.7 Pressure=95.5 Flag=N
+2026-10-03 00:51:18 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:18 Flow=27031.0 Dust=2.91 SO2=28.9 NOx=29.8 O2=6.3 Velocity=12.9 Temp=186.8 Humidity=46.6 Pressure=95.5 Flag=N
+2026-10-03 00:51:23 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:23 Flow=27050.0 Dust=2.91 SO2=29.6 NOx=31.0 O2=6.4 Velocity=13.0 Temp=185.6 Humidity=46.7 Pressure=95.5 Flag=N
+2026-10-03 00:51:28 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:28 Flow=27275.0 Dust=2.91 SO2=30.0 NOx=31.7 O2=6.4 Velocity=12.9 Temp=186.4 Humidity=46.7 Pressure=95.5 Flag=N
+2026-10-03 00:51:34 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:34 Flow=27187.0 Dust=2.99 SO2=30.7 NOx=32.9 O2=6.4 Velocity=12.9 Temp=186.9 Humidity=46.8 Pressure=95.5 Flag=N
+2026-10-03 00:51:39 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:39 Flow=27345.0 Dust=3.07 SO2=31.2 NOx=33.6 O2=6.4 Velocity=12.9 Temp=186.8 Humidity=46.6 Pressure=95.5 Flag=N
+2026-10-03 00:51:44 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:44 Flow=27245.0 Dust=3.2 SO2=31.8 NOx=34.8 O2=6.4 Velocity=13.0 Temp=185.7 Humidity=46.6 Pressure=95.5 Flag=N
+2026-10-03 00:51:48 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:48 Flow=27285.0 Dust=3.28 SO2=32.3 NOx=35.6 O2=6.3 Velocity=12.9 Temp=185.6 Humidity=46.9 Pressure=95.5 Flag=N
+2026-10-03 00:51:53 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:53 Flow=27343.0 Dust=3.4 SO2=33.0 NOx=36.7 O2=6.4 Velocity=13.0 Temp=186.4 Humidity=46.8 Pressure=95.5 Flag=N
+2026-10-03 00:51:58 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:51:58 Flow=27205.0 Dust=3.48 SO2=33.4 NOx=37.5 O2=6.4 Velocity=13.0 Temp=186.7 Humidity=46.7 Pressure=95.5 Flag=N
+2026-10-03 00:52:03 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:03 Flow=27164.0 Dust=3.6 SO2=34.2 NOx=38.6 O2=6.4 Velocity=13.0 Temp=186.8 Humidity=46.4 Pressure=95.6 Flag=N
+2026-10-03 00:52:08 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:08 Flow=27215.0 Dust=3.68 SO2=34.1 NOx=39.4 O2=6.3 Velocity=13.0 Temp=186.3 Humidity=46.5 Pressure=95.5 Flag=N
+2026-10-03 00:52:13 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:13 Flow=27300.0 Dust=3.8 SO2=33.5 NOx=40.5 O2=6.4 Velocity=13.0 Temp=186.3 Humidity=46.9 Pressure=95.5 Flag=N
+2026-10-03 00:52:19 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:19 Flow=27321.0 Dust=3.89 SO2=33.0 NOx=41.3 O2=6.4 Velocity=13.0 Temp=187.0 Humidity=46.6 Pressure=95.6 Flag=N
+2026-10-03 00:52:24 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:24 Flow=27382.0 Dust=4.01 SO2=32.3 NOx=42.5 O2=6.3 Velocity=13.0 Temp=186.6 Humidity=46.5 Pressure=95.6 Flag=N
+2026-10-03 00:52:29 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:29 Flow=27260.0 Dust=4.09 SO2=31.9 NOx=43.2 O2=6.3 Velocity=13.1 Temp=185.9 Humidity=46.7 Pressure=95.6 Flag=N
+2026-10-03 00:52:34 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:34 Flow=27151.0 Dust=4.21 SO2=31.2 NOx=44.4 O2=6.3 Velocity=13.0 Temp=186.8 Humidity=46.6 Pressure=95.6 Flag=N
+2026-10-03 00:52:39 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:39 Flow=27242.0 Dust=4.29 SO2=30.7 NOx=45.1 O2=6.3 Velocity=13.0 Temp=186.9 Humidity=46.6 Pressure=95.6 Flag=N
+2026-10-03 00:52:44 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:44 Flow=27443.0 Dust=4.41 SO2=30.0 NOx=46.3 O2=6.4 Velocity=13.0 Temp=185.6 Humidity=46.8 Pressure=95.6 Flag=N
+2026-10-03 00:52:49 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:49 Flow=27471.0 Dust=4.49 SO2=29.6 NOx=47.0 O2=6.4 Velocity=13.0 Temp=187.1 Humidity=46.6 Pressure=95.6 Flag=N
+2026-10-03 00:52:54 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:54 Flow=27329.0 Dust=4.62 SO2=28.9 NOx=48.2 O2=6.3 Velocity=13.0 Temp=185.9 Humidity=46.6 Pressure=95.5 Flag=N
+2026-10-03 00:52:59 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:52:59 Flow=27490.0 Dust=4.7 SO2=28.4 NOx=49.0 O2=6.3 Velocity=13.1 Temp=186.3 Humidity=46.5 Pressure=95.6 Flag=N
+[2026-10-03 00:53:02]   device2 日志口径入队 28 条，原因分布 {'断网': 28}
+
+[2026-10-03 00:53:02] ========================================================================
+[2026-10-03 00:53:02] 恢复：docker start emqx
+[2026-10-03 00:53:02] ========================================================================
+[2026-10-03 00:53:02] --- docker start emqx ---
+[2026-10-03 00:53:02] emqx
+[2026-10-03 00:53:02] EVENT emqx_started_at_cmd = 2026-10-03 00:53:02
+[2026-10-03 00:53:11] EVENT emqx_healthy_at = 2026-10-03 00:53:11
+[2026-10-03 00:53:11]   emqx 恢复 healthy 耗时 8.7 秒
+[2026-10-03 00:53:12] --- EMQX 会话/订阅状态（broker 刚恢复、客户端尚未重连） ---
+[2026-10-03 00:53:12] No clients.
+
+No subscriptions.
+[2026-10-03 00:53:12]   排空探测: pending=60（{'device1': 30, 'device2': 30}）
+[2026-10-03 00:53:17]   排空探测: pending=62（{'device1': 31, 'device2': 31}）
+[2026-10-03 00:53:22]   排空探测: pending=64（{'device1': 32, 'device2': 32}）
+[2026-10-03 00:53:27]   排空探测: pending=66（{'device1': 33, 'device2': 33}）
+[2026-10-03 00:53:32]   排空探测: pending=68（{'device1': 34, 'device2': 34}）
+[2026-10-03 00:53:37]   排空探测: pending=70（{'device1': 35, 'device2': 35}）
+[2026-10-03 00:53:42]   排空探测: pending=72（{'device1': 36, 'device2': 36}）
+[2026-10-03 00:53:47]   排空探测: pending=74（{'device1': 37, 'device2': 37}）
+[2026-10-03 00:53:52]   排空探测: pending=76（{'device1': 38, 'device2': 38}）
+[2026-10-03 00:53:57]   排空探测: pending=78（{'device1': 39, 'device2': 39}）
+[2026-10-03 00:54:02]   排空探测: pending=80（{'device1': 40, 'device2': 40}）
+[2026-10-03 00:54:07]   排空探测: pending=82（{'device1': 41, 'device2': 41}）
+[2026-10-03 00:54:12]   排空探测: pending=84（{'device1': 42, 'device2': 42}）
+[2026-10-03 00:54:17]   排空探测: pending=86（{'device1': 43, 'device2': 43}）
+[2026-10-03 00:54:23]   排空探测: pending=88（{'device1': 44, 'device2': 44}）
+[2026-10-03 00:54:28]   排空探测: pending=90（{'device1': 45, 'device2': 45}）
+[2026-10-03 00:54:33]   排空探测: pending=92（{'device1': 46, 'device2': 46}）
+[2026-10-03 00:54:38]   排空探测: pending=94（{'device1': 47, 'device2': 47}）
+[2026-10-03 00:54:43]   排空探测: pending=96（{'device1': 48, 'device2': 48}）
+[2026-10-03 00:54:48]   排空探测: pending=98（{'device1': 49, 'device2': 49}）
+[2026-10-03 00:54:53]   排空探测: pending=100（{'device1': 50, 'device2': 50}）
+[2026-10-03 00:54:58]   排空探测: pending=102（{'device1': 51, 'device2': 51}）
+[2026-10-03 00:55:03]   排空探测: pending=104（{'device1': 52, 'device2': 52}）
+[2026-10-03 00:55:08]   排空探测: pending=106（{'device1': 53, 'device2': 53}）
+[2026-10-03 00:55:13]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:55:18]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:55:23]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:55:23] EVENT drained_at = 2026-10-03 00:55:23
+[2026-10-03 00:55:23]   排空耗时 130.1 秒，drained=True
+
+[2026-10-03 00:55:23] ========================================================================
+[2026-10-03 00:55:23] 恢复后日志与状态
+[2026-10-03 00:55:23] ========================================================================
+[2026-10-03 00:55:23] --- device1 网关日志（补传相关） ---
+[2026-10-03 00:55:23] 2026-10-03 00:55:08 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-03 00:55:08 [INFO] gateway: [补传] 开始补传 53 条，在途窗口 100 条
+2026-10-03 00:55:08 [INFO] gateway: [补传完成] broker 已确认 53 条
+[2026-10-03 00:55:23] --- device2 网关日志（补传相关） ---
+[2026-10-03 00:55:23] 2026-10-03 00:55:08 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-03 00:55:08 [INFO] gateway: [补传] 开始补传 53 条，在途窗口 100 条
+2026-10-03 00:55:08 [INFO] gateway: [补传完成] broker 已确认 53 条
+[2026-10-03 00:55:23] --- device1 订阅端会话日志 ---
+[2026-10-03 00:55:23] 2026-10-03 00:55:08 [INFO] platform.subscriber_to_td: MQTT 已连接: emqx:1883（会话恢复=True）
+[2026-10-03 00:55:23] --- device2 订阅端会话日志 ---
+[2026-10-03 00:55:23] 2026-10-03 00:55:08 [INFO] platform.subscriber_to_td: MQTT 已连接: emqx:1883（会话恢复=True）
+[2026-10-03 00:55:23] --- 缓存快照（恢复后） ---
+[2026-10-03 00:55:23] {"device1": {"pending_total": 0}, "device2": {"pending_total": 0}}
+
+[2026-10-03 00:55:23] ========================================================================
+[2026-10-03 00:55:23] 投递观察（区分'投递慢'与'真丢'）
+[2026-10-03 00:55:23] ========================================================================
+[2026-10-03 00:55:23]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:55:33]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:55:43]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:55:53]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:56:03]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:56:13]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:56:23]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:56:33]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:56:43]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:56:53]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:57:03]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:57:13]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+[2026-10-03 00:57:23]   投递探测: {'device1': {'cached': 53, 'missing': 53}, 'device2': {'cached': 53, 'missing': 0}}
+
+[2026-10-03 00:57:23] ========================================================================
+[2026-10-03 00:57:23] 逐条对账
+[2026-10-03 00:57:23] ========================================================================
+[2026-10-03 00:57:23]   对账 device1: 缓存 53 条 → 库内存在 0 条，缺失 53 条，成功率 0.0
+[2026-10-03 00:57:23]     ⚠️ 缺失时间戳: ['2026-10-03 00:50:44', '2026-10-03 00:50:50', '2026-10-03 00:50:55', '2026-10-03 00:51:00', '2026-10-03 00:51:05', '2026-10-03 00:51:10', '2026-10-03 00:51:15', '2026-10-03 00:51:20', '2026-10-03 00:51:25', '2026-10-03 00:51:30', '2026-10-03 00:51:35', '2026-10-03 00:51:40', '2026-10-03 00:51:45', '2026-10-03 00:51:50', '2026-10-03 00:51:55', '2026-10-03 00:52:00', '2026-10-03 00:52:05', '2026-10-03 00:52:10', '2026-10-03 00:52:15', '2026-10-03 00:52:20', '2026-10-03 00:52:25', '2026-10-03 00:52:30', '2026-10-03 00:52:35', '2026-10-03 00:52:40', '2026-10-03 00:52:46', '2026-10-03 00:52:51', '2026-10-03 00:52:56', '2026-10-03 00:53:01', '2026-10-03 00:53:06', '2026-10-03 00:53:11', '2026-10-03 00:53:16', '2026-10-03 00:53:21', '2026-10-03 00:53:26', '2026-10-03 00:53:31', '2026-10-03 00:53:36', '2026-10-03 00:53:41', '2026-10-03 00:53:46', '2026-10-03 00:53:51', '2026-10-03 00:53:56', '2026-10-03 00:54:01', '2026-10-03 00:54:06', '2026-10-03 00:54:11', '2026-10-03 00:54:16', '2026-10-03 00:54:21', '2026-10-03 00:54:26', '2026-10-03 00:54:31', '2026-10-03 00:54:36', '2026-10-03 00:54:41', '2026-10-03 00:54:46', '2026-10-03 00:54:51', '2026-10-03 00:54:56', '2026-10-03 00:55:01', '2026-10-03 00:55:06']
+[2026-10-03 00:57:23]   对账 device2: 缓存 53 条 → 库内存在 53 条，缺失 0 条，成功率 1.0
+[2026-10-03 00:57:23]   device1 来源一致性: 日志 53 / 文件 28，仅日志有 25，仅文件有 0
+[2026-10-03 00:57:23]   device2 来源一致性: 日志 53 / 文件 28，仅日志有 25，仅文件有 0
+[2026-10-03 00:57:24] --- EMQX 会话/订阅状态（恢复后） ---
+[2026-10-03 00:57:24] Client(cems-lgsub-acc_n10-7, username=undefined, peername=172.18.0.20:35889, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960153086, connected_at=1790960153104)
+Client(cems-lgsub-acc_n10-8, username=undefined, peername=172.18.0.21:52457, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960153338, connected_at=1790960153359)
+Client(cems-subscriber-plant1, username=undefined, peername=172.18.0.12:48023, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=25, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790946991507, connected_at=1790960108561)
+Client(cems-lgsub-acc_n2-2, username=undefined, peername=172.18.0.10:43417, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=70, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790959288827, connected_at=1790960023710)
+Client(cems-lgsub-acc_n10-2, username=undefined, peername=172.18.0.15:56985, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960151772, connected_at=1790960151792)
+Client(cems-lgsub-acc_n10-10, username=undefined, peername=172.18.0.23:50417, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960153811, connected_at=1790960153825)
+Client(cems-subscriber-plant2, username=undefined, peername=172.18.0.13:58889, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=79, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790946991508, connected_at=1790960108533)
+Client(cems-lgsub-acc_n10-3, username=undefined, peername=172.18.0.16:55551, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960152017, connected_at=1790960152036)
+Client(cems-gateway-plant1, username=undefined, peername=172.18.0.3:39391, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960108512, connected_at=1790960108512)
+Client(cems-lgsub-acc_n10-6, username=undefined, peername=172.18.0.19:47901, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960152814, connected_at=1790960152833)
+Client(cems-gateway-plant2, username=undefined, peername=172.18.0.8:43961, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960108541, connected_at=1790960108541)
+Client(cems-lgsub-acc_n10-1, username=undefined, peername=172.18.0.14:58739, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960151528, connected_at=1790960151546)
+Client(cems-lgsub-acc_n10-5, username=undefined, peername=172.18.0.18:36345, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960152565, connected_at=1790960152581)
+Client(cems-lgsub-acc_n10-4, username=undefined, peername=172.18.0.17:36587, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960152283, connected_at=1790960152306)
+Client(cems-lgsub-acc_n2-1, username=undefined, peername=172.18.0.4:52157, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=70, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790959288574, connected_at=1790960023308)
+Client(cems-lgsub-acc_n10-9, username=undefined, peername=172.18.0.22:57931, clean_start=false, keepalive=60, session_expiry_interval=86400, subscriptions=1, inflight=0, awaiting_rel=0, delivered_msgs=40, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1790960153589, connected_at=1790960153607)
+
+No subscriptions.
+[2026-10-03 00:57:25] --- docker compose ps（恢复后） ---
+[2026-10-03 00:57:25] cems-device	Up 7 minutes (healthy)
+cems-gateway	Up 7 minutes (healthy)
+cems-gateway-plant2	Up 7 minutes (healthy)
+cems-nginx	Up 10 hours (healthy)
+cems-redis	Up 10 hours (healthy)
+cems-subscriber	Up 12 minutes (healthy)
+cems-subscriber-plant2	Up 12 minutes (healthy)
+cems-web	Up 2 hours (healthy)
+emqx	Up 4 minutes (healthy)
+tdengine	Up 10 hours (healthy)
+[2026-10-03 00:57:26] --- 容器状态（恢复后） ---
+[2026-10-03 00:57:26] {
+  "cems-device": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:49:44.092852683Z"
+  },
+  "cems-gateway": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:49:59.224766237Z"
+  },
+  "cems-gateway-plant2": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:50:02.485417021Z"
+  },
+  "cems-subscriber": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:44:43.086285268Z"
+  },
+  "cems-subscriber-plant2": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:44:43.194166199Z"
+  },
+  "cems-web": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T15:20:45.675073222Z"
+  },
+  "emqx": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:53:00.198813Z"
+  },
+  "cems-nginx": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:34:09.771564358Z"
+  },
+  "cems-redis": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:34:03.455925381Z"
+  },
+  "tdengine": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:30:13.166146657Z"
+  }
+}
+[2026-10-03 00:57:26] JSON 已写入: F:\Project1\cems-data-pipeline\docs\evidence\drill\emqx_restart_1a_reconcile_20261003.json
+[2026-10-03 00:57:26] 演练结束

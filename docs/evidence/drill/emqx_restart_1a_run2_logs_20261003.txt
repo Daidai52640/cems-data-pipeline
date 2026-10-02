@@ -1,0 +1,84 @@
+# 1A run2 原始日志（窗口 2026-10-03 00:38:24 ~ 2026-10-03 00:41:10）
+# 来源：docker logs <容器> --since/--until（容器自 00:49:59 起未再重启，日志完整）
+
+=== device1（cems-gateway）窗口内入队 29 条，缺失 0 条 ===
+原因分布: {"断网": 29}
+补传批次: 开始 [29] / 完成 [29] / 未完成 []
+缓存时间戳: ["2026-10-03 00:38:30", "2026-10-03 00:38:35", "2026-10-03 00:38:40", "2026-10-03 00:38:45", "2026-10-03 00:38:50", "2026-10-03 00:38:55", "2026-10-03 00:39:00", "2026-10-03 00:39:05", "2026-10-03 00:39:10", "2026-10-03 00:39:15", "2026-10-03 00:39:20", "2026-10-03 00:39:25", "2026-10-03 00:39:30", "2026-10-03 00:39:35", "2026-10-03 00:39:40", "2026-10-03 00:39:45", "2026-10-03 00:39:50", "2026-10-03 00:39:55", "2026-10-03 00:40:00", "2026-10-03 00:40:05", "2026-10-03 00:40:10", "2026-10-03 00:40:15", "2026-10-03 00:40:20", "2026-10-03 00:40:25", "2026-10-03 00:40:30", "2026-10-03 00:40:35", "2026-10-03 00:40:40", "2026-10-03 00:40:45", "2026-10-03 00:40:50"]
+缺失时间戳: []
+
+--- 原始日志行 ---
+2026-10-03 00:38:30 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:30 Flow=29902.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.2 Velocity=12.1 Temp=184.0 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:38:35 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:35 Flow=30103.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.1 Temp=184.2 Humidity=42.2 Pressure=96.4 Flag=N
+2026-10-03 00:38:40 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:40 Flow=30151.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.1 Temp=184.8 Humidity=42.2 Pressure=96.4 Flag=N
+2026-10-03 00:38:45 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:45 Flow=30197.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.0 Temp=183.6 Humidity=41.9 Pressure=96.4 Flag=N
+2026-10-03 00:38:50 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:50 Flow=29978.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=12.1 Temp=184.6 Humidity=42.1 Pressure=96.4 Flag=N
+2026-10-03 00:38:55 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:55 Flow=30113.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.2 Velocity=12.0 Temp=183.9 Humidity=42.0 Pressure=96.4 Flag=N
+2026-10-03 00:39:00 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:00 Flow=29968.0 Dust=2.88 SO2=19.5 NOx=32.2 O2=5.1 Velocity=12.0 Temp=184.2 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:39:05 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:05 Flow=30279.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.0 Temp=184.3 Humidity=41.9 Pressure=96.3 Flag=N
+2026-10-03 00:39:10 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:10 Flow=30279.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.1 Temp=184.6 Humidity=42.2 Pressure=96.3 Flag=N
+2026-10-03 00:39:15 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:15 Flow=30191.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=11.9 Temp=183.3 Humidity=41.9 Pressure=96.3 Flag=N
+2026-10-03 00:39:20 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:20 Flow=30161.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.0 Temp=183.5 Humidity=42.2 Pressure=96.3 Flag=N
+2026-10-03 00:39:25 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:25 Flow=30348.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.0 Temp=183.6 Humidity=42.0 Pressure=96.4 Flag=N
+2026-10-03 00:39:30 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:30 Flow=30356.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.0 Temp=183.5 Humidity=42.1 Pressure=96.3 Flag=N
+2026-10-03 00:39:35 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:35 Flow=30365.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.2 Velocity=11.9 Temp=183.6 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:39:40 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:40 Flow=30359.0 Dust=2.88 SO2=19.5 NOx=32.1 O2=5.2 Velocity=12.0 Temp=183.7 Humidity=42.1 Pressure=96.3 Flag=N
+2026-10-03 00:39:45 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:45 Flow=30198.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.1 Velocity=11.9 Temp=184.0 Humidity=41.9 Pressure=96.3 Flag=N
+2026-10-03 00:39:50 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:50 Flow=30351.0 Dust=2.88 SO2=19.5 NOx=32.2 O2=5.2 Velocity=11.9 Temp=184.1 Humidity=42.2 Pressure=96.3 Flag=N
+2026-10-03 00:39:55 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:55 Flow=30433.0 Dust=2.88 SO2=19.5 NOx=32.2 O2=5.2 Velocity=11.9 Temp=183.2 Humidity=42.2 Pressure=96.4 Flag=N
+2026-10-03 00:40:00 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:00 Flow=30159.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.1 Velocity=12.0 Temp=183.8 Humidity=42.1 Pressure=96.4 Flag=N
+2026-10-03 00:40:05 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:05 Flow=30329.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.2 Velocity=11.9 Temp=183.7 Humidity=42.1 Pressure=96.3 Flag=N
+2026-10-03 00:40:10 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:10 Flow=30260.0 Dust=2.88 SO2=20.2 NOx=32.2 O2=5.1 Velocity=11.9 Temp=183.6 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:40:15 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:15 Flow=30471.0 Dust=2.88 SO2=20.7 NOx=32.2 O2=5.2 Velocity=12.0 Temp=183.9 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:40:20 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:20 Flow=30325.0 Dust=2.88 SO2=21.4 NOx=32.1 O2=5.1 Velocity=11.9 Temp=183.9 Humidity=42.1 Pressure=96.4 Flag=N
+2026-10-03 00:40:25 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:25 Flow=30217.0 Dust=2.88 SO2=21.8 NOx=32.2 O2=5.2 Velocity=11.9 Temp=183.1 Humidity=41.9 Pressure=96.4 Flag=N
+2026-10-03 00:40:30 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:30 Flow=30332.0 Dust=2.88 SO2=22.5 NOx=32.2 O2=5.2 Velocity=11.9 Temp=183.1 Humidity=42.1 Pressure=96.4 Flag=N
+2026-10-03 00:40:35 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:35 Flow=30431.0 Dust=2.88 SO2=23.0 NOx=32.2 O2=5.2 Velocity=12.0 Temp=184.2 Humidity=42.1 Pressure=96.4 Flag=N
+2026-10-03 00:40:40 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:40 Flow=30517.0 Dust=2.88 SO2=23.6 NOx=32.2 O2=5.1 Velocity=11.8 Temp=183.8 Humidity=42.3 Pressure=96.3 Flag=N
+2026-10-03 00:40:45 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:45 Flow=30348.0 Dust=2.88 SO2=24.1 NOx=32.2 O2=5.2 Velocity=11.9 Temp=183.9 Humidity=42.3 Pressure=96.3 Flag=N
+2026-10-03 00:40:51 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:50 Flow=30301.0 Dust=2.88 SO2=24.8 NOx=32.2 O2=5.1 Velocity=11.8 Temp=184.1 Humidity=42.0 Pressure=96.4 Flag=N
+2026-10-03 00:40:53 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-03 00:40:53 [INFO] gateway: [补传] 开始补传 29 条，在途窗口 100 条
+2026-10-03 00:40:53 [INFO] gateway: [补传完成] broker 已确认 29 条
+
+=== device2（cems-gateway-plant2）窗口内入队 30 条，缺失 0 条 ===
+原因分布: {"断网": 30}
+补传批次: 开始 [30] / 完成 [30] / 未完成 []
+缓存时间戳: ["2026-10-03 00:38:26", "2026-10-03 00:38:31", "2026-10-03 00:38:36", "2026-10-03 00:38:41", "2026-10-03 00:38:46", "2026-10-03 00:38:51", "2026-10-03 00:38:56", "2026-10-03 00:39:01", "2026-10-03 00:39:06", "2026-10-03 00:39:11", "2026-10-03 00:39:16", "2026-10-03 00:39:21", "2026-10-03 00:39:26", "2026-10-03 00:39:31", "2026-10-03 00:39:36", "2026-10-03 00:39:41", "2026-10-03 00:39:46", "2026-10-03 00:39:51", "2026-10-03 00:39:56", "2026-10-03 00:40:01", "2026-10-03 00:40:06", "2026-10-03 00:40:11", "2026-10-03 00:40:16", "2026-10-03 00:40:22", "2026-10-03 00:40:27", "2026-10-03 00:40:32", "2026-10-03 00:40:37", "2026-10-03 00:40:42", "2026-10-03 00:40:47", "2026-10-03 00:40:52"]
+缺失时间戳: []
+
+--- 原始日志行 ---
+2026-10-03 00:38:26 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:26 Flow=27637.0 Dust=2.91 SO2=25.7 NOx=43.1 O2=5.8 Velocity=12.5 Temp=189.5 Humidity=47.9 Pressure=95.4 Flag=N
+2026-10-03 00:38:31 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:31 Flow=27883.0 Dust=2.91 SO2=25.2 NOx=43.9 O2=5.9 Velocity=12.6 Temp=188.9 Humidity=47.9 Pressure=95.3 Flag=N
+2026-10-03 00:38:36 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:36 Flow=27601.0 Dust=3.03 SO2=24.5 NOx=45.0 O2=5.8 Velocity=12.6 Temp=189.6 Humidity=47.9 Pressure=95.3 Flag=N
+2026-10-03 00:38:41 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:41 Flow=27901.0 Dust=3.12 SO2=24.1 NOx=45.8 O2=5.8 Velocity=12.6 Temp=189.3 Humidity=47.9 Pressure=95.4 Flag=N
+2026-10-03 00:38:46 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:46 Flow=27760.0 Dust=3.24 SO2=23.4 NOx=46.9 O2=5.8 Velocity=12.7 Temp=188.6 Humidity=47.7 Pressure=95.3 Flag=N
+2026-10-03 00:38:51 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:51 Flow=27851.0 Dust=3.32 SO2=22.9 NOx=47.7 O2=5.8 Velocity=12.7 Temp=189.1 Humidity=47.5 Pressure=95.3 Flag=N
+2026-10-03 00:38:56 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:38:56 Flow=27784.0 Dust=3.44 SO2=22.2 NOx=48.9 O2=5.9 Velocity=12.6 Temp=189.4 Humidity=47.5 Pressure=95.3 Flag=N
+2026-10-03 00:39:01 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:01 Flow=27695.0 Dust=3.52 SO2=21.7 NOx=49.7 O2=5.8 Velocity=12.6 Temp=188.7 Humidity=47.5 Pressure=95.4 Flag=N
+2026-10-03 00:39:06 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:06 Flow=27839.0 Dust=3.64 SO2=21.1 NOx=49.3 O2=5.8 Velocity=12.7 Temp=189.5 Humidity=47.4 Pressure=95.4 Flag=N
+2026-10-03 00:39:11 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:11 Flow=27787.0 Dust=3.72 SO2=20.6 NOx=48.5 O2=5.8 Velocity=12.7 Temp=188.9 Humidity=47.5 Pressure=95.3 Flag=N
+2026-10-03 00:39:16 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:16 Flow=27895.0 Dust=3.85 SO2=20.6 NOx=47.3 O2=5.9 Velocity=12.7 Temp=189.4 Humidity=47.8 Pressure=95.4 Flag=N
+2026-10-03 00:39:21 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:21 Flow=27617.0 Dust=3.93 SO2=20.6 NOx=46.6 O2=5.9 Velocity=12.6 Temp=188.6 Humidity=47.6 Pressure=95.3 Flag=N
+2026-10-03 00:39:26 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:26 Flow=27788.0 Dust=4.05 SO2=20.6 NOx=45.4 O2=5.9 Velocity=12.7 Temp=189.9 Humidity=47.4 Pressure=95.4 Flag=N
+2026-10-03 00:39:31 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:31 Flow=27832.0 Dust=4.13 SO2=20.6 NOx=44.6 O2=5.8 Velocity=12.6 Temp=189.1 Humidity=47.7 Pressure=95.3 Flag=N
+2026-10-03 00:39:36 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:36 Flow=27775.0 Dust=4.25 SO2=20.6 NOx=43.5 O2=5.8 Velocity=12.7 Temp=189.2 Humidity=47.6 Pressure=95.3 Flag=N
+2026-10-03 00:39:41 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:41 Flow=27851.0 Dust=4.33 SO2=20.6 NOx=42.8 O2=5.8 Velocity=12.6 Temp=189.4 Humidity=47.7 Pressure=95.4 Flag=N
+2026-10-03 00:39:46 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:46 Flow=27766.0 Dust=4.45 SO2=20.6 NOx=41.6 O2=5.9 Velocity=12.7 Temp=189.6 Humidity=47.4 Pressure=95.4 Flag=N
+2026-10-03 00:39:51 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:51 Flow=27778.0 Dust=4.53 SO2=20.6 NOx=40.8 O2=5.8 Velocity=12.7 Temp=189.4 Humidity=47.4 Pressure=95.4 Flag=N
+2026-10-03 00:39:56 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:39:56 Flow=27682.0 Dust=4.66 SO2=20.6 NOx=39.7 O2=5.8 Velocity=12.6 Temp=189.6 Humidity=47.5 Pressure=95.4 Flag=N
+2026-10-03 00:40:01 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:01 Flow=27818.0 Dust=4.74 SO2=20.6 NOx=40.5 O2=5.8 Velocity=12.7 Temp=188.8 Humidity=47.6 Pressure=95.4 Flag=N
+2026-10-03 00:40:06 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:06 Flow=27777.0 Dust=4.86 SO2=20.6 NOx=41.6 O2=5.9 Velocity=12.7 Temp=188.8 Humidity=47.6 Pressure=95.4 Flag=N
+2026-10-03 00:40:11 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:11 Flow=27701.0 Dust=4.94 SO2=20.6 NOx=42.4 O2=5.8 Velocity=12.7 Temp=188.4 Humidity=47.4 Pressure=95.4 Flag=N
+2026-10-03 00:40:17 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:16 Flow=27749.0 Dust=5.06 SO2=20.6 NOx=43.5 O2=5.9 Velocity=12.7 Temp=188.6 Humidity=47.4 Pressure=95.4 Flag=N
+2026-10-03 00:40:22 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:22 Flow=27655.0 Dust=5.14 SO2=20.6 NOx=44.3 O2=5.9 Velocity=12.7 Temp=188.7 Humidity=47.4 Pressure=95.4 Flag=N
+2026-10-03 00:40:27 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:27 Flow=27722.0 Dust=5.26 SO2=20.6 NOx=45.4 O2=5.8 Velocity=12.7 Temp=189.2 Humidity=47.7 Pressure=95.5 Flag=N
+2026-10-03 00:40:32 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:32 Flow=27732.0 Dust=5.34 SO2=20.6 NOx=46.2 O2=5.8 Velocity=12.8 Temp=189.7 Humidity=47.6 Pressure=95.4 Flag=N
+2026-10-03 00:40:37 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:37 Flow=27734.0 Dust=5.22 SO2=20.6 NOx=47.4 O2=5.8 Velocity=12.8 Temp=189.1 Humidity=47.6 Pressure=95.4 Flag=N
+2026-10-03 00:40:42 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:42 Flow=27487.0 Dust=5.14 SO2=20.6 NOx=48.2 O2=5.8 Velocity=12.6 Temp=189.7 Humidity=47.6 Pressure=95.4 Flag=N
+2026-10-03 00:40:47 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:47 Flow=27501.0 Dust=5.02 SO2=20.6 NOx=49.3 O2=5.8 Velocity=12.7 Temp=188.6 Humidity=47.5 Pressure=95.4 Flag=N
+2026-10-03 00:40:52 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:40:52 Flow=27418.0 Dust=4.94 SO2=20.6 NOx=50.1 O2=5.8 Velocity=12.7 Temp=189.6 Humidity=47.3 Pressure=95.5 Flag=N
+2026-10-03 00:40:53 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-03 00:40:53 [INFO] gateway: [补传] 开始补传 30 条，在途窗口 100 条
+2026-10-03 00:40:53 [INFO] gateway: [补传完成] broker 已确认 30 条
+

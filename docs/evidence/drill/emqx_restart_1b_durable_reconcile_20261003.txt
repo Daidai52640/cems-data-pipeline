@@ -1,0 +1,467 @@
+[2026-10-03 00:41:55] TC-E2E-002 演练 1b 开始；结果文件 emqx_restart_1b_durable_reconcile_20261003.json / .txt
+
+[2026-10-03 00:41:55] ========================================================================
+[2026-10-03 00:41:55] 基线（1b 故障前）
+[2026-10-03 00:41:55] ========================================================================
+[2026-10-03 00:41:56] --- docker compose ps ---
+[2026-10-03 00:41:56] cems-device	device	Up About an hour (healthy)
+cems-gateway	gateway	Up About an hour (healthy)
+cems-gateway-plant2	gateway2	Up About an hour (healthy)
+cems-nginx	nginx	Up 10 hours (healthy)
+cems-redis	redis	Up 10 hours (healthy)
+cems-subscriber	subscriber	Up About an hour (healthy)
+cems-subscriber-plant2	subscriber2	Up About an hour (healthy)
+cems-web	web	Up About an hour (healthy)
+emqx	emqx	Up 2 minutes (healthy)
+tdengine	tdengine	Up 10 hours (healthy)
+[2026-10-03 00:41:56] --- 缓存快照 ---
+[2026-10-03 00:41:56] {
+  "device1": {
+    "dir": "F:\\Project1\\cems-data-pipeline\\data",
+    "cache_lines": 0,
+    "legacy_sending_lines": 0,
+    "inflight_files": {
+      "inflight-000001.jsonl": 0,
+      "inflight-000002.jsonl": 0,
+      "inflight-000003.jsonl": 0,
+      "inflight-000004.jsonl": 0,
+      "inflight-000005.jsonl": 0,
+      "inflight-000006.jsonl": 0
+    },
+    "inflight_lines": 0,
+    "pending_total": 0
+  },
+  "device2": {
+    "dir": "F:\\Project1\\cems-data-pipeline\\data\\plant2",
+    "cache_lines": 0,
+    "legacy_sending_lines": 0,
+    "inflight_files": {
+      "inflight-000001.jsonl": 0,
+      "inflight-000002.jsonl": 0,
+      "inflight-000003.jsonl": 0
+    },
+    "inflight_lines": 0,
+    "pending_total": 0
+  }
+}
+[2026-10-03 00:41:56] 库内总数=18828 最近时间戳={'device1': '2026-10-03 00:41:51', 'device2': '2026-10-03 00:41:52'}
+
+[2026-10-03 00:41:56] ========================================================================
+[2026-10-03 00:41:56] 第 1 步：停两个订阅端（制造离线窗口）
+[2026-10-03 00:41:56] ========================================================================
+[2026-10-03 00:41:59] --- docker stop cems-subscriber cems-subscriber-plant2 ---
+[2026-10-03 00:41:59] cems-subscriber
+cems-subscriber-plant2
+[2026-10-03 00:41:59] EVENT subscribers_stopped_at = 2026-10-03 00:41:59
+
+[2026-10-03 00:41:59] ========================================================================
+[2026-10-03 00:41:59] 第 2 步：停 EMQX
+[2026-10-03 00:41:59] ========================================================================
+[2026-10-03 00:42:01] --- docker stop emqx ---
+[2026-10-03 00:42:01] emqx
+[2026-10-03 00:42:01] EVENT emqx_stopped_at = 2026-10-03 00:42:01
+[2026-10-03 00:42:21]   离线 20 秒: pending={'device1': 5, 'device2': 4}
+[2026-10-03 00:42:41]   离线 40 秒: pending={'device1': 8, 'device2': 8}
+[2026-10-03 00:43:01]   离线 60 秒: pending={'device1': 12, 'device2': 12}
+[2026-10-03 00:43:21]   离线 80 秒: pending={'device1': 16, 'device2': 16}
+[2026-10-03 00:43:41]   离线 100 秒: pending={'device1': 20, 'device2': 20}
+[2026-10-03 00:44:01]   离线 120 秒: pending={'device1': 24, 'device2': 24}
+
+[2026-10-03 00:44:01] ========================================================================
+[2026-10-03 00:44:01] 离线窗口快照（订阅端与 broker 均不在线）
+[2026-10-03 00:44:01] ========================================================================
+[2026-10-03 00:44:01] --- device1 缓存时间戳 ---
+[2026-10-03 00:44:01] {"cache_ts": ["2026-10-03 00:42:01", "2026-10-03 00:42:06", "2026-10-03 00:42:11", "2026-10-03 00:42:16", "2026-10-03 00:42:21", "2026-10-03 00:42:26", "2026-10-03 00:42:31", "2026-10-03 00:42:36", "2026-10-03 00:42:41", "2026-10-03 00:42:46", "2026-10-03 00:42:51", "2026-10-03 00:42:56", "2026-10-03 00:43:01", "2026-10-03 00:43:06", "2026-10-03 00:43:11", "2026-10-03 00:43:17", "2026-10-03 00:43:22", "2026-10-03 00:43:27", "2026-10-03 00:43:32", "2026-10-03 00:43:37", "2026-10-03 00:43:42", "2026-10-03 00:43:47", "2026-10-03 00:43:52", "2026-10-03 00:43:57"], "inflight_ts": [], "legacy_ts": []}
+[2026-10-03 00:44:01]   device1 日志口径入队 24 条
+[2026-10-03 00:44:01] --- device2 缓存时间戳 ---
+[2026-10-03 00:44:01] {"cache_ts": ["2026-10-03 00:42:02", "2026-10-03 00:42:07", "2026-10-03 00:42:12", "2026-10-03 00:42:17", "2026-10-03 00:42:22", "2026-10-03 00:42:27", "2026-10-03 00:42:32", "2026-10-03 00:42:37", "2026-10-03 00:42:42", "2026-10-03 00:42:47", "2026-10-03 00:42:52", "2026-10-03 00:42:57", "2026-10-03 00:43:02", "2026-10-03 00:43:07", "2026-10-03 00:43:13", "2026-10-03 00:43:18", "2026-10-03 00:43:23", "2026-10-03 00:43:28", "2026-10-03 00:43:33", "2026-10-03 00:43:38", "2026-10-03 00:43:43", "2026-10-03 00:43:48", "2026-10-03 00:43:53", "2026-10-03 00:43:58"], "inflight_ts": [], "legacy_ts": []}
+[2026-10-03 00:44:01]   device2 日志口径入队 24 条
+
+[2026-10-03 00:44:01] ========================================================================
+[2026-10-03 00:44:01] 第 3 步：起 EMQX（订阅端仍离线 → 报文只可能进 broker 的持久队列）
+[2026-10-03 00:44:01] ========================================================================
+[2026-10-03 00:44:02] --- docker start emqx ---
+[2026-10-03 00:44:02] emqx
+[2026-10-03 00:44:02] EVENT emqx_started_at_cmd = 2026-10-03 00:44:02
+[2026-10-03 00:44:02] EVENT emqx_healthy_at = 2026-10-03 00:44:02
+[2026-10-03 00:44:02]   emqx 恢复 healthy 耗时 0.1 秒
+[2026-10-03 00:44:02]   排空探测: pending=48（{'device1': 24, 'device2': 24}）
+[2026-10-03 00:44:07]   排空探测: pending=50（{'device1': 25, 'device2': 25}）
+[2026-10-03 00:44:12]   排空探测: pending=52（{'device1': 26, 'device2': 26}）
+[2026-10-03 00:44:17]   排空探测: pending=54（{'device1': 27, 'device2': 27}）
+[2026-10-03 00:44:22]   排空探测: pending=56（{'device1': 28, 'device2': 28}）
+[2026-10-03 00:44:27]   排空探测: pending=58（{'device1': 29, 'device2': 29}）
+[2026-10-03 00:44:32]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:44:37]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:44:42]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:44:42] EVENT gateway_resend_done_at = 2026-10-03 00:44:42
+[2026-10-03 00:44:42]   网关补传（broker 已确认）耗时 40.0 秒，drained=True
+[2026-10-03 00:44:42] --- device1 网关日志（订阅端仍离线时的补传） ---
+[2026-10-03 00:44:42] 2026-10-03 00:44:27 [INFO] gateway: [补传] 开始补传 29 条，在途窗口 100 条
+2026-10-03 00:44:27 [INFO] gateway: [补传完成] broker 已确认 29 条
+[2026-10-03 00:44:42] --- device2 网关日志（订阅端仍离线时的补传） ---
+[2026-10-03 00:44:42] 2026-10-03 00:44:27 [INFO] gateway: [补传] 开始补传 29 条，在途窗口 100 条
+2026-10-03 00:44:27 [INFO] gateway: [补传完成] broker 已确认 29 条
+[2026-10-03 00:44:43] --- EMQX 队列（订阅端离线时） ---
+[2026-10-03 00:44:43] Usage: emqx ctl
+--------------------------------------------------------------------------------------------------------------
+authz cache-clean all         # Clears authorization cache on all nodes
+authz cache-clean node <Node> # Clears authorization cache on given node
+authz cache-clean <ClientId>  # Clears authorization cache for given client
+--------------------------------------------------------------------------------------------------------------
+broker         # Show broker version, uptime and description
+broker stats   # Show broker statistics of clients, topics, subscribers
+broker metrics # Show broker metrics
+--------------------------------------------------------------------------------------------------------------
+clients list                                         # List all clients
+clients stats <File> [--batch <Size>] [--sleep <Ms>] # Dump statistic data for all clients in csv format to the given file.
+                                                     # --batch controls processing speed (default: 1000),
+                                                     # --sleep controls delay between batches (default: 10ms).
+clients show <ClientId>                              # Show a client
+clients kick <ClientId>                              # Kick out a client
+--------------------------------------------------------------------------------------------------------------
+cluster join <Node>            # Join the cluster
+cluster leave                  # Leave the cluster
+cluster force-leave <Node>     # Force the node leave from cluster
+cluster status [--json]        # Cluster status
+cluster discovery enable       # Enable and run automatic cluster discovery (if configured)
+cluster core rebalance plan    # Plan rebalancing of replicants against cores
+cluster core rebalance status  # Check status of replicant rebalance
+cluster core rebalance confirm # Execute the planned rebalance
+cluster core rebalance abort   # Abort the ongoing rebalance
+--------------------------------------------------------------------------------------------------------------
+data import <File> [--allow-security-profile-mismatch] # Import data from the specified tar archive file
+data export \                                          # Export data
+  [--root-keys key1,key2,key3] \                       # 
+  [--table-sets set1,set2,set3] \                      # 
+  [--dir out_dir]                                      # 
+--------------------------------------------------------------------------------------------------------------
+ds info                                           # Show overview of the embedded durable storage state
+ds set-replicas <storage>|all <site1> <site2> ... # Change the replica set of the durable storage(s)
+ds join <storage>|all <site>                      # Add site to the replica set of the storage(s)
+ds leave <storage>|all <site>                     # Remove site from the replica set of the storage(s)
+ds forget <site>                                  # Remove a site from the list of known sites
+--------------------------------------------------------------------------------------------------------------
+exclusive list           # List all exclusive topics
+exclusive delete <Topic> # Delete an exclusive topic
+--------------------------------------------------------------------------------------------------------------
+listeners                                  # List listeners
+listeners stop    <Identifier>             # Stop a listener
+listeners start   <Identifier>             # Start a listener
+listeners restart <Identifier>             # Restart a listener
+listeners enable <Identifier> <true/false> # Enable or disable a listener
+--------------------------------------------------------------------------------------------------------------
+log set-level <Level>                # Set the overall log level
+log primary-level                    # Show the primary log level now
+log primary-level <Level>            # Set the primary log level
+log outputs list                     # Show configured log outputs
+log outputs enable <name>            # Enable console, file, or a file handler name
+log outputs disable <name>           # Disable console, file, or a file handler name
+log outputs set-level <name> <Level> # Set log level for console, file, or a file handler name
+--------------------------------------------------------------------------------------------------------------
+mnesia # Mnesia system info
+--------------------------------------------------------------------------------------------------------------
+olp status  # Return OLP status if system is overloaded
+olp enable  # Enable overload protection
+olp disable # Disable overload protection
+--------------------------------------------------------------------------------------------------------------
+pem_cache clean all         # Clears x509 certificate cache on all nodes
+pem_cache clean node <Node> # Clears x509 certificate cache on given node
+--------------------------------------------------------------------------------------------------------------
+session-top status       # Show the running scan or the latest finished scan.
+                         # The latest finished status is kept until the next scan starts.
+session-top cancel       # Cancel the running session-top scan.
+session-top --out <File> # Write cluster top sessions to a new CSV file.
+  [--count <K>]          # Result row limit, default: 10, max: 1000.
+  [--sort <SortBy>]      # SortBy: mqueue_length | total_payload_bytes.
+  [--batch <Size>]       # Rows per local scan batch, default: 1000.
+  [--sleep <Ms>]         # Delay between batches, default: 1ms.
+--------------------------------------------------------------------------------------------------------------
+status # Show broker status
+--------------------------------------------------------------------------------------------------------------
+subscriptions list                         # List all subscriptions
+subscriptions show <ClientId>              # Show subscriptions of a client
+subscriptions add <ClientId> <Topic> <QoS> # Add a static subscription manually
+subscriptions del <ClientId> <Topic>       # Delete a static subscription manually
+--------------------------------------------------------------------------------------------------------------
+topics list         # List all topics
+topics show <Topic> # Show a topic
+--------------------------------------------------------------------------------------------------------------
+trace list                                                     # List all traces started on local node
+trace start client <ClientId> <File> [<Level>] [<Formatter>]   # Traces for a client on local node (Formatter=text|json)
+trace stop  client <ClientId>                                  # Stop tracing for a client on local node
+trace start topic  <Topic>    <File> [<Level>] [<Formatter>]   # Traces for a topic on local node (Formatter=text|json)
+trace stop  topic  <Topic>                                     # Stop tracing for a topic on local node
+trace start ip_address  <IP>    <File> [<Level>] [<Formatter>] # Traces for a client ip on local node (Formatter=text|json)
+trace stop  ip_address  <IP>                                   # Stop tracing for a client ip on local node
+trace start ruleid  <RuleID>    <File> [<Level>] [<Formatter>] # Traces for a rule ID on local node (Formatter=text|json)
+trace stop  ruleid  <RuleID>                                   # Stop tracing for a rule ID on local node
+--------------------------------------------------------------------------------------------------------------
+traces list                                                        # List all cluster traces started
+traces start <Name> client <ClientId> [<Duration>] [<Formatter>]   # Traces for a client in cluster (Formatter=text|json)
+traces start <Name> topic <Topic> [<Duration>] [<Formatter>]       # Traces for a topic in cluster (Formatter=text|json)
+traces start <Name> ruleid <RuleID> [<Duration>] [<Formatter>]     # Traces for a rule ID in cluster (Formatter=text|json)
+traces start <Name> ip_address <IPAddr> [<Duration>] [<Formatter>] # Traces for a client IP in cluster
+                                                                   # Trace will start immediately on all nodes, including the core and replicant,
+                                                                   # and will end after <Duration> seconds. The default value for <Duration> is 1800 seconds. (Formatter=text|json)
+traces stop <Name>                                                 # Stop trace in cluster
+traces delete <Name>                                               # Delete trace in cluster
+--------------------------------------------------------------------------------------------------------------
+vm all     # Show info of Erlang VM
+vm load    # Show load of Erlang VM
+vm memory  # Show memory of Erlang VM
+vm process # Show process of Erlang VM
+vm io      # Show IO of Erlang VM
+vm ports   # Show Ports of Erlang VM
+--------------------------------------------------------------------------------------------------------------
+conf reload [--namespace <ns>] --replace|--merge      # reload etc/emqx.conf on local node
+                                                      # The new configuration values will be overlaid on the existing values by default.
+                                                      # use the --replace flag to replace existing values with the new ones instead.
+                                                      # Set `--namespace <ns>` to narrow the scope to a specific namespace.
+----------------------------------                    # ------------
+conf show_keys                                        # print all the currently used configuration keys.
+----------------------------------                    # ------------
+conf show [--namespace <ns>] [<key>]                  # Print in-use configs (including default values) under the given key.
+                                                      # Print ALL keys if key is not provided
+                                                      # Set `--namespace <ns>` to narrow the scope to a specific namespace.
+----------------------------------                    # ------------
+conf load [--namespace <ns>] --replace|--merge <path> # Load a HOCON format config file.
+                                                      # The new configuration values will be overlaid on the existing values by default.
+                                                      # use the --replace flag to replace existing values with the new ones instead.
+                                                      # The current node will initiate a cluster wide config change
+                                                      # transaction to sync the changes to other nodes in the cluster. 
+                                                      # NOTE: do not make runtime config changes during rolling upgrade.
+                                                      # Set `--namespace <ns>` to narrow the scope to a specific namespace.
+----------------------------------                    # ------------
+conf remove [--namespace <ns>] <conf-path>            # Removes a config path (e.g. `a.b.c`) from the current config.
+                                                      # Set `--namespace <ns>` to narrow the scope to a specific namespace.
+----------------------------------                    # ------------
+conf cluster_sync status                              # Show cluster config sync status summary for all nodes.
+conf cluster_sync inspect <ID>                        # Inspect detailed information of the config change transaction at the given commit ID
+conf cluster_sync skip [node]                         # Increment the (currently failing) commit on the given node.
+                                                      # WARNING: This results in inconsistent configs among the clustered nodes.
+conf cluster_sync fast_forward [node] <ID>            # Fast-forward config change to the given commit ID on the given node.
+                                                      # WARNING: This results in inconsistent configs among the clustered nodes.
+conf cluster_sync fix                                 # Sync the node with the most comprehensive configuration to other node.
+                                                      # WARNING: typically the config leader(with the highest tnxid).
+--------------------------------------------------------------------------------------------------------------
+observer status   # Start observer in the current console
+observer bin_leak # Force all processes to perform garbage collection and prints the top-100 processes that freed the biggest amount of binaries, potentially highlighting leaks.
+observer load Mod # Enhanced module synchronization across all cluster nodes
+--------------------------------------------------------------------------------------------------------------
+plugins <command> [Name-Vsn]            # e.g. 'start emqx_plugin_template-5.0-rc.1'
+plugins list                            # List all installed plugins
+plugins describe  Name-Vsn              # Describe an installed plugins
+plugins allow     Name-Vsn [sha256:HEX] # Allows installation of a plugin in the cluster from Dashboard or API.
+                                        # The grant expires 5 minutes after issue.
+                                        # If sha256:HEX (64 lowercase hex chars) is given, the upload bytes
+                                        # must hash to that value or the install is rejected.
+                                        # The hardened security profile requires sha256:HEX.
+plugins disallow  Name-Vsn              # Disallows installation of a plugin in the cluster from Dashboard or API
+plugins install   Name-Vsn              # Install a plugin package placed
+                                        # in plugin's install_dir
+plugins uninstall Name-Vsn              # Uninstall a plugin. NOTE: it deletes
+                                        # all files in install_dir/Name-Vsn
+plugins start     Name-Vsn              # Start a plugin
+plugins stop      Name-Vsn              # Stop a plugin
+plugins restart   Name-Vsn              # Stop then start a plugin
+plugins disable   Name-Vsn              # Disable auto-boot
+plugins enable    Name-Vsn [Position]   # Enable auto-boot at Position in the boot list, where Position could be
+                                        # 'front', 'rear', or 'before Other-Vsn' to specify a relative position.
+                                        # The Position parameter can be used to adjust the boot order.
+                                        # If no Position is given, an already configured plugin
+                                        # will stay at is old position; a newly plugin is appended to the rear
+                                        # e.g. plugins disable foo-0.1.0 front
+                                        #      plugins enable bar-0.2.0 before foo-0.1.0
+--------------------------------------------------------------------------------------------------------------
+retainer info                   # Show the count of retained messages
+retainer topics                 # Same as retainer topic 1 1000
+retainer topics <Start> <Limit> # Show topics of retained messages by the specified range
+retainer clean                  # Clean all retained messages
+retainer clean <Topic>          # Clean retained messages by the specified topic filter
+retainer reindex status         # Show reindex status.
+                                # Only available for built-in backend.
+retainer reindex start [force]  # Generate new retainer topic indices from config settings.
+                                # Pass true as <Force> to ignore previously started reindexing.
+                                # Only available for built-in backend.
+--------------------------------------------------------------------------------------------------------------
+eviction status # Get current node eviction status
+--------------------------------------------------------------------------------------------------------------
+rebalance start --evacuation \            # Start current node evacuation with optional
+  [--wait-health-check Secs] \            # server redirect to the specified servers
+  [--redirect-to "Host1 Host2 .."] \      # 
+  [--conn-evict-rate CountPerSec] \       # 
+  [--migrate-to "emqx@h.1 emqx@h.2 .."] \ # 
+  [--wait-takeover Secs] \                # 
+  [--sess-evict-rate CountPerSec]         # 
+rebalance start \                         # Start rebalance on the specified nodes
+  [--nodes "emqx@h.1 emqx@h.2 .."] \      # using the current node as the coordinator
+  [--wait-health-check Secs] \            # 
+  [--conn-evict-rate ConnPerSec] \        # 
+  [--conn-evict-rpc-timeout Secs] \       # 
+  [--abs-conn-threshold Count] \          # 
+  [--rel-conn-threshold Fraction] \       # 
+  [--wait-takeover Secs] \                # 
+  [--sess-evict-rate CountPerSec] \       # 
+  [--sess-evict-rpc-timeout Secs] \       # 
+  [--abs-sess-threshold Count] \          # 
+  [--rel-sess-threshold Fraction]         # 
+rebalance node-status                     # Get current node rebalance status
+rebalance node-status "emqx@h.1"          # Get remote node rebalance status
+rebalance status                          # Get statuses of all current rebalance/evacuation
+                                          # processes across the cluster
+rebalance stop                            # Stop node rebalance
+--------------------------------------------------------------------------------------------------------------
+mt purge_ns <namespace> # Delete the namespace and purge all data belonging to it.
+                        # Idempotent: purges any leftover data even if the namespace does not exist,
+                        # e.g. if a previous deletion was interrupted halfway.
+--------------------------------------------------------------------------------------------------------------
+gateway list                     # List all gateway
+gateway lookup <Name>            # Lookup a gateway detailed information
+gateway load   <Name> <JsonConf> # Load a gateway with config
+gateway unload <Name>            # Unload the gateway
+gateway stop   <Name>            # Stop the gateway
+gateway start  <Name>            # Start the gateway
+--------------------------------------------------------------------------------------------------------------
+gateway-registry list # List all registered gateways
+--------------------------------------------------------------------------------------------------------------
+gateway-clients list   <Name>            # List all clients for a gateway
+gateway-clients lookup <Name> <ClientId> # Lookup the Client Info for specified client
+gateway-clients kick   <Name> <ClientId> # Kick out a client
+--------------------------------------------------------------------------------------------------------------
+gateway-metrics <Name> # List all metrics for a gateway
+--------------------------------------------------------------------------------------------------------------
+actions show [--name <type:name>] [--ns <namespace>]   # Show local action config (secrets redacted) and status as JSON.
+                                                       # Omit --name to show every action; omit --ns for the global namespace.
+                                                       # Always exits 0 on a successful lookup, printing `null` if --name matches
+                                                       # nothing; pipe to `jq -e` to turn that into a failing check.
+actions status [--name <type:name>] [--ns <namespace>] # Show local action status as a compact JSON array of
+                                                       # {"<type>:<name>": "<status>"} objects.
+                                                       # Omit --name to show every action; omit --ns for the global namespace.
+                                                       # Always exits 0 on a successful lookup, printing `[]` if --name matches
+                                                       # nothing; pipe to `jq -e` to turn that into a failing check.
+--------------------------------------------------------------------------------------------------------------
+rules list [--namespace <ns>]          # List rules
+                                       # Set `--namespace <ns>` to narrow the scope to a specific namespace.
+rules show [--namespace <ns>] <RuleId> # Show a rule
+                                       # Set `--namespace <ns>` to narrow the scope to a specific namespace.
+--------------------------------------------------------------------------------------------------------------
+license info                                          # Show license info
+license history [N] [--period daily|monthly] [--json] # Show session high-watermark history in plain text or JSON
+license update '<License>'|'file:///tmp/emqx.lic'     # Update license given as a string
+                                                      # or referenced by a file path via 'file://' prefix
+--------------------------------------------------------------------------------------------------------------
+admins add <Username> <Password> <Description> <Role> # Add dashboard user
+admins passwd <Username> <Password>                   # Reset dashboard user password
+admins del <Username> <Backend>                       # Delete dashboard user, <Backend> can be omitted, the default value is 'local'
+admins mfa <Username> disable                         # disable Multi-factor authentication for the user
+admins mfa <Username> enable [<Mechanism>]            # Enable Multi-factor authentication. Default mechanism is 'totp' (Authenticator App)
+--------------------------------------------------------------------------------------------------------------
+api_keys list                                                  # List API keys
+api_keys show --name <Name>                                    # Show API key details
+api_keys add --name <Name> [--api-secret <Secret>]             # Create API key
+[--valid-days <infinity|days>] [--role <Role>] [--desc <Desc>] # 
+[--scopes <scope1,scope2,...>]                                 # 
+api_keys enable --name <Name>                                  # Enable API key
+api_keys disable --name <Name>                                 # Disable API key
+api_keys del --name <Name>                                     # Delete API key
+--------------------------------------------------------------------------------------------------------------
+a2a_registry list \                                             # List registered agent cards
+  [--org-id ORG_ID] \                                           # 
+  [--unit-id UNIT_ID] \                                         # 
+  [--agent-id AGENT_ID] \                                       # 
+  [--status STATUS]                                             # 
+a2a_registry get ORG_ID UNIT_ID AGENT_ID                        # Lookup one registered agent card
+a2a_registry delete ORG_ID UNIT_ID AGENT_ID                     # Delete one registered agent card
+a2a_registry register ORG_ID UNIT_ID AGENT_ID <agent-card.json> # Insert/update agent card
+a2a_registry stats                                              # Print agent card registry statistics
+
+[2026-10-03 00:44:43] ========================================================================
+[2026-10-03 00:44:43] 第 4 步：起订阅端 → 消费 broker 持久队列
+[2026-10-03 00:44:43] ========================================================================
+[2026-10-03 00:44:43] --- docker start cems-subscriber cems-subscriber-plant2 ---
+[2026-10-03 00:44:43] cems-subscriber
+cems-subscriber-plant2
+[2026-10-03 00:44:43] EVENT subscribers_started_at = 2026-10-03 00:44:43
+[2026-10-03 00:44:43]   队列投递探测: 缺失 58 条
+[2026-10-03 00:44:53]   队列投递探测: 缺失 0 条
+[2026-10-03 00:44:53] EVENT durable_queue_delivered_at = 2026-10-03 00:44:53
+
+[2026-10-03 00:44:53] ========================================================================
+[2026-10-03 00:44:53] 恢复后日志与状态
+[2026-10-03 00:44:53] ========================================================================
+[2026-10-03 00:44:53] --- device1 订阅端会话日志 ---
+[2026-10-03 00:44:53] 2026-10-03 00:44:43 [INFO] platform.subscriber_to_td: MQTT 已连接: emqx:1883（会话恢复=True）
+[2026-10-03 00:44:53] --- device2 订阅端会话日志 ---
+[2026-10-03 00:44:53] 2026-10-03 00:44:43 [INFO] platform.subscriber_to_td: MQTT 已连接: emqx:1883（会话恢复=True）
+[2026-10-03 00:44:53] --- device1 网关日志（补传相关） ---
+[2026-10-03 00:44:53] 2026-10-03 00:44:27 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-03 00:44:27 [INFO] gateway: [补传] 开始补传 29 条，在途窗口 100 条
+2026-10-03 00:44:27 [INFO] gateway: [补传完成] broker 已确认 29 条
+[2026-10-03 00:44:53] --- device2 网关日志（补传相关） ---
+[2026-10-03 00:44:53] 2026-10-03 00:44:27 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-03 00:44:27 [INFO] gateway: [补传] 开始补传 29 条，在途窗口 100 条
+2026-10-03 00:44:27 [INFO] gateway: [补传完成] broker 已确认 29 条
+[2026-10-03 00:44:53] --- 缓存快照（恢复后） ---
+[2026-10-03 00:44:53] {"device1": {"pending_total": 0}, "device2": {"pending_total": 0}}
+
+[2026-10-03 00:44:53] ========================================================================
+[2026-10-03 00:44:53] 逐条对账（持久会话投递）
+[2026-10-03 00:44:53] ========================================================================
+[2026-10-03 00:44:53]   对账 device1: 缓存 29 条 → 库内存在 29 条，缺失 0 条，成功率 1.0
+[2026-10-03 00:44:53]   对账 device2: 缓存 29 条 → 库内存在 29 条，缺失 0 条，成功率 1.0
+[2026-10-03 00:44:54] --- 容器状态（恢复后） ---
+[2026-10-03 00:44:54] {
+  "cems-device": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T15:32:33.525908122Z"
+  },
+  "cems-gateway": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T15:32:34.293576384Z"
+  },
+  "cems-gateway-plant2": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T15:32:34.168174563Z"
+  },
+  "cems-subscriber": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:44:43.086285268Z"
+  },
+  "cems-subscriber-plant2": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:44:43.194166199Z"
+  },
+  "cems-web": {
+    "status": "running",
+    "health": "unhealthy",
+    "started_at": "2026-10-02T15:20:45.675073222Z"
+  },
+  "emqx": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:43:26.145748278Z"
+  },
+  "cems-nginx": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:34:09.771564358Z"
+  },
+  "cems-redis": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:34:03.455925381Z"
+  },
+  "tdengine": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:30:13.166146657Z"
+  }
+}
+[2026-10-03 00:44:54] JSON 已写入: F:\Project1\cems-data-pipeline\docs\evidence\drill\emqx_restart_1b_durable_reconcile_20261003.json
+[2026-10-03 00:44:54] 演练结束

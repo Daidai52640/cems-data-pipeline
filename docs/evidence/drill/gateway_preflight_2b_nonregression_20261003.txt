@@ -1,0 +1,140 @@
+[2026-10-03 00:49:05] TC-E2E-002 演练 2b 开始；结果文件 gateway_preflight_2b_nonregression_20261003.json / .txt
+
+[2026-10-03 00:49:05] ========================================================================
+[2026-10-03 00:49:05] 基线（2b 故障前）
+[2026-10-03 00:49:05] ========================================================================
+[2026-10-03 00:49:05] --- docker compose ps ---
+[2026-10-03 00:49:05] cems-device	device	Up About an hour (healthy)
+cems-gateway	gateway	Up About an hour (healthy)
+cems-gateway-plant2	gateway2	Up About an hour (healthy)
+cems-nginx	nginx	Up 10 hours (healthy)
+cems-redis	redis	Up 10 hours (healthy)
+cems-subscriber	subscriber	Up 4 minutes (healthy)
+cems-subscriber-plant2	subscriber2	Up 4 minutes (healthy)
+cems-web	web	Up About an hour (healthy)
+emqx	emqx	Up About a minute (healthy)
+tdengine	tdengine	Up 10 hours (healthy)
+[2026-10-03 00:49:05] --- 缓存快照 ---
+[2026-10-03 00:49:05] {
+  "device1": {
+    "dir": "F:\\Project1\\cems-data-pipeline\\data",
+    "cache_lines": 0,
+    "legacy_sending_lines": 0,
+    "inflight_files": {
+      "inflight-000001.jsonl": 0,
+      "inflight-000002.jsonl": 0,
+      "inflight-000003.jsonl": 0,
+      "inflight-000004.jsonl": 0,
+      "inflight-000005.jsonl": 0,
+      "inflight-000006.jsonl": 0
+    },
+    "inflight_lines": 0,
+    "pending_total": 0
+  },
+  "device2": {
+    "dir": "F:\\Project1\\cems-data-pipeline\\data\\plant2",
+    "cache_lines": 0,
+    "legacy_sending_lines": 0,
+    "inflight_files": {
+      "inflight-000001.jsonl": 0,
+      "inflight-000002.jsonl": 0,
+      "inflight-000003.jsonl": 0
+    },
+    "inflight_lines": 0,
+    "pending_total": 0
+  }
+}
+[2026-10-03 00:49:05] 库内总数=19001 最近时间戳={'device1': '2026-10-03 00:49:04', 'device2': '2026-10-03 00:49:05'}
+
+[2026-10-03 00:49:05] ========================================================================
+[2026-10-03 00:49:05] 2b-1 设备未起时重启网关（确认预检不误伤'暂时连不上'）
+[2026-10-03 00:49:05] ========================================================================
+[2026-10-03 00:49:09] --- docker stop cems-device ---
+[2026-10-03 00:49:09] cems-device
+[2026-10-03 00:49:09] EVENT device_stopped_at = 2026-10-03 00:49:09
+[2026-10-03 00:49:18] --- docker restart cems-gateway cems-gateway-plant2 ---
+[2026-10-03 00:49:18] cems-gateway
+cems-gateway-plant2
+[2026-10-03 00:49:18] EVENT gateways_restarted_device_down_at = 2026-10-03 00:49:18
+[2026-10-03 00:49:43] --- device1 网关日志（设备停用期间启动） ---
+[2026-10-03 00:49:43] 2026-10-03 00:49:09 [ERROR] gateway: 读 Modbus 设备异常: Modbus Error: [Connection] ModbusTcpClient device:5020: Connection unexpectedly closed 0.000 seconds into read of unbounded read bytes without response from slave before it closed connection
+2026-10-03 00:49:09 [ERROR] gateway: 本轮采集失败，重建 Modbus 连接
+2026-10-03 00:49:15 [INFO] gateway: 网关启动: 设备 device:5020 从站1 → MQTT emqx:1883 主题 cems/plant1/data (QoS=1) client_id=cems-gateway-plant1
+2026-10-03 00:49:15 [INFO] gateway: 断网续传已启用，缓存目录: /app/data（GATEWAY_DATA_DIR=未设置，用默认 PROJECT_ROOT/data）
+2026-10-03 00:49:19 [ERROR] gateway: 连不上 Modbus 设备 device:5020（确认 modbus_server.py 在跑），5 秒后重试
+2026-10-03 00:49:28 [ERROR] gateway: 连不上 Modbus 设备 device:5020（确认 modbus_server.py 在跑），5 秒后重试
+2026-10-03 00:49:37 [ERROR] gateway: 连不上 Modbus 设备 device:5020（确认 modbus_server.py 在跑），5 秒后重试
+[2026-10-03 00:49:43] --- device2 网关日志（设备停用期间启动） ---
+[2026-10-03 00:49:43] 2026-10-03 00:49:10 [ERROR] gateway: 读 Modbus 设备异常: Modbus Error: [Connection] ModbusTcpClient device:5020: Connection unexpectedly closed 0.000 seconds into read of unbounded read bytes without response from slave before it closed connection
+2026-10-03 00:49:10 [ERROR] gateway: 本轮采集失败，重建 Modbus 连接
+2026-10-03 00:49:18 [INFO] gateway: 网关启动: 设备 device:5020 从站2 → MQTT emqx:1883 主题 cems/plant2/data (QoS=1) client_id=cems-gateway-plant2
+2026-10-03 00:49:18 [INFO] gateway: 断网续传已启用，缓存目录: /app/data-plant2（GATEWAY_DATA_DIR=/app/data-plant2）
+2026-10-03 00:49:22 [ERROR] gateway: 连不上 Modbus 设备 device:5020（确认 modbus_server.py 在跑），5 秒后重试
+2026-10-03 00:49:31 [ERROR] gateway: 连不上 Modbus 设备 device:5020（确认 modbus_server.py 在跑），5 秒后重试
+2026-10-03 00:49:40 [ERROR] gateway: 连不上 Modbus 设备 device:5020（确认 modbus_server.py 在跑），5 秒后重试
+[2026-10-03 00:49:44] --- 网关容器状态（设备停用期间） ---
+[2026-10-03 00:49:44] {"cems-gateway": {"status": "running", "health": "healthy", "started_at": "2026-10-02T16:49:15.314601237Z"}, "cems-gateway-plant2": {"status": "running", "health": "healthy", "started_at": "2026-10-02T16:49:18.573317797Z"}}
+
+[2026-10-03 00:49:44] ========================================================================
+[2026-10-03 00:49:44] 2b-1 恢复：起设备
+[2026-10-03 00:49:44] ========================================================================
+[2026-10-03 00:49:44] --- docker start cems-device ---
+[2026-10-03 00:49:44] cems-device
+[2026-10-03 00:49:44] EVENT device_started_at = 2026-10-03 00:49:44
+[2026-10-03 00:49:55] EVENT both_devices_resumed_at = 2026-10-03 00:49:55
+[2026-10-03 00:49:55] --- device1 网关日志（设备恢复后） ---
+[2026-10-03 00:49:55] 2026-10-03 00:49:46 [ERROR] gateway: 连不上 Modbus 设备 device:5020（确认 modbus_server.py 在跑），5 秒后重试
+2026-10-03 00:49:51 [INFO] gateway: Modbus 已连接: device:5020 从站1
+[2026-10-03 00:49:55] --- device2 网关日志（设备恢复后） ---
+[2026-10-03 00:49:55] 2026-10-03 00:49:45 [INFO] gateway: Modbus 已连接: device:5020 从站2
+
+[2026-10-03 00:49:55] ========================================================================
+[2026-10-03 00:49:55] 2b-2 设备已起时重启网关（确认预检通过 + 采集恢复）
+[2026-10-03 00:49:55] ========================================================================
+[2026-10-03 00:49:55]   重启前各设备最近一条: {'device1': '2026-10-03 00:49:51', 'device2': '2026-10-03 00:49:55'}
+[2026-10-03 00:50:02] --- docker restart cems-gateway cems-gateway-plant2 ---
+[2026-10-03 00:50:02] cems-gateway
+cems-gateway-plant2
+[2026-10-03 00:50:02] EVENT gateways_restarted_device_up_at = 2026-10-03 00:50:02
+[2026-10-03 00:50:22] --- device1 网关日志（设备在线的重启） ---
+[2026-10-03 00:50:22] (无输出)
+[2026-10-03 00:50:22] --- device2 网关日志（设备在线的重启） ---
+[2026-10-03 00:50:22] 2026-10-03 00:50:02 [INFO] gateway: 网关启动: 设备 device:5020 从站2 → MQTT emqx:1883 主题 cems/plant2/data (QoS=1) client_id=cems-gateway-plant2
+2026-10-03 00:50:02 [INFO] gateway: 断网续传已启用，缓存目录: /app/data-plant2（GATEWAY_DATA_DIR=/app/data-plant2）
+2026-10-03 00:50:02 [INFO] gateway: Modbus 已连接: device:5020 从站2
+2026-10-03 00:50:02 [INFO] gateway: 启动预检通过: 从站2 可读（9 个寄存器）
+[2026-10-03 00:50:22] --- 网关容器状态（设备在线的重启后） ---
+[2026-10-03 00:50:22] {"cems-gateway": {"status": "running", "health": "healthy", "started_at": "2026-10-02T16:49:59.224766237Z"}, "cems-gateway-plant2": {"status": "running", "health": "healthy", "started_at": "2026-10-02T16:50:02.485417021Z"}}
+[2026-10-03 00:50:22] EVENT both_devices_resumed_after_restart_at = 2026-10-03 00:50:22
+[2026-10-03 00:50:22]   重启后各设备最近一条: {'device1': '2026-10-03 00:50:19', 'device2': '2026-10-03 00:50:23'}
+
+[2026-10-03 00:50:23] ========================================================================
+[2026-10-03 00:50:23] 2b-3 正向控制：把 MODBUS_UNIT 指向未登记从站 99，预检必须拒绝启动
+[2026-10-03 00:50:23] ========================================================================
+[2026-10-03 00:50:23] --- cems-gateway 预检正向控制（MODBUS_UNIT=99） ---
+[2026-10-03 00:50:23] exit_code=1
+2026-10-03 00:50:23 [INFO] gateway: 网关启动: 设备 device:5020 从站99 → MQTT emqx:1884 主题 cems/plant1/data (QoS=1) client_id=preflight-probe-99
+2026-10-03 00:50:23 [INFO] gateway: 断网续传已启用，缓存目录: /tmp/preflight-probe（GATEWAY_DATA_DIR=/tmp/preflight-probe）
+2026-10-03 00:50:23 [INFO] gateway: Modbus 已连接: device:5020 从站99
+2026-10-03 00:50:23 [WARNING] pymodbus.logging: Unable to decode frame Modbus Error: Unknown response 128
+2026-10-03 00:50:23 [CRITICAL] gateway: 启动预检失败: 读 Modbus 从站99 抛异常: Modbus Error: [Input/Output] Unable to decode request。确认设备层 SLAVE_IDS 里包含 99（设备层是 device:5020）
+[2026-10-03 00:50:23] --- cems-gateway-plant2 预检正向控制（MODBUS_UNIT=99） ---
+[2026-10-03 00:50:23] exit_code=1
+2026-10-03 00:50:23 [INFO] gateway: 网关启动: 设备 device:5020 从站99 → MQTT emqx:1884 主题 cems/plant2/data (QoS=1) client_id=preflight-probe-99
+2026-10-03 00:50:23 [INFO] gateway: 断网续传已启用，缓存目录: /tmp/preflight-probe（GATEWAY_DATA_DIR=/tmp/preflight-probe）
+2026-10-03 00:50:23 [INFO] gateway: Modbus 已连接: device:5020 从站99
+2026-10-03 00:50:23 [WARNING] pymodbus.logging: Unable to decode frame Modbus Error: Unknown response 128
+2026-10-03 00:50:23 [CRITICAL] gateway: 启动预检失败: 读 Modbus 从站99 抛异常: Modbus Error: [Input/Output] Unable to decode request。确认设备层 SLAVE_IDS 里包含 99（设备层是 device:5020）
+[2026-10-03 00:50:24] --- docker compose ps（2b 结束） ---
+[2026-10-03 00:50:24] cems-device	Up 39 seconds (healthy)
+cems-gateway	Up 24 seconds (healthy)
+cems-gateway-plant2	Up 21 seconds (healthy)
+cems-nginx	Up 10 hours (healthy)
+cems-redis	Up 10 hours (healthy)
+cems-subscriber	Up 5 minutes (healthy)
+cems-subscriber-plant2	Up 5 minutes (healthy)
+cems-web	Up About an hour (healthy)
+emqx	Up 2 minutes (healthy)
+tdengine	Up 10 hours (healthy)
+[2026-10-03 00:50:25] JSON 已写入: F:\Project1\cems-data-pipeline\docs\evidence\drill\gateway_preflight_2b_nonregression_20261003.json
+[2026-10-03 00:50:25] 演练结束

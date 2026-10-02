@@ -1,0 +1,239 @@
+[2026-10-03 00:45:31] TC-E2E-002 演练 2a 开始；结果文件 dual_device_linkcut_2a_reconcile_20261003.json / .txt
+
+[2026-10-03 00:45:31] ========================================================================
+[2026-10-03 00:45:31] 基线（2a 故障前）
+[2026-10-03 00:45:31] ========================================================================
+[2026-10-03 00:45:32] --- docker compose ps ---
+[2026-10-03 00:45:32] cems-device	device	Up About an hour (healthy)
+cems-gateway	gateway	Up About an hour (healthy)
+cems-gateway-plant2	gateway2	Up About an hour (healthy)
+cems-nginx	nginx	Up 10 hours (healthy)
+cems-redis	redis	Up 10 hours (healthy)
+cems-subscriber	subscriber	Up 49 seconds (healthy)
+cems-subscriber-plant2	subscriber2	Up 48 seconds (healthy)
+cems-web	web	Up About an hour (healthy)
+emqx	emqx	Up 2 minutes (healthy)
+tdengine	tdengine	Up 10 hours (healthy)
+[2026-10-03 00:45:32] --- 缓存快照 ---
+[2026-10-03 00:45:32] {
+  "device1": {
+    "dir": "F:\\Project1\\cems-data-pipeline\\data",
+    "cache_lines": 0,
+    "legacy_sending_lines": 0,
+    "inflight_files": {
+      "inflight-000001.jsonl": 0,
+      "inflight-000002.jsonl": 0,
+      "inflight-000003.jsonl": 0,
+      "inflight-000004.jsonl": 0,
+      "inflight-000005.jsonl": 0,
+      "inflight-000006.jsonl": 0
+    },
+    "inflight_lines": 0,
+    "pending_total": 0
+  },
+  "device2": {
+    "dir": "F:\\Project1\\cems-data-pipeline\\data\\plant2",
+    "cache_lines": 0,
+    "legacy_sending_lines": 0,
+    "inflight_files": {
+      "inflight-000001.jsonl": 0,
+      "inflight-000002.jsonl": 0,
+      "inflight-000003.jsonl": 0
+    },
+    "inflight_lines": 0,
+    "pending_total": 0
+  }
+}
+[2026-10-03 00:45:32] 库内总数=18920 最近时间戳={'device1': '2026-10-03 00:45:28', 'device2': '2026-10-03 00:45:29'}
+
+[2026-10-03 00:45:32] ========================================================================
+[2026-10-03 00:45:32] 故障注入：docker network disconnect cems-net emqx（断链，进程不重启）
+[2026-10-03 00:45:32] ========================================================================
+[2026-10-03 00:45:32] --- docker network disconnect cems-net emqx ---
+[2026-10-03 00:45:32] (无输出)
+[2026-10-03 00:45:32] EVENT link_cut_at = 2026-10-03 00:45:32
+[2026-10-03 00:45:52]   断链 20 秒: pending={'device1': 2, 'device2': 2}
+[2026-10-03 00:46:12]   断链 40 秒: pending={'device1': 5, 'device2': 6}
+[2026-10-03 00:46:32]   断链 60 秒: pending={'device1': 9, 'device2': 10}
+[2026-10-03 00:46:52]   断链 80 秒: pending={'device1': 13, 'device2': 14}
+[2026-10-03 00:47:12]   断链 100 秒: pending={'device1': 17, 'device2': 18}
+[2026-10-03 00:47:32]   断链 120 秒: pending={'device1': 21, 'device2': 22}
+
+[2026-10-03 00:47:32] ========================================================================
+[2026-10-03 00:47:32] 断链窗口快照
+[2026-10-03 00:47:32] ========================================================================
+[2026-10-03 00:47:32] --- device1 缓存快照 ---
+[2026-10-03 00:47:32] {"cache_lines": 21, "inflight_lines": 0, "legacy_sending_lines": 0, "cache_ts": ["2026-10-03 00:45:33", "2026-10-03 00:45:43", "2026-10-03 00:45:53", "2026-10-03 00:46:03", "2026-10-03 00:46:08", "2026-10-03 00:46:13", "2026-10-03 00:46:18", "2026-10-03 00:46:23", "2026-10-03 00:46:28", "2026-10-03 00:46:33", "2026-10-03 00:46:38", "2026-10-03 00:46:43", "2026-10-03 00:46:48", "2026-10-03 00:46:53", "2026-10-03 00:46:58", "2026-10-03 00:47:03", "2026-10-03 00:47:08", "2026-10-03 00:47:13", "2026-10-03 00:47:18", "2026-10-03 00:47:23", "2026-10-03 00:47:28"], "inflight_ts": [], "legacy_ts": []}
+[2026-10-03 00:47:32] --- device1 网关日志（断链窗口） ---
+[2026-10-03 00:47:32] 2026-10-03 00:45:38 [INFO] gateway: [缓存] 未收到 PUBACK，数据已入本地队列: 2026-10-03 00:45:33 Flow=30622.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=180.2 Humidity=42.6 Pressure=96.3 Flag=N
+2026-10-03 00:45:43 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-03 00:45:48 [INFO] gateway: [缓存] 未收到 PUBACK，数据已入本地队列: 2026-10-03 00:45:43 Flow=30870.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.5 Temp=180.3 Humidity=42.7 Pressure=96.3 Flag=N
+2026-10-03 00:45:48 [WARNING] gateway: [补传] 等待 5 秒仍未收到 PUBACK，本条转入缓存: 2026-10-03 00:45:33 Flow=30622.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=180.2 Humidity=42.6 Pressure=96.3 Flag=N
+2026-10-03 00:45:48 [WARNING] gateway: [补传未完成] 1 条未确认，已放回缓存队首等待重试
+2026-10-03 00:45:58 [INFO] gateway: [缓存] 未收到 PUBACK，数据已入本地队列: 2026-10-03 00:45:53 Flow=30805.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.5 Temp=179.7 Humidity=42.5 Pressure=96.3 Flag=N
+2026-10-03 00:46:03 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:03 Flow=30920.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.5 Temp=178.7 Humidity=42.3 Pressure=96.3 Flag=N
+2026-10-03 00:46:08 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:08 Flow=30850.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.5 Temp=179.1 Humidity=42.6 Pressure=96.4 Flag=N
+2026-10-03 00:46:13 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:13 Flow=30919.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=179.6 Humidity=42.2 Pressure=96.4 Flag=N
+2026-10-03 00:46:18 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:18 Flow=30821.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=178.4 Humidity=42.5 Pressure=96.3 Flag=N
+2026-10-03 00:46:23 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:23 Flow=30846.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=179.7 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:46:28 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:28 Flow=31525.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=179.2 Humidity=42.2 Pressure=96.4 Flag=N
+2026-10-03 00:46:33 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:33 Flow=31328.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=178.8 Humidity=42.1 Pressure=96.4 Flag=N
+2026-10-03 00:46:38 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:38 Flow=31342.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.5 Temp=179.5 Humidity=42.4 Pressure=96.4 Flag=N
+2026-10-03 00:46:43 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:43 Flow=31423.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.3 Velocity=11.6 Temp=178.1 Humidity=42.1 Pressure=96.3 Flag=N
+2026-10-03 00:46:48 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:48 Flow=31534.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=178.2 Humidity=42.3 Pressure=96.4 Flag=N
+2026-10-03 00:46:53 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:53 Flow=31484.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.5 Temp=178.0 Humidity=42.4 Pressure=96.3 Flag=N
+2026-10-03 00:46:58 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:58 Flow=31312.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.4 Velocity=11.6 Temp=179.1 Humidity=42.5 Pressure=96.4 Flag=N
+2026-10-03 00:47:03 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:03 Flow=31367.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=178.8 Humidity=42.2 Pressure=96.3 Flag=N
+2026-10-03 00:47:08 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:08 Flow=31357.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.7 Temp=179.0 Humidity=42.4 Pressure=96.3 Flag=N
+2026-10-03 00:47:13 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:13 Flow=31467.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.4 Velocity=11.6 Temp=178.5 Humidity=42.5 Pressure=96.4 Flag=N
+2026-10-03 00:47:18 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:18 Flow=31352.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.3 Velocity=11.6 Temp=178.0 Humidity=42.4 Pressure=96.4 Flag=N
+2026-10-03 00:47:23 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:23 Flow=31229.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.3 Velocity=11.6 Temp=179.0 Humidity=42.1 Pressure=96.3 Flag=N
+2026-10-03 00:47:28 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:28 Flow=31348.0 Dust=2.88 SO2=19.6 NOx=32.1 O2=5.3 Velocity=11.6 Temp=178.8 Humidity=42.4 Pressure=96.3 Flag=N
+[2026-10-03 00:47:32]   device1 入队 21 条，原因分布 {'未收到 PUBACK': 3, '断网': 18}
+[2026-10-03 00:47:32] --- device2 缓存快照 ---
+[2026-10-03 00:47:32] {"cache_lines": 22, "inflight_lines": 0, "legacy_sending_lines": 0, "cache_ts": ["2026-10-03 00:45:34", "2026-10-03 00:45:44", "2026-10-03 00:45:54", "2026-10-03 00:45:59", "2026-10-03 00:46:04", "2026-10-03 00:46:09", "2026-10-03 00:46:14", "2026-10-03 00:46:19", "2026-10-03 00:46:24", "2026-10-03 00:46:29", "2026-10-03 00:46:34", "2026-10-03 00:46:39", "2026-10-03 00:46:44", "2026-10-03 00:46:49", "2026-10-03 00:46:54", "2026-10-03 00:46:59", "2026-10-03 00:47:04", "2026-10-03 00:47:09", "2026-10-03 00:47:14", "2026-10-03 00:47:19", "2026-10-03 00:47:24", "2026-10-03 00:47:29"], "inflight_ts": [], "legacy_ts": []}
+[2026-10-03 00:47:32] --- device2 网关日志（断链窗口） ---
+[2026-10-03 00:47:32] 2026-10-03 00:45:39 [INFO] gateway: [缓存] 未收到 PUBACK，数据已入本地队列: 2026-10-03 00:45:34 Flow=27091.0 Dust=2.91 SO2=20.6 NOx=39.4 O2=6.0 Velocity=12.8 Temp=188.3 Humidity=46.8 Pressure=95.4 Flag=N
+2026-10-03 00:45:44 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-03 00:45:49 [INFO] gateway: [缓存] 未收到 PUBACK，数据已入本地队列: 2026-10-03 00:45:44 Flow=27242.0 Dust=2.91 SO2=20.6 NOx=37.5 O2=6.0 Velocity=12.8 Temp=188.1 Humidity=47.2 Pressure=95.4 Flag=N
+2026-10-03 00:45:49 [WARNING] gateway: [补传] 等待 5 秒仍未收到 PUBACK，本条转入缓存: 2026-10-03 00:45:34 Flow=27091.0 Dust=2.91 SO2=20.6 NOx=39.4 O2=6.0 Velocity=12.8 Temp=188.3 Humidity=46.8 Pressure=95.4 Flag=N
+2026-10-03 00:45:49 [WARNING] gateway: [补传未完成] 1 条未确认，已放回缓存队首等待重试
+2026-10-03 00:45:54 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:45:54 Flow=27162.0 Dust=2.91 SO2=20.6 NOx=35.6 O2=6.1 Velocity=12.7 Temp=187.8 Humidity=46.9 Pressure=95.4 Flag=N
+2026-10-03 00:45:59 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:45:59 Flow=27123.0 Dust=2.92 SO2=20.5 NOx=34.4 O2=6.0 Velocity=12.7 Temp=187.0 Humidity=47.0 Pressure=95.4 Flag=N
+2026-10-03 00:46:04 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:04 Flow=27189.0 Dust=2.91 SO2=20.6 NOx=33.6 O2=6.0 Velocity=12.7 Temp=186.6 Humidity=46.9 Pressure=95.4 Flag=N
+2026-10-03 00:46:09 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:09 Flow=27162.0 Dust=2.91 SO2=20.6 NOx=32.5 O2=6.0 Velocity=12.8 Temp=187.4 Humidity=47.1 Pressure=95.4 Flag=N
+2026-10-03 00:46:14 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:14 Flow=27173.0 Dust=2.91 SO2=20.6 NOx=31.7 O2=6.1 Velocity=12.7 Temp=187.9 Humidity=47.2 Pressure=95.4 Flag=N
+2026-10-03 00:46:19 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:19 Flow=27063.0 Dust=2.91 SO2=20.6 NOx=30.6 O2=6.0 Velocity=12.8 Temp=186.9 Humidity=46.9 Pressure=95.4 Flag=N
+2026-10-03 00:46:24 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:24 Flow=27094.0 Dust=2.91 SO2=20.6 NOx=29.8 O2=6.0 Velocity=12.8 Temp=187.8 Humidity=47.2 Pressure=95.2 Flag=N
+2026-10-03 00:46:29 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:29 Flow=26987.0 Dust=2.95 SO2=20.6 NOx=28.6 O2=6.0 Velocity=12.7 Temp=186.8 Humidity=46.9 Pressure=95.3 Flag=N
+2026-10-03 00:46:34 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:34 Flow=27136.0 Dust=3.04 SO2=20.6 NOx=27.9 O2=6.0 Velocity=12.8 Temp=186.5 Humidity=46.9 Pressure=95.3 Flag=N
+2026-10-03 00:46:39 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:39 Flow=27161.0 Dust=3.16 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.7 Temp=186.5 Humidity=46.9 Pressure=95.3 Flag=N
+2026-10-03 00:46:44 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:44 Flow=27012.0 Dust=3.24 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.8 Temp=187.8 Humidity=47.1 Pressure=95.2 Flag=N
+2026-10-03 00:46:49 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:49 Flow=27114.0 Dust=3.36 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.7 Temp=187.3 Humidity=46.9 Pressure=95.3 Flag=N
+2026-10-03 00:46:54 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:54 Flow=26956.0 Dust=3.44 SO2=20.6 NOx=27.1 O2=6.0 Velocity=12.7 Temp=187.4 Humidity=46.9 Pressure=95.2 Flag=N
+2026-10-03 00:46:59 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:46:59 Flow=27090.0 Dust=3.56 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.8 Temp=186.2 Humidity=46.8 Pressure=95.3 Flag=N
+2026-10-03 00:47:04 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:04 Flow=27091.0 Dust=3.64 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.7 Temp=186.2 Humidity=47.2 Pressure=95.3 Flag=N
+2026-10-03 00:47:09 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:09 Flow=27209.0 Dust=3.76 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.7 Temp=186.5 Humidity=46.9 Pressure=95.3 Flag=N
+2026-10-03 00:47:14 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:14 Flow=26918.0 Dust=3.85 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.8 Temp=187.5 Humidity=47.2 Pressure=95.3 Flag=N
+2026-10-03 00:47:19 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:19 Flow=26990.0 Dust=3.97 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.7 Temp=187.3 Humidity=46.8 Pressure=95.3 Flag=N
+2026-10-03 00:47:24 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:24 Flow=26976.0 Dust=4.09 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.8 Temp=186.3 Humidity=46.8 Pressure=95.3 Flag=N
+2026-10-03 00:47:29 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-03 00:47:29 Flow=27047.0 Dust=4.17 SO2=20.6 NOx=27.1 O2=6.1 Velocity=12.7 Temp=187.1 Humidity=46.8 Pressure=95.3 Flag=N
+[2026-10-03 00:47:32]   device2 入队 22 条，原因分布 {'未收到 PUBACK': 2, '断网': 20}
+[2026-10-03 00:47:32] --- emqx 进程未重启的证据（StartedAt 不变） ---
+[2026-10-03 00:47:32] {"status": "running", "health": "unhealthy", "started_at": "2026-10-02T16:43:26.145748278Z"}
+
+[2026-10-03 00:47:32] ========================================================================
+[2026-10-03 00:47:32] 恢复：docker network connect cems-net emqx
+[2026-10-03 00:47:32] ========================================================================
+[2026-10-03 00:47:33] --- docker network connect cems-net emqx ---
+[2026-10-03 00:47:33] (无输出)
+[2026-10-03 00:47:33] EVENT link_restored_at = 2026-10-03 00:47:33
+[2026-10-03 00:47:33]   排空探测: pending=43（{'device1': 21, 'device2': 22}）
+[2026-10-03 00:47:38]   排空探测: pending=45（{'device1': 22, 'device2': 23}）
+[2026-10-03 00:47:43]   排空探测: pending=47（{'device1': 23, 'device2': 24}）
+[2026-10-03 00:47:48]   排空探测: pending=49（{'device1': 24, 'device2': 25}）
+[2026-10-03 00:47:53]   排空探测: pending=51（{'device1': 25, 'device2': 26}）
+[2026-10-03 00:47:58]   排空探测: pending=53（{'device1': 26, 'device2': 27}）
+[2026-10-03 00:48:03]   排空探测: pending=55（{'device1': 27, 'device2': 28}）
+[2026-10-03 00:48:08]   排空探测: pending=57（{'device1': 28, 'device2': 29}）
+[2026-10-03 00:48:13]   排空探测: pending=59（{'device1': 29, 'device2': 30}）
+[2026-10-03 00:48:18]   排空探测: pending=61（{'device1': 30, 'device2': 31}）
+[2026-10-03 00:48:23]   排空探测: pending=31（{'device1': 31, 'device2': 0}）
+[2026-10-03 00:48:28]   排空探测: pending=32（{'device1': 32, 'device2': 0}）
+[2026-10-03 00:48:33]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:48:38]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:48:43]   排空探测: pending=0（{'device1': 0, 'device2': 0}）
+[2026-10-03 00:48:43] EVENT drained_at = 2026-10-03 00:48:43
+[2026-10-03 00:48:43]   排空耗时 70.1 秒，drained=True
+
+[2026-10-03 00:48:43] ========================================================================
+[2026-10-03 00:48:43] 恢复后日志与状态
+[2026-10-03 00:48:43] ========================================================================
+[2026-10-03 00:48:43] --- device1 网关日志（补传相关） ---
+[2026-10-03 00:48:43] 2026-10-03 00:45:43 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-03 00:45:48 [WARNING] gateway: [补传] 等待 5 秒仍未收到 PUBACK，本条转入缓存: 2026-10-03 00:45:33 Flow=30622.0 Dust=2.88 SO2=19.6 NOx=32.2 O2=5.4 Velocity=11.6 Temp=180.2 Humidity=42.6 Pressure=96.3 Flag=N
+2026-10-03 00:45:48 [WARNING] gateway: [补传未完成] 1 条未确认，已放回缓存队首等待重试
+2026-10-03 00:46:00 [ERROR] gateway: MQTT 连接断开 reason_code=Unspecified error，后续数据写入本地缓存
+2026-10-03 00:48:31 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-03 00:48:31 [INFO] gateway: [补传] 开始补传 33 条，在途窗口 100 条
+2026-10-03 00:48:31 [INFO] gateway: [补传完成] broker 已确认 33 条
+[2026-10-03 00:48:43] --- device2 网关日志（补传相关） ---
+[2026-10-03 00:48:43] 2026-10-03 00:45:44 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-03 00:45:47 [ERROR] gateway: MQTT 连接断开 reason_code=Unspecified error，后续数据写入本地缓存
+2026-10-03 00:45:49 [WARNING] gateway: [补传] 等待 5 秒仍未收到 PUBACK，本条转入缓存: 2026-10-03 00:45:34 Flow=27091.0 Dust=2.91 SO2=20.6 NOx=39.4 O2=6.0 Velocity=12.8 Temp=188.3 Humidity=46.8 Pressure=95.4 Flag=N
+2026-10-03 00:45:49 [WARNING] gateway: [补传未完成] 1 条未确认，已放回缓存队首等待重试
+2026-10-03 00:48:18 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-03 00:48:18 [INFO] gateway: [补传] 开始补传 31 条，在途窗口 100 条
+2026-10-03 00:48:18 [INFO] gateway: [补传完成] broker 已确认 31 条
+[2026-10-03 00:48:43] --- 缓存快照（恢复后） ---
+[2026-10-03 00:48:43] {"device1": {"pending_total": 0}, "device2": {"pending_total": 0}}
+[2026-10-03 00:48:43] --- emqx 进程 StartedAt（恢复后） ---
+[2026-10-03 00:48:43] {"status": "running", "health": "healthy", "started_at": "2026-10-02T16:48:03.675927769Z"}
+
+[2026-10-03 00:48:43] ========================================================================
+[2026-10-03 00:48:43] 投递观察（区分'投递慢'与'真丢'）
+[2026-10-03 00:48:43] ========================================================================
+[2026-10-03 00:48:43]   投递探测: {'device1': {'cached': 33, 'missing': 0}, 'device2': {'cached': 31, 'missing': 0}}
+
+[2026-10-03 00:48:43] ========================================================================
+[2026-10-03 00:48:43] 逐条对账
+[2026-10-03 00:48:43] ========================================================================
+[2026-10-03 00:48:43]   对账 device1: 缓存 33 条 → 库内存在 33 条，缺失 0 条，成功率 1.0
+[2026-10-03 00:48:43]   对账 device2: 缓存 31 条 → 库内存在 31 条，缺失 0 条，成功率 1.0
+[2026-10-03 00:48:43]   device1 来源一致性: 日志 33 / 文件 21，仅日志有 12，仅文件有 0
+[2026-10-03 00:48:43]   device2 来源一致性: 日志 31 / 文件 22，仅日志有 9，仅文件有 0
+[2026-10-03 00:48:44] --- 容器状态（恢复后） ---
+[2026-10-03 00:48:44] {
+  "cems-device": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T15:32:33.525908122Z"
+  },
+  "cems-gateway": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T15:32:34.293576384Z"
+  },
+  "cems-gateway-plant2": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T15:32:34.168174563Z"
+  },
+  "cems-subscriber": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:44:43.086285268Z"
+  },
+  "cems-subscriber-plant2": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:44:43.194166199Z"
+  },
+  "cems-web": {
+    "status": "running",
+    "health": "unhealthy",
+    "started_at": "2026-10-02T15:20:45.675073222Z"
+  },
+  "emqx": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T16:48:03.675927769Z"
+  },
+  "cems-nginx": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:34:09.771564358Z"
+  },
+  "cems-redis": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:34:03.455925381Z"
+  },
+  "tdengine": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-02T06:30:13.166146657Z"
+  }
+}
+[2026-10-03 00:48:44] JSON 已写入: F:\Project1\cems-data-pipeline\docs\evidence\drill\dual_device_linkcut_2a_reconcile_20261003.json
+[2026-10-03 00:48:44] 演练结束

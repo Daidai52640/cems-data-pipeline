@@ -1,0 +1,66 @@
+容器内代码 vs 工作区代码 一致性核对（TC-E2E-002 验收前置）
+========================================================================
+一致	cems-device:/app/src/device/modbus_server.py	4acf3f6da66100a0084b52e35cee27ca	工作区 src/device/modbus_server.py（15452 字节）	4acf3f6da66100a0084b52e35cee27ca
+一致	cems-device:/app/src/device/simulator.py	d7ccdc8331700c686ce9aa32051cca9b	工作区 src/device/simulator.py（35466 字节）	d7ccdc8331700c686ce9aa32051cca9b
+★不一致	cems-gateway:/app/src/gateway/gateway.py	e5ec4b12250e7c9d122481d2dbda1d62	工作区 src/gateway/gateway.py（37545 字节）	273beba69d9485f30005d0e477e019f5
+★不一致	cems-gateway-plant2:/app/src/gateway/gateway.py	e5ec4b12250e7c9d122481d2dbda1d62	工作区 src/gateway/gateway.py（37545 字节）	273beba69d9485f30005d0e477e019f5
+一致	cems-gateway:/app/src/common/points.py	c00a5ff83ba03ed9e387be306cd8cc95	工作区 src/common/points.py（17365 字节）	c00a5ff83ba03ed9e387be306cd8cc95
+一致	cems-subscriber:/app/src/platform/subscriber_to_td.py	933988c303c3c1dbabb98874a76588b2	工作区 src/platform/subscriber_to_td.py（51682 字节）	933988c303c3c1dbabb98874a76588b2
+一致	cems-subscriber-plant2:/app/src/platform/subscriber_to_td.py	933988c303c3c1dbabb98874a76588b2	工作区 src/platform/subscriber_to_td.py（51682 字节）	933988c303c3c1dbabb98874a76588b2
+
+git 版本：
+8b45be7c075d52f58d3133aaf78f55eb2fe5bc41
+feat/hj212-outlet
+最近 4 次提交（含时间）：
+8b45be7 2026-10-03 00:30:27 +0800 docs(adr-0007): 标注 §2 的"固定名在途文件"描述已被 v2.0.2 唯一段名修正取代
+c2a9c80 2026-10-03 00:29:54 +0800 fix(verify): 血缘追踪的清理必须覆盖四张表（原先只清 cems_data -> 残留累积）
+2d2e044 2026-10-03 00:13:14 +0800 fix(verify): --mode off 从未真正关闭尖峰（env 必须在导入 simulator 之前设）
+881eaf8 2026-10-03 00:08:38 +0800 docs(verify): 记录本轮验收实跑结果（12/15 PASS）+ 3 项失效判据定性 + 修掉的 3 个工装缺陷
+
+gateway.py 逐行差异（HEAD blob vs 运行态）：41 行 diff
+--- 工作区 HEAD:src/gateway/gateway.py
++++ 运行态 cems-gateway:/app/src/gateway/gateway.py
+@@ -210,25 +210,23 @@
+ 
+     返回 True 表示预检通过；False 表示本从站读不到（调用方据此拒绝启动）。
+     """
+-    reason = ""
+     try:
+         response = _read_holding_registers(client, REG_BASE, REG_COUNT)
+-        if response is None or response.isError():
+-            reason = f"无响应/返回异常码（{response}）"
+     except Exception as exc:                       # noqa: BLE001 —— 预检要兜住一切读失败
+-        # 实测（pymodbus 3.6.9）：读未登记的从站会在这里以 "Unable to decode request"
+-        # 之类的解码异常冒出来（服务端对未登记从站不作答），所以两个分支必须给同一套提示
+-        reason = f"读取抛异常（{type(exc).__name__}: {exc}）"
+-
+-    if reason:
+         LOGGER.critical(
+-            "启动预检失败: 读 Modbus 从站%d %s。"
+-            "⚠️ 最可能的原因：本实例的 MODBUS_UNIT=%d 不在设备层的 SLAVE_IDS 里 —— "
+-            "设备层只对**已登记**的从站提供数据。多设备是**两个开关**："
+-            "① 使用方 .env 里 SLAVE_IDS 要包含 %d（如 SLAVE_IDS=1,2）并重建 device 容器；"
+-            "② 起第二套实例要带 --profile plant2。只开②不开①就会命中这条。"
+-            "（本实例拒绝启动，而不是空跑或拿别的从站的数据。设备层是 %s:%d）",
+-            MODBUS_UNIT, reason, MODBUS_UNIT, MODBUS_UNIT, MODBUS_HOST, MODBUS_PORT,
++            "启动预检失败: 读 Modbus 从站%d 抛异常: %s。"
++            "确认设备层 SLAVE_IDS 里包含 %d（设备层是 %s:%d）",
++            MODBUS_UNIT, exc, MODBUS_UNIT, MODBUS_HOST, MODBUS_PORT,
++        )
++        return False
++    if response is None or response.isError():
++        LOGGER.critical(
++            "启动预检失败: 读 Modbus 从站%d 无响应/返回异常码（%s）。"
++            "⚠️ 本实例的 MODBUS_UNIT=%d 不在设备层的 SLAVE_IDS 列表里 —— "
++            "设备层只对已登记的从站提供数据。修法：在使用方 .env 里把 SLAVE_IDS "
++            "设成包含 %d（如 SLAVE_IDS=1,2），并重建 device 容器。"
++            "（本实例拒绝启动，而不是空跑或拿别的从站的数据）",
++            MODBUS_UNIT, response, MODBUS_UNIT, MODBUS_UNIT,
+         )
+         return False
+     LOGGER.info("启动预检通过: 从站%d 可读（%d 个寄存器）", MODBUS_UNIT, REG_COUNT)
+
+结论：
+  运行态与工作区不一致的文件: ['src/gateway/gateway.py', 'src/gateway/gateway.py']
+  差异范围：仅 src/gateway/gateway.py 的 verify_unit_readable()（预检失败日志的分支组织与措辞）；'读不到本从站即拒绝启动'的契约两者一致。
+  以运行态（容器内）代码为准做验收；2B 场景对运行态预检做了实测。

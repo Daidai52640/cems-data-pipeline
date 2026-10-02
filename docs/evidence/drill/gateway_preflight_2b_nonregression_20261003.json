@@ -1,0 +1,179 @@
+{
+  "baseline": {
+    "at": "2026-10-03 00:49:05",
+    "total": 19001,
+    "last_ts": {
+      "device1": "2026-10-03 00:49:04",
+      "device2": "2026-10-03 00:49:05"
+    },
+    "emqx_started_at": "2026-10-02T16:48:03.675927769Z"
+  },
+  "2b1_device_down_gateway_restart": {
+    "gateway_states": {
+      "cems-gateway": {
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-10-02T16:49:15.314601237Z"
+      },
+      "cems-gateway-plant2": {
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-10-02T16:49:18.573317797Z"
+      }
+    },
+    "preflight_failed_count": {
+      "device1": 0,
+      "device2": 0
+    },
+    "modbus_unreachable_count": {
+      "device1": 3,
+      "device2": 3
+    },
+    "refused_to_start": false,
+    "row_gap_window": {},
+    "resumed_at": "2026-10-03 00:49:55",
+    "gateways_restarted_at": "2026-10-03 00:49:18",
+    "last_ts_after_resume": {
+      "device1": "2026-10-03 00:49:51",
+      "device2": "2026-10-03 00:49:55"
+    },
+    "modbus_connected_after_device_up": {
+      "device1": [
+        1
+      ],
+      "device2": [
+        2
+      ]
+    },
+    "device_down_seconds": 46.0,
+    "db_rows_device1_in_gap": 1,
+    "db_rows_device2_in_gap": 3
+  },
+  "2b2_device_up_gateway_restart": {
+    "gateway_states": {
+      "cems-gateway": {
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-10-02T16:49:59.224766237Z"
+      },
+      "cems-gateway-plant2": {
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-10-02T16:50:02.485417021Z"
+      }
+    },
+    "preflight_ok_units": {
+      "device1": [],
+      "device2": [
+        2
+      ]
+    },
+    "preflight_failed_count": {
+      "device1": 0,
+      "device2": 0
+    },
+    "restart_at": "2026-10-03 00:50:02",
+    "resumed_at": "2026-10-03 00:50:22",
+    "restart_gap_seconds": 20.0,
+    "last_ts_before": {
+      "device1": "2026-10-03 00:49:51",
+      "device2": "2026-10-03 00:49:55"
+    },
+    "last_ts_after": {
+      "device1": "2026-10-03 00:50:19",
+      "device2": "2026-10-03 00:50:23"
+    },
+    "db_rows_device1_in_gap": 4,
+    "db_rows_device2_in_gap": 4
+  },
+  "2b3_positive_control": {
+    "device1": {
+      "container": "cems-gateway",
+      "exit_code": 1,
+      "output_tail": [
+        "2026-10-03 00:50:23 [INFO] gateway: 网关启动: 设备 device:5020 从站99 → MQTT emqx:1884 主题 cems/plant1/data (QoS=1) client_id=preflight-probe-99",
+        "2026-10-03 00:50:23 [INFO] gateway: 断网续传已启用，缓存目录: /tmp/preflight-probe（GATEWAY_DATA_DIR=/tmp/preflight-probe）",
+        "2026-10-03 00:50:23 [INFO] gateway: Modbus 已连接: device:5020 从站99",
+        "2026-10-03 00:50:23 [WARNING] pymodbus.logging: Unable to decode frame Modbus Error: Unknown response 128",
+        "2026-10-03 00:50:23 [CRITICAL] gateway: 启动预检失败: 读 Modbus 从站99 抛异常: Modbus Error: [Input/Output] Unable to decode request。确认设备层 SLAVE_IDS 里包含 99（设备层是 device:5020）"
+      ],
+      "preflight_failed": true,
+      "preflight_passed": false
+    },
+    "device2": {
+      "container": "cems-gateway-plant2",
+      "exit_code": 1,
+      "output_tail": [
+        "2026-10-03 00:50:23 [INFO] gateway: 网关启动: 设备 device:5020 从站99 → MQTT emqx:1884 主题 cems/plant2/data (QoS=1) client_id=preflight-probe-99",
+        "2026-10-03 00:50:23 [INFO] gateway: 断网续传已启用，缓存目录: /tmp/preflight-probe（GATEWAY_DATA_DIR=/tmp/preflight-probe）",
+        "2026-10-03 00:50:23 [INFO] gateway: Modbus 已连接: device:5020 从站99",
+        "2026-10-03 00:50:23 [WARNING] pymodbus.logging: Unable to decode frame Modbus Error: Unknown response 128",
+        "2026-10-03 00:50:23 [CRITICAL] gateway: 启动预检失败: 读 Modbus 从站99 抛异常: Modbus Error: [Input/Output] Unable to decode request。确认设备层 SLAVE_IDS 里包含 99（设备层是 device:5020）"
+      ],
+      "preflight_failed": true,
+      "preflight_passed": false
+    }
+  },
+  "states_after": {
+    "cems-device": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T16:49:44.092852683Z"
+    },
+    "cems-gateway": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T16:49:59.224766237Z"
+    },
+    "cems-gateway-plant2": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T16:50:02.485417021Z"
+    },
+    "cems-subscriber": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T16:44:43.086285268Z"
+    },
+    "cems-subscriber-plant2": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T16:44:43.194166199Z"
+    },
+    "cems-web": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T15:20:45.675073222Z"
+    },
+    "emqx": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T16:48:03.675927769Z"
+    },
+    "cems-nginx": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T06:34:09.771564358Z"
+    },
+    "cems-redis": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T06:34:03.455925381Z"
+    },
+    "tdengine": {
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-10-02T06:30:13.166146657Z"
+    }
+  },
+  "scenario": "gateway_preflight_2b_nonregression_20261003",
+  "events": {
+    "device_stopped_at": "2026-10-03 00:49:09",
+    "gateways_restarted_device_down_at": "2026-10-03 00:49:18",
+    "device_started_at": "2026-10-03 00:49:44",
+    "both_devices_resumed_at": "2026-10-03 00:49:55",
+    "gateways_restarted_device_up_at": "2026-10-03 00:50:02",
+    "both_devices_resumed_after_restart_at": "2026-10-03 00:50:22"
+  },
+  "raw_text": "docs/evidence/drill/gateway_preflight_2b_nonregression_20261003.txt"
+}
