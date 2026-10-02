@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d87e155b-9dda-490a-ae9d-0230238a3c0e",
+  "status": "current",
+  "command": "deliver",
+  "type": "dataflow",
+  "input": "F:\\Project1\\cems-data-pipeline\\docs\\diagrams\\cems-full-chain.dataflow.json",
+  "output": "F:\\Project1\\cems-data-pipeline\\docs\\diagrams\\cems-full-chain.html",
+  "specification": {
+    "sha256": "6ebe8c7683f429eb1fb90b6275f95e240a44854b055535d452e104d7172f7592",
+    "bytes": 2899
+  },
+  "artifact": {
+    "sha256": "fc8a2d798297624827b675a8f9a3ddc43039237d1209bebdb66a7c9a625dcc32",
+    "bytes": 760183
+  }
+}
