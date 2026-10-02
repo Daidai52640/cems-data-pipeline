@@ -33,6 +33,9 @@ from src.common.alarm_judge import (   # noqa: E402
     AlarmEvent,
     AlarmJudge,
     AlarmTables,
+    PUSH_STATUS_FAILED,
+    PUSH_STATUS_RECORDED,
+    PUSH_STATUS_SENT,
     hour_start_of,
     normalize_ts,
 )
@@ -472,28 +475,78 @@ class AlarmWriter:
             TdWriter._safe_close(conn)
 
 
+def _post_webhook(url: str, payload_json: str, timeout: float) -> bool:
+    """把一条告警 POST 到 Webhook；返回是否送达（2xx）。
+
+    ⚠️ **绝不抛异常**：推送失败只记 warning + 把 status 记成 `failed`，
+    事件行与推送记录**照常落库**。理由与网关的补传判定同源 ——
+    "通知"是附加动作，**不能让它的失败影响数据主链路**。
+    """
+    import urllib.error
+    import urllib.request
+
+    request = urllib.request.Request(
+        url, data=payload_json.encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/json; charset=utf-8"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status = int(getattr(response, "status", 0) or 0)
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        LOGGER.warning("[告警推送] Webhook 失败（不影响告警落库）: %s: %s",
+                       type(exc).__name__, exc)
+        return False
+    if 200 <= status < 300:
+        return True
+    LOGGER.warning("[告警推送] Webhook 返回非 2xx: %s", status)
+    return False
+
+
 def publish_alarm_events(
     writer: AlarmWriter,
     tables: AlarmTables,
     events: Sequence[AlarmEvent],
     channel: str,
 ) -> tuple[int, int]:
-    """把告警事件落成**可验证的动作**：事件行 + 推送记录 + 结构化日志。
+    """把告警事件落成**可验证的动作**：事件行 + 推送记录 + 结构化日志（+ 可选真实 Webhook）。
 
-    一期没有外部推送通道（没有邮件/Webhook 服务），所以"推送"被实现成两件可查的事：
+    推送被实现成三件可查的事：
         1. `cems_alarm_push` 里一条推送记录（`channel`/`status`/`payload`，与事件行同 ts，
            因此同样满足 `(子表, ts)` 幂等）；
-        2. 一行 `ALARM_PUSH ...` 结构化日志（可 grep、可进日志采集）。
-    ⚠️ 真实外部推送（Webhook / 短信 / 环保平台）**未接入**，属待接项（ADR-0002 §6 未决 5）。
+        2. 一行 `ALARM_PUSH ...` 结构化日志（可 grep、可进日志采集）；
+        3. ⭐ `channel == "webhook"` 时：真的 POST 到 `ALARM_PUSH_URL`，
+           成功记 `status=sent`、失败记 `status=failed`（**都不影响事件落库**）。
+
+    ⚠️ 边界：默认 channel 是 `log`（只落记录，无外部通道）。真实 Webhook 需对方提供
+    接收地址（`ALARM_PUSH_URL`）；短信 / 环保平台仍未接入（ADR-0002 §6 未决 5）。
 
     返回 (成功的事件行数, 成功的推送记录数)。
     """
     if not events:
         return 0, 0
+
+    # ---- 1) 先定推送状态：webhook 失败只降级 status，不阻断落库 ----
+    statuses: list[str] = [PUSH_STATUS_RECORDED] * len(events)
+    if channel == "webhook":
+        url = os.getenv("ALARM_PUSH_URL", "").strip()
+        if not url:
+            LOGGER.warning(
+                "[告警推送] ALARM_PUSH_CHANNEL=webhook 但未配置 ALARM_PUSH_URL，"
+                "降级为只落记录（status=recorded）"
+            )
+        else:
+            timeout = float(os.getenv("ALARM_PUSH_TIMEOUT", "3.0"))
+            for index, event in enumerate(events):
+                ok = _post_webhook(url, event.payload_json(), timeout)
+                statuses[index] = PUSH_STATUS_SENT if ok else PUSH_STATUS_FAILED
+
     event_sqls = [tables.event_insert_sql(event) for event in events]
-    push_sqls = [tables.push_insert_sql(event, channel) for event in events]
-    for event in events:
-        LOGGER.info(event.log_text(channel))
+    push_sqls = [
+        tables.push_insert_sql(event, channel, status)
+        for event, status in zip(events, statuses)
+    ]
+    for event, status in zip(events, statuses):
+        LOGGER.info(event.log_text(channel, status))
     written_events = writer.write(event_sqls)
     written_push = writer.write(push_sqls)
     if written_events != len(event_sqls) or written_push != len(push_sqls):

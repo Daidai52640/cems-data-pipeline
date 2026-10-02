@@ -220,6 +220,9 @@ services:
       ALARM_POLL_INTERVAL: ${ALARM_POLL_INTERVAL:-5.0}          # 算 720 条/小时用，须与网关一致
       ALARM_JUDGE_VERSION: ${ALARM_JUDGE_VERSION:-v1.0.0}
       ALARM_PUSH_CHANNEL: ${ALARM_PUSH_CHANNEL:-log}
+      # channel=webhook 时真的 POST 告警到该地址；留空则自动降级为只落记录
+      ALARM_PUSH_URL: ${ALARM_PUSH_URL:-}
+      ALARM_PUSH_TIMEOUT: ${ALARM_PUSH_TIMEOUT:-3.0}
       ALARM_STATS_LOG_SAMPLES: ${ALARM_STATS_LOG_SAMPLES:-60}
       ALARM_EVENT_STABLE: ${ALARM_EVENT_STABLE:-cems_alarm_event}
       ALARM_VERDICT_STABLE: ${ALARM_VERDICT_STABLE:-cems_hourly_verdict}
