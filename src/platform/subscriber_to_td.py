@@ -494,8 +494,10 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
             # 抽样打 INFO 而不是每条都打（首条也打：重启后立刻能看到折算出口是活的）
             # 打的是**传输值**：O2 >= 21% 时应当看到哨兵值，而不是 nan
             LOGGER.info(
-                "折算值抽样（第 %d 条，出站已按 HJ 212-2025 §8.1.1 d) 编码，"
-                "无法折算时传哨兵值 %.2f）: 标干 ts=%s O2=%.4f -> %s",
+                "折算值抽样（第 %d 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理："
+                "无法折算时传缺省类型最大值哨兵 %.2f；"
+                "⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: "
+                "标干 ts=%s O2=%.4f -> %s",
                 STATS["accepted"],
                 ZS_UNAVAILABLE_SENTINEL,
                 ts,
