@@ -245,6 +245,11 @@ def query_aggregate(
 
     缓存：`kind` 进缓存键（分钟报表/日报表/曲线各自独立），
     是否真的命中由 cache.query_cached 按"窗口是否已闭合"决定。
+
+    ★ **设备维度**也进缓存键：同一个时间窗对不同设备是不同的数据，键里少了它，第二台设备
+      查同一时间窗就会命中第一台的条目（见 src/web/cache.py 模块头第 6 条）。
+      设备取值不在本模块解析，统一从 cache.DEVICE_SCOPE 引用（唯一真源，避免两处各解析一遍
+      环境变量而出现"查询按 A 设备、键按 B 设备"）。
     """
     avg_columns = ", ".join(f"AVG({column})" for column in COLUMNS)
     sql = (
@@ -260,7 +265,7 @@ def query_aggregate(
     return _execute_cached(
         f"{sql} ORDER BY _wstart ASC",
         where=f"aggregate/{kind}",
-        context=cache.prepare(kind, window, start, end),
+        context=cache.prepare(kind, window, start, end, device=cache.DEVICE_SCOPE),
     )
 
 
@@ -292,6 +297,9 @@ def _execute_cached(
 
     `context is None` 是**有语义的**：调用方明确表示"这次查询不能缓存"（例如覆盖当前秒的原始点），
     这种查询连"试着读缓存"都不做。
+
+    设备维度不需要在这里单独传参：它已经由 `cache.prepare` 放进了 `context["device"]` 并烘焙进
+    `context["key"]`，所以下游 `cache.query_cached` 的读写都只发生在同一台设备的命名空间里。
     """
     if context is None or not CACHE_ENABLED:
         return _execute(sql)

@@ -222,13 +222,22 @@ def api_cache_stats() -> Response:
 
     ⚠️ 默认 nginx 配置把 `/api/cache/` 整个路径 return 403，不对公网暴露内部计数。
     测量脚本直连 web 容器端口取数。
+
+    ★ 统计**不按设备拆**：计数是"这个 Redis 命名空间里缓存层整体好不好用"的度量，多设备部署下
+      各实例共用同一个 Redis DB，拆开反而读不出全局健康度。响应里用 `device_scope` 说明这些计数
+      覆盖的是哪台设备（理由与取舍见 `cache.stats()` 的 docstring）。
     """
     return jsonify(cache.stats())
 
 
 @app.route("/api/cache/clear", methods=["POST"])
 def api_cache_clear() -> Response:
-    """接口2c：清空全部查询缓存（演练/排障用）。返回删除条数。"""
+    """接口2c：清空全部查询缓存（演练/排障用）。返回删除条数。
+
+    ★ 清理**不按设备拆**：语义是"把缓存层清干净"，缓存可随时重建，所以全清没有代价；
+      只清本设备那一份会留下别的设备的条目，制造"清了但还在"的假象，也让演练的空白基线失真
+      （理由见 `cache.clear()` 的 docstring）。
+    """
     return jsonify(cache.clear())
 
 
@@ -953,6 +962,10 @@ def main() -> None:
     setup_logging()
     LOGGER.info("Web 大屏启动: http://localhost:%d （局域网: http://<本机IP>:%d）", WEB_PORT, WEB_PORT)
     LOGGER.info("数据源: %s 库=%s 超级表=%s 最近 %d 分钟", TD_URL, TD_DB, TD_STABLE, QUERY_MINUTES)
+    # 缓存层的设备维度：cache.py 在**导入时**已经算好，但那会儿日志系统还没配置（setup_logging 在
+    # 这个函数里才跑），导入时的 INFO 记录会被丢弃 —— 所以在这里补一次，保证 `docker logs` 里能看见
+    # "这台 web 给哪台设备做缓存"（多设备部署排查时第一个要确认的就是它）。
+    LOGGER.info("查询缓存设备维度: %s（缓存键按设备隔离，见 src/web/cache.py）", cache.DEVICE_SCOPE)
     try:
         serve_forever()
     except OSError as exc:

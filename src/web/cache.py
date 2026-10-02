@@ -37,6 +37,19 @@
    对报表/告警的影响面：报表是分钟/小时级均值，窗口内少 1 条（1/12 到 1/60 的权重）
    对均值的影响远小于 ROUND_DIGITS=2 的分辨力；告警判据是连续窗口越限
    （见 `docs/告警判据设计.md`），不依赖单点。因此上述残留风险不会把"达标"判成"超标"。
+
+6. **缓存键带设备维度**（`TD_PLANT` / `TD_DEVICE`，见配置区与 `build_key`）：
+   同一个时间窗对不同设备是**不同的数据**，少了这一维，第二台设备查同一时间窗就会命中
+   第一台写下的条目、把别人的数据当成自己的返回。所以设备维度是键的一部分。
+
+   ★ **键格式因此变了**：改造前写入的条目（哈希材料里没有设备维度）在新代码下**永远不会再被命中**，
+     它们不需要任何人清理，会按 `TTL_SECONDS`（默认 300 s）自行过期。
+     这里**不做双写、也不做旧键兼容读取** —— 双写会让同一份数据同时落在两个键下，
+     而"一个窗口只有一条缓存、命中判定（写后失效）比对的就是那一条"是这套判据能成立的前提
+     （见 `query_cached` 的三道命中判定）。为一次可接受的缓存失效引入双写，是本末倒置。
+
+   ⚠️ 设备维度的取值**只进哈希、不进 SQL**，所以不需要转义/白名单校验；
+      一旦它被用作查询过滤条件，必须先按 tag 字符集校验（见 §6 末尾）。
 ============================================================================
 
 Redis 不可用时本模块**整体退化为空操作**：所有查询直连 TDengine，结果与加缓存前逐字节一致。
@@ -117,6 +130,36 @@ LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
 
 LOGGER: Final[logging.Logger] = logging.getLogger("web.cache")
+
+# ---- 设备维度（数据归属）----
+# 缓存键必须带"这条查询结果属于哪台设备"：同一个时间窗对不同设备是不同的数据。
+# 取值沿用平台接入层已经落地的同名变量与默认值（src/platform/subscriber_to_td.py:79-80），
+# 单设备部署下就是 plant1 / device1，与改造前逐字节一致（键内容变了，但服务的行为口径没变）。
+#
+# ★ 唯一真源在这里：report.py 通过 `cache.DEVICE_SCOPE` 引用，不再各自解析一遍环境变量 ——
+#   两处各解析一次，迟早会出现"查询按 A 设备、缓存键按 B 设备"这种自相矛盾的状态
+#   （与 CACHE_FLAG 同一个理由）。
+TD_PLANT: Final[str] = os.getenv("TD_PLANT", "plant1").strip()
+TD_DEVICE: Final[str] = os.getenv("TD_DEVICE", "device1").strip()
+
+
+def _device_scope(plant: str, device: str) -> str:
+    """(plant, device) -> 缓存命名空间里的设备维度串；空值回落默认值并告警。
+
+    回落而不是"用空串"：`TD_PLANT` 为空会得到 `/device1` 这种看起来像路径、实际少了一半
+    信息的串，两个都不设时更是所有设备挤进同一个命名空间 —— 那正是本模块要修掉的隐患。
+    这种情况必须能从启动日志里看出来（级别按 AGENTS.md §4 的"配置回落"取 WARNING）。
+    """
+    if not plant:
+        LOGGER.warning("TD_PLANT 为空，设备维度回落默认值 plant1（请检查环境变量）")
+        plant = "plant1"
+    if not device:
+        LOGGER.warning("TD_DEVICE 为空，设备维度回落默认值 device1（请检查环境变量）")
+        device = "device1"
+    return f"{plant}/{device}"
+
+
+DEVICE_SCOPE: Final[str] = _device_scope(TD_PLANT, TD_DEVICE)
 
 
 # ==================== 2. 客户端（懒连接 + 全链路降级） ====================
@@ -337,13 +380,27 @@ def parse_ts_text(text: str) -> Optional[datetime]:
     return None
 
 
-def build_key(kind: str, unit: str, start_text: str, end_text: str) -> str:
-    """查询缓存键：kind/unit/起止时间 全部进键。
+def build_key(
+    kind: str,
+    unit: str,
+    start_text: str,
+    end_text: str,
+    device: str = DEVICE_SCOPE,
+) -> str:
+    """查询缓存键：**设备维度** + kind/unit/起止时间 全部进键。
 
     ⚠️ 起止时间用的是**已对齐到窗口边界**的值（调用方在 report 里先对齐再进这里），
     所以同一分钟内重复请求的键是稳定的，而跨过分钟边界就会自然换键 —— 不需要另做失效。
+
+    ★ 设备维度（`device`，形如 `plant1/device1`）放在哈希材料**最前面**：它是**数据归属**维度，
+      kind/unit/时间都是"对这台设备的哪一段"的进一步筛选。少了它，第二台设备查同一时间窗
+      就会算出同一个键、命中第一台的条目，把别人的数据当成自己的返回（模块头第 6 条）。
+
+    ⚠️ `device` 的默认值是本实例配置的设备（`DEVICE_SCOPE`），单设备部署不必显式传；
+       但**调用点应该显式传**（report.py 就是这么写的），这样"这个键属于哪台设备"在调用处可见，
+       而不用回头查环境变量。
     """
-    raw = f"{kind}|{unit}|{start_text}|{end_text}"
+    raw = f"{device}|{kind}|{unit}|{start_text}|{end_text}"
     return KEY_PREFIX + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:24]
 
 
@@ -440,6 +497,31 @@ def _encode_cell(cell: Any) -> Any:
 #   最终落地的形状是：按分钟归档，只记"该分钟里最晚的那条"。
 #   判据变成"缓存这条窗口时看到的最大值" vs "库里现在的最大值"——
 #   只有**该分钟真的多了一条更晚的数据**才判脏；重复看到同一批行不会误杀。
+#
+# ---- 水位为什么**不**按设备分开（判断，含证据与耦合条件）----
+# 结论：现在保持全局一份；一旦"读路径按设备过滤"，水位**必须**同时按设备分开 ——
+#       这两件事要落在同一次改动里，只改一半比不改更危险。
+#
+# 证据（读代码即可复现，不需要起 Redis / 不需要造第二台设备的数据）：
+#   · 水位的**观测源**是 `/api/data`（web_dashboard.api_data → query_recent），它的 SQL 是
+#     `FROM {TD_DB}.{TD_STABLE} WHERE ts >= now - Nm AND ts <= now`，**没有任何 tag 过滤**
+#     （web_dashboard.py:149-153）；report.py 的聚合 SQL 同样没有（report.py:250-254）。
+#   · 也就是说，这条观测流里根本不存在"哪台设备"这一维。把 KEY_DATA_TS / KEY_MINMAX 按设备拆开，
+#     只能把同一份全局观测复制 N 份（或者更糟：拿别的设备的观测当自己的水位），既消不掉下面的
+#     失真，还会掩盖真正的根因（读路径没按设备过滤）。
+#
+# 失真本身是真的，但它有前提：读路径按设备过滤之后，若仍共用一份全局 data_ts，
+# 设备 A 的新数据会把设备 B 还没写完的窗口判成"已闭合"（`_closure` 的 a 条件被放松），
+# 于是 B 的条目会返回偏旧的数据；而且这种偏旧**不会被写后失效兜住** —— B 的迟到行落在
+# 一个"全局分钟最大值本来就没变"的分钟里（A 在同一分钟里有更晚的行），signature 不变、判不出脏。
+# 这就是 observed_window_detail 那条注释里"窗口最大值不变 → 判据失灵"的同类漏洞，
+# 只不过这次是被别的设备的数据填住的。
+#
+# 届时的改法（一次改完）：
+#   1) 读路径加设备过滤（report.py 的聚合 SQL、web_dashboard.query_recent，按 tag 过滤）；
+#   2) KEY_DATA_TS / KEY_MINMAX / KEY_MINMAX_TS 三个键加设备维度；
+#   3) note_data_ts / note_minute_max / _closure / observed_window_detail / signature
+#      都带上设备参数（水位的语义变成"这台设备的库内数据的最新时间戳"）。
 KEY_MINMAX_TTL_SECONDS: Final[int] = int(os.getenv("CACHE_MINMAX_TTL_SECONDS", "86400"))
 
 
@@ -554,18 +636,28 @@ def dirty_count() -> int:
 
 # ==================== 7. 缓存查询主流程 ====================
 
-def prepare(kind: str, unit: str, start: datetime, end: datetime) -> dict[str, Any]:
-    """为一个查询准备缓存上下文（缓存键 + 是否允许缓存）。
+def prepare(
+    kind: str,
+    unit: str,
+    start: datetime,
+    end: datetime,
+    device: str = DEVICE_SCOPE,
+) -> dict[str, Any]:
+    """为一个查询准备缓存上下文（设备维度 + 缓存键 + 是否允许缓存）。
 
     在这里单独算出 `range_start_key` / `range_end_key`（19 字符串），
     后面存值和查值都用同一对键，避免"存的时候用 datetime、比的时候用字符串"这种口径漂移。
+
+    ★ `device` 随 `context` 全程带着走（`_execute_cached` → `query_cached` 都不必再解析环境变量），
+      它已经"烘焙"进 `key`：命中和写入都只可能发生在同一台设备的命名空间里。
     """
     start_text = start.strftime(TS_FORMAT)
     end_text = end.strftime(TS_FORMAT)
     return {
         "kind": kind,
         "unit": unit,
-        "key": build_key(kind, unit, start_text, end_text),
+        "device": device,
+        "key": build_key(kind, unit, start_text, end_text, device),
         "range_start_key": start_text,
         "range_end_key": end_text,
     }
@@ -584,6 +676,10 @@ def query_cached(
       ① 写后失效：库里"本窗口观测到的最大时间戳"和缓存条目存的那一版不一致 → 内容变过；
       ② 读侧自检：条目的窗口上界已经追平/越过 data_ts 水位 → 水位已进窗口，条目不可信；
       ③ 未闭合：窗口本身还没写完（含当前秒）→ 根本不缓存。
+
+    ★ 设备维度已经在 `context["key"]` 里（由 `prepare` 烘焙，见模块头第 6 条）：
+      读写都只发生在**这一台设备**的命名空间内，所以这三道判定判的都是"这台设备的这个窗口"，
+      不存在"命中到另一台设备的条目"这条路径。水位仍是全局一份（理由见 §6）。
     """
     if not _ready(where):
         return fetch()
@@ -642,20 +738,30 @@ def query_cached(
         LOGGER.info("[%s] 结果集超过 %d 字节，跳过缓存", where, MAX_VALUE_BYTES)
         return rows
     CLIENT.set_str(key, encoded, TTL_SECONDS)
-    CLIENT.set_str(KEY_LAST_QUERY, f"{where}|{context['range_start_key']}|{context['range_end_key']}", 86400)
-    return rows
-    if encoded is None:
-        LOGGER.info("[%s] 结果集超过 %d 字节，跳过缓存", where, MAX_VALUE_BYTES)
-        return rows
-    CLIENT.set_str(key, encoded, TTL_SECONDS)
-    CLIENT.set_str(KEY_LAST_QUERY, f"{where}|{context['range_start_key']}|{context['range_end_key']}", 86400)
+    # 诊断串里带上设备维度：多设备部署时"最近一次被缓存的是哪台设备的哪个窗口"要能直接读出来
+    CLIENT.set_str(
+        KEY_LAST_QUERY,
+        f"{where}|{context['device']}|{context['range_start_key']}|{context['range_end_key']}",
+        86400,
+    )
     return rows
 
 
 # ==================== 8. 统计与运维接口 ====================
 
 def stats() -> dict[str, Any]:
-    """缓存统计快照（供 /api/cache/stats 与测量脚本取证）。"""
+    """缓存统计快照（供 /api/cache/stats 与测量脚本取证）。
+
+    ★ 统计**不按设备拆**（判断，理由三条）：
+      1) 这些计数是"缓存层整体好不好用"的度量：多设备部署下各 web 实例本来就在**同一个 Redis DB**
+         里读写，命中/未命中是这份共享缓存的事实，按设备拆开后单看任何一台都读不出全局健康度；
+      2) 计数键带设备维度还有个前提做不到：Redis 侧的计数没有"谁写的"信息，拆键只是把口径改成
+         "本实例"，读到的人却容易以为那是全局 —— 反而更容易误判；
+      3) 但读数的人必须知道这份全局视图覆盖了哪些设备，所以这里显式下发 `device_scope`
+         （本实例的设备维度）。多实例部署时各实例的 `device_scope` 不同、`counters` 是同一份。
+      真要按设备归因，改法是给计数键也加设备维度（`...:cnt:{scope}:hit`），代价是丢掉全局视图、
+      并要同步改测量脚本（scripts/measure_cache_invalidation.py）的口径 —— 当前不做。
+    """
     counters = {name: (CLIENT.get_int(f"{STATS_PREFIX}{name}") or 0) for name in COUNTERS}
     hit, miss, stale = counters["hit"], counters["miss"], counters["stale"]
     lookups = hit + miss + stale
@@ -678,11 +784,14 @@ def stats() -> dict[str, Any]:
         "redis_connected": CLIENT.enabled,
         "last_error": CLIENT.last_error,
         "redis": f"{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
+        # 本实例的**设备维度**：上面这些计数/键数/水位是全局视图，这一项说明它们里包含谁
+        "device_scope": DEVICE_SCOPE,
         "config": {
             "margin_seconds": MARGIN_SECONDS,
             "ttl_seconds": TTL_SECONDS,
             "max_value_bytes": MAX_VALUE_BYTES,
             "version": CACHE_VERSION,
+            "device_scope": DEVICE_SCOPE,
         },
         "counters": counters,
         "lookups": lookups,
@@ -708,7 +817,14 @@ def stats() -> dict[str, Any]:
 
 
 def clear() -> dict[str, Any]:
-    """手动清空全部查询缓存（演练与排障用）。返回删除条数。"""
+    """手动清空全部查询缓存（演练与排障用）。返回删除条数。
+
+    ★ 清理**不按设备拆**（判断）：这个接口的语义是"把缓存层清干净"，缓存本身是易失的、
+      随时可以重建，所以"清空"没有任何正确性代价。按设备只清自己那一份反而有两个坏处：
+      ① 留下别的设备的条目，制造"清了但好像还在"的假象；
+      ② 演练/对照测量时要的正是"一个空的缓存层"，只清一半会让前后对照失真。
+      按前缀删除天然只覆盖当前版本命名空间（`cems:{CACHE_VERSION}:q:`），不会碰到水位与计数。
+    """
     deleted = CLIENT.purge_queries()
     return {"deleted": deleted, "enabled": CLIENT.enabled}
 
@@ -718,4 +834,12 @@ def source_of(cache_key: str) -> str:
     return _source_key(cache_key)
 
 
+# 设备维度在这里打一条日志：多设备部署下"这台 web 给哪台设备做缓存"必须一眼可见。
+# ⚠️ 它必须与平台接入层的 TD_PLANT/TD_DEVICE 一致；当前读路径还没按设备过滤（见 §6），
+#    写错的后果只是缓存命名空间与真实 tag 对不上（表现是"缓存好像不生效"），
+#    但读路径一旦按设备过滤，写错就会变成"读的是别人的数据"。
+# ⚠️ 本行与下面的 CLIENT.init() 都在**导入时**执行，那时日志系统可能还没配置
+#    （web_dashboard 是"先 import、后 setup_logging"），这类 INFO 记录会被丢弃 ——
+#    所以 web_dashboard.main() 在 setup_logging() 之后会再打一条同样的（保证 docker logs 里看得到）。
+LOGGER.info("查询缓存设备维度: %s（缓存键按设备隔离，键格式见 build_key）", DEVICE_SCOPE)
 CLIENT.init()
