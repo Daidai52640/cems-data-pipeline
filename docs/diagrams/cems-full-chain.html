@@ -4987,7 +4987,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
-      <svg viewBox="0 0 1620 940" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
+      <svg viewBox="0 0 1240 956" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
         <title id="archify-diagram-title">CEMS 数据采集全链路（按代码结构）</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
@@ -5013,365 +5013,373 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="0" data-composition-frame-label="仅绑定 127.0.0.1（不对外暴露）" x="330" y="170" width="870" height="592" rx="8" class="c-security-group" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="0" data-composition-frame-label="仅绑定 127.0.0.1（不对外暴露）" x="330" y="70" width="870" height="598" rx="8" class="c-security-group" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
         <g data-graph-role="automatic-crossover" style="--step:0">
-          <path data-graph-role="automatic-crossover-underlay" d="M 155 262 L 155 340" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="simulator" data-edge-to="registers" data-edge-label="写入数据区" data-edge-key="0" data-edge-id="sim-to-reg" data-composition-points="155,262;155,340" data-composition-crossover="halo" data-composition-independent="true" d="M 155 262 L 155 340" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 155 158 L 155 222" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="simulator" data-edge-to="registers" data-edge-label="写入数据区" data-edge-key="0" data-edge-id="sim-to-reg" data-composition-points="155,158;155,222" data-composition-crossover="halo" data-composition-independent="true" d="M 155 158 L 155 222" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:1">
-          <path data-graph-role="automatic-crossover-underlay" d="M 155 402 L 155 540" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="registers" data-edge-to="gateway" data-edge-label="按地址读数" data-edge-key="1" data-edge-id="reg-to-gw" data-composition-points="155,402;155,540" data-composition-crossover="halo" data-composition-independent="true" d="M 155 402 L 155 540" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 155 280 L 155 360" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="registers" data-edge-to="gateway" data-edge-label="按地址读数" data-edge-key="1" data-edge-id="reg-to-gw" data-composition-points="155,280;155,360" data-composition-crossover="halo" data-composition-independent="true" d="M 155 280 L 155 360" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:2">
-          <path data-graph-role="automatic-crossover-underlay" d="M 250 571 L 297 571 Q 305 571 305 563 L 305 379 Q 305 371 313 371 L 360 371" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="gateway" data-edge-to="emqx" data-edge-label="发布出去" data-edge-key="2" data-edge-id="gw-to-emqx" data-composition-points="250,571;305,571;305,371;360,371" data-composition-crossover="halo" data-composition-independent="true" d="M 250 571 L 297 571 Q 305 571 305 563 L 305 379 Q 305 371 313 371 L 360 371" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 250 389 L 297 389 Q 305 389 305 381 L 305 297 Q 305 289 313 289 L 360 289" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="gateway" data-edge-to="emqx" data-edge-label="发布出去" data-edge-key="2" data-edge-id="gw-to-emqx" data-composition-points="250,389;305,389;305,289;360,289" data-composition-crossover="halo" data-composition-independent="true" d="M 250 389 L 297 389 Q 305 389 305 381 L 305 297 Q 305 289 313 289 L 360 289" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:3">
-          <path data-graph-role="automatic-crossover-underlay" d="M 560 371 L 640 371" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="emqx" data-edge-to="subscriber" data-edge-label="订阅收到" data-edge-key="3" data-edge-id="emqx-to-sub" data-composition-points="560,371;640,371" data-composition-crossover="halo" data-composition-independent="true" d="M 560 371 L 640 371" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 560 289 L 640 289" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="emqx" data-edge-to="subscriber" data-edge-label="订阅收到" data-edge-key="3" data-edge-id="emqx-to-sub" data-composition-points="560,289;640,289" data-composition-crossover="halo" data-composition-independent="true" d="M 560 289 L 640 289" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:4">
-          <path data-graph-role="automatic-crossover-underlay" d="M 860 362.95 L 940 362.95" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="subscriber" data-edge-to="tdengine" data-edge-label="存数据 + 存告警" data-edge-key="4" data-edge-id="sub-to-db" data-composition-points="860,362.95;940,362.95" data-composition-crossover="halo" data-composition-independent="true" d="M 860 362.95 L 940 362.95" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 860 289 L 876 289 Q 884 289 884 297 L 884 334 Q 884 342 892 342 L 1038.95 342 Q 1046.95 342 1046.95 334 L 1046.95 318" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="subscriber" data-edge-to="tdengine" data-edge-label="存数据 + 存告警" data-edge-key="4" data-edge-id="sub-to-db" data-composition-points="860,289;884,289;884,342;1046.95,342;1046.95,318" data-composition-crossover="halo" data-composition-independent="true" d="M 860 289 L 876 289 Q 884 289 884 297 L 884 334 Q 884 342 892 342 L 1038.95 342 Q 1046.95 342 1046.95 334 L 1046.95 318" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:5">
-          <path data-graph-role="automatic-crossover-underlay" d="M 155 602 L 155 633 Q 155 641 163 641 L 167 641 Q 175 641 175 649 L 175 680" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="gateway" data-edge-to="cachefile" data-edge-label="发不出去就先存本地" data-edge-key="5" data-edge-id="gw-to-cache" data-composition-points="155,602;155,641;175,641;175,680" data-composition-crossover="halo" data-composition-independent="true" d="M 155 602 L 155 633 Q 155 641 163 641 L 167 641 Q 175 641 175 649 L 175 680" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 155 418 L 155 441 Q 155 449 163 449 L 167 449 Q 175 449 175 457 L 175 480" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="gateway" data-edge-to="cachefile" data-edge-label="发不出去就先存本地" data-edge-key="5" data-edge-id="gw-to-cache" data-composition-points="155,418;155,449;175,449;175,480" data-composition-crossover="halo" data-composition-independent="true" d="M 155 418 L 155 441 Q 155 449 163 449 L 167 449 Q 175 449 175 457 L 175 480" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:6">
-          <path data-graph-role="automatic-crossover-underlay" d="M 168 742 L 168 790" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="cachefile" data-edge-to="resend" data-edge-label="取出待补的" data-edge-key="6" data-edge-id="cache-to-resend" data-composition-points="168,742;168,790" data-composition-crossover="halo" data-composition-independent="true" d="M 168 742 L 168 790" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 168 538 L 168 590" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="cachefile" data-edge-to="resend" data-edge-label="取出待补的" data-edge-key="6" data-edge-id="cache-to-resend" data-composition-points="168,538;168,590" data-composition-crossover="halo" data-composition-independent="true" d="M 168 538 L 168 590" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:7">
-          <path data-graph-role="automatic-crossover-underlay" d="M 182 790 L 182 774 Q 182 766 190 766 L 452 766 Q 460 766 460 758 L 460 402" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="resend" data-edge-to="emqx" data-edge-label="联网后重发" data-edge-key="7" data-edge-id="resend-to-emqx" data-composition-points="182,790;182,766;460,766;460,402" data-composition-crossover="halo" data-composition-independent="true" d="M 182 790 L 182 774 Q 182 766 190 766 L 452 766 Q 460 766 460 758 L 460 402" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 290 619 L 452 619 Q 460 619 460 611 L 460 318" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="resend" data-edge-to="emqx" data-edge-label="联网后重发" data-edge-key="7" data-edge-id="resend-to-emqx" data-composition-points="290,619;460,619;460,318" data-composition-crossover="halo" data-composition-independent="true" d="M 290 619 L 452 619 Q 460 619 460 611 L 460 318" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:8">
-          <path data-graph-role="automatic-crossover-underlay" d="M 750 402 L 750 540" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="subscriber" data-edge-to="hourly" data-edge-label="整点触发" data-edge-key="8" data-edge-id="sub-to-hourly" data-composition-points="750,402;750,540" data-composition-crossover="halo" data-composition-independent="true" d="M 750 402 L 750 540" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 750 318 L 750 440" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="subscriber" data-edge-to="hourly" data-edge-label="整点触发" data-edge-key="8" data-edge-id="sub-to-hourly" data-composition-points="750,318;750,440" data-composition-crossover="halo" data-composition-independent="true" d="M 750 318 L 750 440" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:9">
-          <path data-graph-role="automatic-crossover-underlay" d="M 860 571 L 892 571 Q 900 571 900 563 L 900 386 Q 900 378 908 378 L 940 378" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="hourly" data-edge-to="tdengine" data-edge-label="写小时结论" data-edge-key="9" data-edge-id="hourly-to-db" data-composition-points="860,571;900,571;900,378;940,378" data-composition-crossover="halo" data-composition-independent="true" d="M 860 571 L 892 571 Q 900 571 900 563 L 900 386 Q 900 378 908 378 L 940 378" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 860 469 L 908 469 Q 916 469 916 461 L 916 296 Q 916 288 924 288 L 940 288" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="hourly" data-edge-to="tdengine" data-edge-label="写小时结论" data-edge-key="9" data-edge-id="hourly-to-db" data-composition-points="860,469;916,469;916,288;940,288" data-composition-crossover="halo" data-composition-independent="true" d="M 860 469 L 908 469 Q 916 469 916 461 L 916 296 Q 916 288 924 288 L 940 288" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:10">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1063.05 402 L 1063.05 540" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="tdengine" data-edge-to="dashboard" data-edge-label="查数据出图" data-edge-key="10" data-edge-id="db-to-dash" data-composition-points="1063.05,402;1063.05,540" data-composition-crossover="halo" data-composition-independent="true" d="M 1063.05 402 L 1063.05 540" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1063.05 318 L 1063.05 440" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="tdengine" data-edge-to="dashboard" data-edge-label="查数据出图" data-edge-key="10" data-edge-id="db-to-dash" data-composition-points="1063.05,318;1063.05,440" data-composition-crossover="halo" data-composition-independent="true" d="M 1063.05 318 L 1063.05 440" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:11">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1055 602 L 1055 680" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="dashboard" data-edge-to="redis" data-edge-label="报表结果缓存" data-edge-key="11" data-edge-id="dash-to-redis" data-composition-points="1055,602;1055,680" data-composition-crossover="halo" data-composition-independent="true" d="M 1055 602 L 1055 680" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1055 498 L 1055 590" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="dashboard" data-edge-to="redis" data-edge-label="报表结果缓存" data-edge-key="11" data-edge-id="dash-to-redis" data-composition-points="1055,498;1055,590" data-composition-crossover="halo" data-composition-independent="true" d="M 1055 498 L 1055 590" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:12">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1170 571 L 1186 571 Q 1194 571 1194 563 L 1194 239 Q 1194 231 1186 231 L 1170 231" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="dashboard" data-edge-to="nginx" data-edge-label="浏览器访问" data-edge-key="12" data-edge-id="dash-to-nginx" data-composition-points="1170,571;1194,571;1194,231;1170,231" data-composition-crossover="halo" data-composition-independent="true" d="M 1170 571 L 1186 571 Q 1194 571 1194 563 L 1194 239 Q 1194 231 1186 231 L 1170 231" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1048 440 L 1048 424 Q 1048 416 1056 416 L 1186 416 Q 1194 416 1194 408 L 1194 137 Q 1194 129 1186 129 L 1170 129" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="dashboard" data-edge-to="nginx" data-edge-label="浏览器访问" data-edge-key="12" data-edge-id="dash-to-nginx" data-composition-points="1048,440;1048,416;1194,416;1194,129;1170,129" data-composition-crossover="halo" data-composition-independent="true" d="M 1048 440 L 1048 424 Q 1048 416 1056 416 L 1186 416 Q 1194 416 1194 408 L 1194 137 Q 1194 129 1186 129 L 1170 129" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:13">
-          <path data-graph-role="automatic-crossover-underlay" d="M 590 841 L 690 841" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="demo" data-edge-to="outlet" data-edge-label="喂给出口" data-edge-key="13" data-edge-id="demo-to-outlet" data-composition-points="590,841;690,841" data-composition-crossover="halo" data-composition-independent="true" d="M 590 841 L 690 841" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1055 260 L 1055 244 Q 1055 236 1047 236 L 322 236 Q 314 236 314 244 L 314 731 Q 314 739 306 739 L 290 739" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="tdengine" data-edge-to="demo" data-edge-label="取一条真实数据当样例" data-edge-key="13" data-edge-id="db-to-demo" data-composition-points="1055,260;1055,236;314,236;314,739;290,739" data-composition-crossover="halo" data-composition-independent="true" d="M 1055 260 L 1055 244 Q 1055 236 1047 236 L 322 236 Q 314 236 314 244 L 314 731 Q 314 739 306 739 L 290 739" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:14">
-          <path data-graph-role="automatic-crossover-underlay" d="M 920 841 L 1020 841" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="outlet" data-edge-to="hj212" data-edge-label="按协议组包" data-edge-key="14" data-edge-id="outlet-to-hj212" data-composition-points="920,841;1020,841" data-composition-crossover="halo" data-composition-independent="true" d="M 920 841 L 1020 841" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 175 768 L 175 830" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="demo" data-edge-to="outlet" data-edge-label="喂给出口" data-edge-key="14" data-edge-id="demo-to-outlet" data-composition-points="175,768;175,830" data-composition-crossover="halo" data-composition-independent="true" d="M 175 768 L 175 830" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:15">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1250 841 L 1350 841" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="hj212" data-edge-to="monitor" data-edge-label="发出并等应答" data-edge-key="15" data-edge-id="hj212-to-monitor" data-composition-points="1250,841;1350,841" data-composition-crossover="halo" data-composition-independent="true" d="M 1250 841 L 1350 841" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 290 859 L 400 859" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="outlet" data-edge-to="hj212" data-edge-label="按协议组包" data-edge-key="15" data-edge-id="outlet-to-hj212" data-composition-points="290,859;400,859" data-composition-crossover="halo" data-composition-independent="true" d="M 290 859 L 400 859" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:16">
+          <path data-graph-role="automatic-crossover-underlay" d="M 630 859 L 760 859" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="hj212" data-edge-to="monitor" data-edge-label="发出并等应答" data-edge-key="16" data-edge-id="hj212-to-monitor" data-composition-points="630,859;760,859" data-composition-crossover="halo" data-composition-independent="true" d="M 630 859 L 760 859" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
 
         <!-- Components -->
         <g id="node-simulator" data-node-id="simulator" data-node-label="设备仿真" tabindex="0" role="button" aria-label="聚焦设备仿真，按同一随机种子生成 9 个测点, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="按同一随机种子生成 9 个测点" data-node-tag="每 2 秒出一组数" data-node-context="架构组件">
           <title>设备仿真 · 按同一随机种子生成 9 个测点 · 架构组件 · 每 2 秒出一组数</title>
-          <rect x="60" y="200" width="190" height="62" rx="6" class="c-mask"/>
-          <rect x="60" y="200" width="190" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 206) scale(0.6875)">
+          <rect x="60" y="100" width="190" height="58" rx="6" class="c-mask"/>
+          <rect x="60" y="100" width="190" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 106) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="155" y="229" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">设备仿真</text>
-        <text data-detail="context" x="155" y="245" class="t-muted" font-size="9" text-anchor="middle">按同一随机种子生成 9 个测点</text>
-        <text data-detail="fine" x="155" y="254" class="t-backend" font-size="7" text-anchor="middle">每 2 秒出一组数</text>
+          <text data-node-label="" data-detail-anchor="" x="155" y="127" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">设备仿真</text>
+        <text data-detail="context" x="155" y="143" class="t-muted" font-size="9" text-anchor="middle">按同一随机种子生成 9 个测点</text>
+        <text data-detail="fine" x="155" y="150" class="t-backend" font-size="7" text-anchor="middle">每 2 秒出一组数</text>
         </g>
 
         <g id="node-registers" data-node-id="registers" data-node-label="Modbus 寄存器" tabindex="0" role="button" aria-label="聚焦Modbus 寄存器，模拟现场仪表的数据区, 架构组件" aria-pressed="false" data-node-kind="database" data-node-sublabel="模拟现场仪表的数据区" data-node-tag="本机端口 5020" data-node-context="架构组件">
           <title>Modbus 寄存器 · 模拟现场仪表的数据区 · 架构组件 · 本机端口 5020</title>
-          <rect x="60" y="340" width="190" height="62" rx="6" class="c-mask"/>
-          <rect x="60" y="340" width="190" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(66 346) scale(0.6875)">
+          <rect x="60" y="222" width="190" height="58" rx="6" class="c-mask"/>
+          <rect x="60" y="222" width="190" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(66 228) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="155" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Modbus 寄存器</text>
-        <text data-detail="context" x="155" y="385" class="t-muted" font-size="9" text-anchor="middle">模拟现场仪表的数据区</text>
-        <text data-detail="fine" x="155" y="394" class="t-database" font-size="7" text-anchor="middle">本机端口 5020</text>
+          <text data-node-label="" data-detail-anchor="" x="155" y="249" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Modbus 寄存器</text>
+        <text data-detail="context" x="155" y="265" class="t-muted" font-size="9" text-anchor="middle">模拟现场仪表的数据区</text>
+        <text data-detail="fine" x="155" y="272" class="t-database" font-size="7" text-anchor="middle">本机端口 5020</text>
         </g>
 
         <g id="node-gateway" data-node-id="gateway" data-node-label="网关" tabindex="0" role="button" aria-label="聚焦网关，读仪表、发布、断网先存本地, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="读仪表、发布、断网先存本地" data-node-tag="每 5 秒采一轮" data-node-context="架构组件">
           <title>网关 · 读仪表、发布、断网先存本地 · 架构组件 · 每 5 秒采一轮</title>
-          <rect x="60" y="540" width="190" height="62" rx="6" class="c-mask"/>
-          <rect x="60" y="540" width="190" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 546) scale(0.6875)">
+          <rect x="60" y="360" width="190" height="58" rx="6" class="c-mask"/>
+          <rect x="60" y="360" width="190" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 366) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="155" y="569" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">网关</text>
-        <text data-detail="context" x="155" y="585" class="t-muted" font-size="9" text-anchor="middle">读仪表、发布、断网先存本地</text>
-        <text data-detail="fine" x="155" y="594" class="t-backend" font-size="7" text-anchor="middle">每 5 秒采一轮</text>
+          <text data-node-label="" data-detail-anchor="" x="155" y="387" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">网关</text>
+        <text data-detail="context" x="155" y="403" class="t-muted" font-size="9" text-anchor="middle">读仪表、发布、断网先存本地</text>
+        <text data-detail="fine" x="155" y="410" class="t-backend" font-size="7" text-anchor="middle">每 5 秒采一轮</text>
         </g>
 
         <g id="node-cachefile" data-node-id="cachefile" data-node-label="续传缓存" tabindex="0" role="button" aria-label="聚焦续传缓存，存本机磁盘，断电不丢已确认外的数据, 架构组件" aria-pressed="false" data-node-kind="database" data-node-sublabel="存本机磁盘，断电不丢已确认外的数据" data-node-tag="断网时用" data-node-context="架构组件">
           <title>续传缓存 · 存本机磁盘，断电不丢已确认外的数据 · 架构组件 · 断网时用</title>
-          <rect x="60" y="680" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="60" y="680" width="230" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(66 686) scale(0.6875)">
+          <rect x="60" y="480" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="60" y="480" width="230" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(66 486) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="175" y="709" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">续传缓存</text>
-        <text data-detail="context" x="175" y="725" class="t-muted" font-size="9" text-anchor="middle">存本机磁盘，断电不丢已确认外的数据</text>
-        <text data-detail="fine" x="175" y="734" class="t-database" font-size="7" text-anchor="middle">断网时用</text>
+          <text data-node-label="" data-detail-anchor="" x="175" y="507" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">续传缓存</text>
+        <text data-detail="context" x="175" y="523" class="t-muted" font-size="9" text-anchor="middle">存本机磁盘，断电不丢已确认外的数据</text>
+        <text data-detail="fine" x="175" y="530" class="t-database" font-size="7" text-anchor="middle">断网时用</text>
         </g>
 
         <g id="node-resend" data-node-id="resend" data-node-label="补传线程" tabindex="0" role="button" aria-label="聚焦补传线程，联网后按时间顺序把存的补齐, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="联网后按时间顺序把存的补齐" data-node-tag="只删已确认的" data-node-context="架构组件">
           <title>补传线程 · 联网后按时间顺序把存的补齐 · 架构组件 · 只删已确认的</title>
-          <rect x="60" y="790" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="60" y="790" width="230" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 796) scale(0.6875)">
+          <rect x="60" y="590" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="60" y="590" width="230" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 596) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="175" y="819" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">补传线程</text>
-        <text data-detail="context" x="175" y="835" class="t-muted" font-size="9" text-anchor="middle">联网后按时间顺序把存的补齐</text>
-        <text data-detail="fine" x="175" y="844" class="t-backend" font-size="7" text-anchor="middle">只删已确认的</text>
+          <text data-node-label="" data-detail-anchor="" x="175" y="617" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">补传线程</text>
+        <text data-detail="context" x="175" y="633" class="t-muted" font-size="9" text-anchor="middle">联网后按时间顺序把存的补齐</text>
+        <text data-detail="fine" x="175" y="640" class="t-backend" font-size="7" text-anchor="middle">只删已确认的</text>
         </g>
 
         <g id="node-emqx" data-node-id="emqx" data-node-label="EMQX" tabindex="0" role="button" aria-label="聚焦EMQX，消息中转，订阅方掉线也不丢消息, 仅绑定 127.0.0.1（不对外暴露）" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="消息中转，订阅方掉线也不丢消息" data-node-tag="消息中间件" data-node-context="仅绑定 127.0.0.1（不对外暴露）">
           <title>EMQX · 消息中转，订阅方掉线也不丢消息 · 仅绑定 127.0.0.1（不对外暴露） · 消息中间件</title>
-          <rect x="360" y="340" width="200" height="62" rx="6" class="c-mask"/>
-          <rect x="360" y="340" width="200" height="62" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(366 346) scale(0.6875)">
+          <rect x="360" y="260" width="200" height="58" rx="6" class="c-mask"/>
+          <rect x="360" y="260" width="200" height="58" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(366 266) scale(0.6875)">
             <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
             <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
             <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
             <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="460" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">EMQX</text>
-        <text data-detail="context" x="460" y="385" class="t-muted" font-size="9" text-anchor="middle">消息中转，订阅方掉线也不丢消息</text>
-        <text data-detail="fine" x="460" y="394" class="t-messagebus" font-size="7" text-anchor="middle">消息中间件</text>
+          <text data-node-label="" data-detail-anchor="" x="460" y="287" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">EMQX</text>
+        <text data-detail="context" x="460" y="303" class="t-muted" font-size="9" text-anchor="middle">消息中转，订阅方掉线也不丢消息</text>
+        <text data-detail="fine" x="460" y="310" class="t-messagebus" font-size="7" text-anchor="middle">消息中间件</text>
         </g>
 
         <g id="node-subscriber" data-node-id="subscriber" data-node-label="接入层" tabindex="0" role="button" aria-label="聚焦接入层，校验数据、算折算值、判超标, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="校验数据、算折算值、判超标" data-node-tag="不合法就整条拒收" data-node-context="架构组件">
           <title>接入层 · 校验数据、算折算值、判超标 · 架构组件 · 不合法就整条拒收</title>
-          <rect x="640" y="340" width="220" height="62" rx="6" class="c-mask"/>
-          <rect x="640" y="340" width="220" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(646 346) scale(0.6875)">
+          <rect x="640" y="260" width="220" height="58" rx="6" class="c-mask"/>
+          <rect x="640" y="260" width="220" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(646 266) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="750" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">接入层</text>
-        <text data-detail="context" x="750" y="385" class="t-muted" font-size="9" text-anchor="middle">校验数据、算折算值、判超标</text>
-        <text data-detail="fine" x="750" y="394" class="t-backend" font-size="7" text-anchor="middle">不合法就整条拒收</text>
+          <text data-node-label="" data-detail-anchor="" x="750" y="287" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">接入层</text>
+        <text data-detail="context" x="750" y="303" class="t-muted" font-size="9" text-anchor="middle">校验数据、算折算值、判超标</text>
+        <text data-detail="fine" x="750" y="310" class="t-backend" font-size="7" text-anchor="middle">不合法就整条拒收</text>
         </g>
 
         <g id="node-hourly" data-node-id="hourly" data-node-label="整点结算" tabindex="0" role="button" aria-label="聚焦整点结算，每小时算一次达标/超标/数据不足, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="每小时算一次达标/超标/数据不足" data-node-tag="独立线程" data-node-context="架构组件">
           <title>整点结算 · 每小时算一次达标/超标/数据不足 · 架构组件 · 独立线程</title>
-          <rect x="640" y="540" width="220" height="62" rx="6" class="c-mask"/>
-          <rect x="640" y="540" width="220" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(646 546) scale(0.6875)">
+          <rect x="640" y="440" width="220" height="58" rx="6" class="c-mask"/>
+          <rect x="640" y="440" width="220" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(646 446) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="750" y="569" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">整点结算</text>
-        <text data-detail="context" x="750" y="585" class="t-muted" font-size="9" text-anchor="middle">每小时算一次达标/超标/数据不足</text>
-        <text data-detail="fine" x="750" y="594" class="t-backend" font-size="7" text-anchor="middle">独立线程</text>
+          <text data-node-label="" data-detail-anchor="" x="750" y="467" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">整点结算</text>
+        <text data-detail="context" x="750" y="483" class="t-muted" font-size="9" text-anchor="middle">每小时算一次达标/超标/数据不足</text>
+        <text data-detail="fine" x="750" y="490" class="t-backend" font-size="7" text-anchor="middle">独立线程</text>
         </g>
 
         <g id="node-tdengine" data-node-id="tdengine" data-node-label="TDengine" tabindex="0" role="button" aria-label="聚焦TDengine，时序库：测点 + 告警事件 + 小时结论, 仅绑定 127.0.0.1（不对外暴露）" aria-pressed="false" data-node-kind="database" data-node-sublabel="时序库：测点 + 告警事件 + 小时结论" data-node-tag="本机端口 6041" data-node-context="仅绑定 127.0.0.1（不对外暴露）">
           <title>TDengine · 时序库：测点 + 告警事件 + 小时结论 · 仅绑定 127.0.0.1（不对外暴露） · 本机端口 6041</title>
-          <rect x="940" y="340" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="940" y="340" width="230" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(946 346) scale(0.6875)">
+          <rect x="940" y="260" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="940" y="260" width="230" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(946 266) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1055" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">TDengine</text>
-        <text data-detail="context" x="1055" y="385" class="t-muted" font-size="9" text-anchor="middle">时序库：测点 + 告警事件 + 小时结论</text>
-        <text data-detail="fine" x="1055" y="394" class="t-database" font-size="7" text-anchor="middle">本机端口 6041</text>
+          <text data-node-label="" data-detail-anchor="" x="1055" y="287" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">TDengine</text>
+        <text data-detail="context" x="1055" y="303" class="t-muted" font-size="9" text-anchor="middle">时序库：测点 + 告警事件 + 小时结论</text>
+        <text data-detail="fine" x="1055" y="310" class="t-database" font-size="7" text-anchor="middle">本机端口 6041</text>
         </g>
 
         <g id="node-dashboard" data-node-id="dashboard" data-node-label="Web 大屏与报表" tabindex="0" role="button" aria-label="聚焦Web 大屏与报表，实时曲线、日月报表、导出 Excel, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="实时曲线、日月报表、导出 Excel" data-node-tag="对外页面" data-node-context="架构组件">
           <title>Web 大屏与报表 · 实时曲线、日月报表、导出 Excel · 架构组件 · 对外页面</title>
-          <rect x="940" y="540" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="940" y="540" width="230" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(946 546) scale(0.6875)">
+          <rect x="940" y="440" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="940" y="440" width="230" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(946 446) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1055" y="569" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Web 大屏与报表</text>
-        <text data-detail="context" x="1055" y="585" class="t-muted" font-size="9" text-anchor="middle">实时曲线、日月报表、导出 Excel</text>
-        <text data-detail="fine" x="1055" y="594" class="t-backend" font-size="7" text-anchor="middle">对外页面</text>
+          <text data-node-label="" data-detail-anchor="" x="1055" y="467" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Web 大屏与报表</text>
+        <text data-detail="context" x="1055" y="483" class="t-muted" font-size="9" text-anchor="middle">实时曲线、日月报表、导出 Excel</text>
+        <text data-detail="fine" x="1055" y="490" class="t-backend" font-size="7" text-anchor="middle">对外页面</text>
         </g>
 
         <g id="node-redis" data-node-id="redis" data-node-label="Redis" tabindex="0" role="button" aria-label="聚焦Redis，缓存已结束时间窗的报表结果（当前数据不缓存）, 仅绑定 127.0.0.1（不对外暴露）" aria-pressed="false" data-node-kind="database" data-node-sublabel="缓存已结束时间窗的报表结果（当前数据不缓存）" data-node-tag="查询加速" data-node-context="仅绑定 127.0.0.1（不对外暴露）">
           <title>Redis · 缓存已结束时间窗的报表结果（当前数据不缓存） · 仅绑定 127.0.0.1（不对外暴露） · 查询加速</title>
-          <rect x="940" y="680" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="940" y="680" width="230" height="62" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(946 686) scale(0.6875)">
+          <rect x="940" y="590" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="940" y="590" width="230" height="58" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(946 596) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1055" y="709" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Redis</text>
-        <text data-detail="context" x="1055" y="725" class="t-muted" font-size="8.4" text-anchor="middle">缓存已结束时间窗的报表结果（当前数据不缓存）</text>
-        <text data-detail="fine" x="1055" y="734" class="t-database" font-size="7" text-anchor="middle">查询加速</text>
+          <text data-node-label="" data-detail-anchor="" x="1055" y="617" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Redis</text>
+        <text data-detail="context" x="1055" y="633" class="t-muted" font-size="8.4" text-anchor="middle">缓存已结束时间窗的报表结果（当前数据不缓存）</text>
+        <text data-detail="fine" x="1055" y="640" class="t-database" font-size="7" text-anchor="middle">查询加速</text>
         </g>
 
         <g id="node-nginx" data-node-id="nginx" data-node-label="nginx" tabindex="0" role="button" aria-label="聚焦nginx，唯一对外入口，转发给大屏、静态文件自己发, 仅绑定 127.0.0.1（不对外暴露）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="唯一对外入口，转发给大屏、静态文件自己发" data-node-tag="本机端口 80" data-node-context="仅绑定 127.0.0.1（不对外暴露）">
           <title>nginx · 唯一对外入口，转发给大屏、静态文件自己发 · 仅绑定 127.0.0.1（不对外暴露） · 本机端口 80</title>
-          <rect x="940" y="200" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="940" y="200" width="230" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(946 206) scale(0.6875)">
+          <rect x="940" y="100" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="940" y="100" width="230" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(946 106) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1055" y="229" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nginx</text>
-        <text data-detail="context" x="1055" y="245" class="t-muted" font-size="9" text-anchor="middle">唯一对外入口，转发给大屏、静态文件自己发</text>
-        <text data-detail="fine" x="1055" y="254" class="t-backend" font-size="7" text-anchor="middle">本机端口 80</text>
+          <text data-node-label="" data-detail-anchor="" x="1055" y="127" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nginx</text>
+        <text data-detail="context" x="1055" y="143" class="t-muted" font-size="9" text-anchor="middle">唯一对外入口，转发给大屏、静态文件自己发</text>
+        <text data-detail="fine" x="1055" y="150" class="t-backend" font-size="7" text-anchor="middle">本机端口 80</text>
         </g>
 
         <g id="node-demo" data-node-id="demo" data-node-label="本地回环验证" tabindex="0" role="button" aria-label="聚焦本地回环验证，不起真实平台也能证明报文可收发、可解回, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="不起真实平台也能证明报文可收发、可解回" data-node-tag="验证用，非生产环节" data-node-context="架构组件">
           <title>本地回环验证 · 不起真实平台也能证明报文可收发、可解回 · 架构组件 · 验证用，非生产环节</title>
-          <rect x="360" y="810" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="360" y="810" width="230" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(366 816) scale(0.6875)">
+          <rect x="60" y="710" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="60" y="710" width="230" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 716) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="475" y="839" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">本地回环验证</text>
-        <text data-detail="context" x="475" y="855" class="t-muted" font-size="9" text-anchor="middle">不起真实平台也能证明报文可收发、可解回</text>
-        <text data-detail="fine" x="475" y="864" class="t-backend" font-size="7" text-anchor="middle">验证用，非生产环节</text>
+          <text data-node-label="" data-detail-anchor="" x="175" y="737" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">本地回环验证</text>
+        <text data-detail="context" x="175" y="753" class="t-muted" font-size="9" text-anchor="middle">不起真实平台也能证明报文可收发、可解回</text>
+        <text data-detail="fine" x="175" y="760" class="t-backend" font-size="7" text-anchor="middle">验证用，非生产环节</text>
         </g>
 
         <g id="node-outlet" data-node-id="outlet" data-node-label="北向出口适配层" tabindex="0" role="button" aria-label="聚焦北向出口适配层，一套接口三种出口：环保报文 / JSON / 寄存器, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="一套接口三种出口：环保报文 / JSON / 寄存器" data-node-tag="已实现未接入" data-node-context="架构组件">
           <title>北向出口适配层 · 一套接口三种出口：环保报文 / JSON / 寄存器 · 架构组件 · 已实现未接入</title>
-          <rect x="690" y="810" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="690" y="810" width="230" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(696 816) scale(0.6875)">
+          <rect x="60" y="830" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="60" y="830" width="230" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 836) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="805" y="839" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">北向出口适配层</text>
-        <text data-detail="context" x="805" y="855" class="t-muted" font-size="8.8" text-anchor="middle">一套接口三种出口：环保报文 / JSON / 寄存器</text>
-        <text data-detail="fine" x="805" y="864" class="t-backend" font-size="7" text-anchor="middle">已实现未接入</text>
+          <text data-node-label="" data-detail-anchor="" x="175" y="857" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">北向出口适配层</text>
+        <text data-detail="context" x="175" y="873" class="t-muted" font-size="8.8" text-anchor="middle">一套接口三种出口：环保报文 / JSON / 寄存器</text>
+        <text data-detail="fine" x="175" y="880" class="t-backend" font-size="7" text-anchor="middle">已实现未接入</text>
         </g>
 
         <g id="node-hj212" data-node-id="hj212" data-node-label="HJ212 编解码 + SM4" tabindex="0" role="button" aria-label="聚焦HJ212 编解码 + SM4，国标环保报文：组包、校验、加密、心跳, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="国标环保报文：组包、校验、加密、心跳" data-node-tag="国家环保标准" data-node-context="架构组件">
           <title>HJ212 编解码 + SM4 · 国标环保报文：组包、校验、加密、心跳 · 架构组件 · 国家环保标准</title>
-          <rect x="1020" y="810" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="1020" y="810" width="230" height="62" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1026 816) scale(0.6875)">
+          <rect x="400" y="830" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="400" y="830" width="230" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(406 836) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1135" y="839" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">HJ212 编解码 + SM4</text>
-        <text data-detail="context" x="1135" y="855" class="t-muted" font-size="9" text-anchor="middle">国标环保报文：组包、校验、加密、心跳</text>
-        <text data-detail="fine" x="1135" y="864" class="t-backend" font-size="7" text-anchor="middle">国家环保标准</text>
+          <text data-node-label="" data-detail-anchor="" x="515" y="857" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">HJ212 编解码 + SM4</text>
+        <text data-detail="context" x="515" y="873" class="t-muted" font-size="9" text-anchor="middle">国标环保报文：组包、校验、加密、心跳</text>
+        <text data-detail="fine" x="515" y="880" class="t-backend" font-size="7" text-anchor="middle">国家环保标准</text>
         </g>
 
         <g id="node-monitor" data-node-id="monitor" data-node-label="监控平台" tabindex="0" role="button" aria-label="聚焦监控平台，对方的接收端，参数填配置即可对接, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="对方的接收端，参数填配置即可对接" data-node-tag="外部系统" data-node-context="架构组件">
           <title>监控平台 · 对方的接收端，参数填配置即可对接 · 架构组件 · 外部系统</title>
-          <rect x="1350" y="810" width="230" height="62" rx="6" class="c-mask"/>
-          <rect x="1350" y="810" width="230" height="62" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1356 816) scale(0.6875)">
+          <rect x="760" y="830" width="230" height="58" rx="6" class="c-mask"/>
+          <rect x="760" y="830" width="230" height="58" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(766 836) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1465" y="839" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">监控平台</text>
-        <text data-detail="context" x="1465" y="855" class="t-muted" font-size="9" text-anchor="middle">对方的接收端，参数填配置即可对接</text>
-        <text data-detail="fine" x="1465" y="864" class="t-external" font-size="7" text-anchor="middle">外部系统</text>
+          <text data-node-label="" data-detail-anchor="" x="875" y="857" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">监控平台</text>
+        <text data-detail="context" x="875" y="873" class="t-muted" font-size="9" text-anchor="middle">对方的接收端，参数填配置即可对接</text>
+        <text data-detail="fine" x="875" y="880" class="t-external" font-size="7" text-anchor="middle">外部系统</text>
         </g>
 
         <!-- Connection labels -->
         <g data-detail="context" data-edge-from="simulator" data-edge-to="registers" data-edge-label="写入数据区" data-edge-key="0" data-edge-id="sim-to-reg">
-          <rect x="91" y="294" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="120" y="304" class="t-edge-emphasis" font-size="8" text-anchor="middle">写入数据区</text>
+          <rect x="91" y="183" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="120" y="193" class="t-edge-emphasis" font-size="8" text-anchor="middle">写入数据区</text>
         </g>
         <g data-detail="context" data-edge-from="registers" data-edge-to="gateway" data-edge-label="按地址读数" data-edge-key="1" data-edge-id="reg-to-gw">
-          <rect x="91" y="464" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="120" y="474" class="t-edge-emphasis" font-size="8" text-anchor="middle">按地址读数</text>
+          <rect x="91" y="313" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="120" y="323" class="t-edge-emphasis" font-size="8" text-anchor="middle">按地址读数</text>
         </g>
         <g data-detail="context" data-edge-from="gateway" data-edge-to="emqx" data-edge-label="发布出去" data-edge-key="2" data-edge-id="gw-to-emqx">
-          <rect x="280.8" y="451" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="305" y="461" class="t-edge-emphasis" font-size="8" text-anchor="middle">发布出去</text>
+          <rect x="250.60000000000002" y="332" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="274.8" y="342" class="t-edge-emphasis" font-size="8" text-anchor="middle">发布出去</text>
         </g>
         <g data-detail="context" data-edge-from="emqx" data-edge-to="subscriber" data-edge-label="订阅收到" data-edge-key="3" data-edge-id="emqx-to-sub">
-          <rect x="575.8" y="351" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="600" y="361" class="t-edge-emphasis" font-size="8" text-anchor="middle">订阅收到</text>
+          <rect x="575.8" y="269" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="600" y="279" class="t-edge-emphasis" font-size="8" text-anchor="middle">订阅收到</text>
         </g>
         <g data-detail="context" data-edge-from="subscriber" data-edge-to="tdengine" data-edge-label="存数据 + 存告警" data-edge-key="4" data-edge-id="sub-to-db">
-          <rect x="859" y="342.95" width="82" height="14" rx="3" class="c-mask"/>
-          <text x="900" y="352.95" class="t-edge-emphasis" font-size="8" text-anchor="middle">存数据 + 存告警</text>
+          <rect x="796" y="321.75" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="837" y="331.75" class="t-edge-emphasis" font-size="8" text-anchor="middle">存数据 + 存告警</text>
         </g>
         <g data-detail="context" data-edge-from="gateway" data-edge-to="cachefile" data-edge-label="发不出去就先存本地" data-edge-key="5" data-edge-id="gw-to-cache">
-          <rect x="116.80000000000001" y="621" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="165" y="631" class="t-edge-dashed" font-size="8" text-anchor="middle">发不出去就先存本地</text>
+          <rect x="116.80000000000001" y="429" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="165" y="439" class="t-edge-dashed" font-size="8" text-anchor="middle">发不出去就先存本地</text>
         </g>
         <g data-detail="context" data-edge-from="cachefile" data-edge-to="resend" data-edge-label="取出待补的" data-edge-key="6" data-edge-id="cache-to-resend">
-          <rect x="104" y="759" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="133" y="769" class="t-edge-dashed" font-size="8" text-anchor="middle">取出待补的</text>
+          <rect x="104" y="557" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="133" y="567" class="t-edge-dashed" font-size="8" text-anchor="middle">取出待补的</text>
         </g>
         <g data-detail="context" data-edge-from="resend" data-edge-to="emqx" data-edge-label="联网后重发" data-edge-key="7" data-edge-id="resend-to-emqx">
-          <rect x="292" y="746" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="321" y="756" class="t-edge-dashed" font-size="8" text-anchor="middle">联网后重发</text>
+          <rect x="431" y="448.5" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="460" y="458.5" class="t-edge-dashed" font-size="8" text-anchor="middle">联网后重发</text>
         </g>
         <g data-detail="context" data-edge-from="subscriber" data-edge-to="hourly" data-edge-label="整点触发" data-edge-key="8" data-edge-id="sub-to-hourly">
-          <rect x="695.5999999999999" y="464" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="719.8" y="474" class="t-edge-dashed" font-size="8" text-anchor="middle">整点触发</text>
+          <rect x="695.5999999999999" y="372" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="719.8" y="382" class="t-edge-dashed" font-size="8" text-anchor="middle">整点触发</text>
         </g>
         <g data-detail="context" data-edge-from="hourly" data-edge-to="tdengine" data-edge-label="写小时结论" data-edge-key="9" data-edge-id="hourly-to-db">
-          <rect x="871" y="454.5" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="900" y="464.5" class="t-edge-dashed" font-size="8" text-anchor="middle">写小时结论</text>
+          <rect x="887" y="358.5" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="916" y="368.5" class="t-edge-dashed" font-size="8" text-anchor="middle">写小时结论</text>
         </g>
         <g data-detail="context" data-edge-from="tdengine" data-edge-to="dashboard" data-edge-label="查数据出图" data-edge-key="10" data-edge-id="db-to-dash">
-          <rect x="999.05" y="464" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="1028.05" y="474" class="t-edge-emphasis" font-size="8" text-anchor="middle">查数据出图</text>
+          <rect x="999.05" y="372" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="1028.05" y="382" class="t-edge-emphasis" font-size="8" text-anchor="middle">查数据出图</text>
         </g>
         <g data-detail="context" data-edge-from="dashboard" data-edge-to="redis" data-edge-label="报表结果缓存" data-edge-key="11" data-edge-id="dash-to-redis">
-          <rect x="981.4000000000001" y="634" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="1015.2" y="644" class="t-edge-default" font-size="8" text-anchor="middle">报表结果缓存</text>
+          <rect x="981.4000000000001" y="537" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="1015.2" y="547" class="t-edge-default" font-size="8" text-anchor="middle">报表结果缓存</text>
         </g>
         <g data-detail="context" data-edge-from="dashboard" data-edge-to="nginx" data-edge-label="浏览器访问" data-edge-key="12" data-edge-id="dash-to-nginx">
-          <rect x="1200" y="394" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="1229" y="404" class="t-edge-default" font-size="8" text-anchor="middle">浏览器访问</text>
+          <rect x="1092" y="396" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="1121" y="406" class="t-edge-default" font-size="8" text-anchor="middle">浏览器访问</text>
         </g>
-        <g data-detail="context" data-edge-from="demo" data-edge-to="outlet" data-edge-label="喂给出口" data-edge-key="13" data-edge-id="demo-to-outlet">
-          <rect x="615.8" y="821" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="640" y="831" class="t-edge-dashed" font-size="8" text-anchor="middle">喂给出口</text>
+        <g data-detail="context" data-edge-from="tdengine" data-edge-to="demo" data-edge-label="取一条真实数据当样例" data-edge-key="13" data-edge-id="db-to-demo">
+          <rect x="631.5" y="216" width="106" height="14" rx="3" class="c-mask"/>
+          <text x="684.5" y="226" class="t-edge-dashed" font-size="8" text-anchor="middle">取一条真实数据当样例</text>
         </g>
-        <g data-detail="context" data-edge-from="outlet" data-edge-to="hj212" data-edge-label="按协议组包" data-edge-key="14" data-edge-id="outlet-to-hj212">
-          <rect x="941" y="821" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="970" y="831" class="t-edge-emphasis" font-size="8" text-anchor="middle">按协议组包</text>
+        <g data-detail="context" data-edge-from="demo" data-edge-to="outlet" data-edge-label="喂给出口" data-edge-key="14" data-edge-id="demo-to-outlet">
+          <rect x="120.60000000000001" y="792" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="144.8" y="802" class="t-edge-dashed" font-size="8" text-anchor="middle">喂给出口</text>
         </g>
-        <g data-detail="context" data-edge-from="hj212" data-edge-to="monitor" data-edge-label="发出并等应答" data-edge-key="15" data-edge-id="hj212-to-monitor">
-          <rect x="1266.2" y="821" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="1300" y="831" class="t-edge-dashed" font-size="8" text-anchor="middle">发出并等应答</text>
+        <g data-detail="context" data-edge-from="outlet" data-edge-to="hj212" data-edge-label="按协议组包" data-edge-key="15" data-edge-id="outlet-to-hj212">
+          <rect x="316" y="839" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="345" y="849" class="t-edge-emphasis" font-size="8" text-anchor="middle">按协议组包</text>
+        </g>
+        <g data-detail="context" data-edge-from="hj212" data-edge-to="monitor" data-edge-label="发出并等应答" data-edge-key="16" data-edge-id="hj212-to-monitor">
+          <rect x="661.2" y="839" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="695" y="849" class="t-edge-dashed" font-size="8" text-anchor="middle">发出并等应答</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
         <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="security-group" data-composition-frame-label="仅绑定 127.0.0.1（不对外暴露）">
-          <rect data-graph-role="structural-frame-label-mask" x="334" y="178" width="198.1290502580645" height="18" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="338" y="192.4516139032258" class="t-security" font-size="10.451613903225805" font-weight="600">仅绑定 127.0.0.1（不对外暴露）</text>
+          <rect data-graph-role="structural-frame-label-mask" x="334" y="80" width="172" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="338" y="93" class="t-security" font-size="9" font-weight="600">仅绑定 127.0.0.1（不对外暴露）</text>
         </g>
 
         <!-- Legend -->
         <g data-legend="" data-legend-bridge="">
-          <text x="40" y="904" class="t-primary" font-size="12" font-weight="650">图例</text>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="40" data-legend-baseline="924" data-legend-width="63">
-            <rect x="40" y="915" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="62" y="924" class="t-muted" font-size="10" font-weight="500">后端</text>
+          <text x="40" y="920" class="t-primary" font-size="12" font-weight="650">图例</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="40" data-legend-baseline="940" data-legend-width="63">
+            <rect x="40" y="931" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="62" y="940" class="t-muted" font-size="10" font-weight="500">后端</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="数据库" data-legend-x="125" data-legend-baseline="924" data-legend-width="73">
-            <rect x="125" y="915" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="147" y="924" class="t-muted" font-size="10" font-weight="500">数据库</text>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="数据库" data-legend-x="125" data-legend-baseline="940" data-legend-width="73">
+            <rect x="125" y="931" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="147" y="940" class="t-muted" font-size="10" font-weight="500">数据库</text>
           </g>
-          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="消息总线" data-legend-x="220" data-legend-baseline="924" data-legend-width="83">
-            <rect x="220" y="915" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
-            <text x="242" y="924" class="t-muted" font-size="10" font-weight="500">消息总线</text>
+          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="消息总线" data-legend-x="220" data-legend-baseline="940" data-legend-width="83">
+            <rect x="220" y="931" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
+            <text x="242" y="940" class="t-muted" font-size="10" font-weight="500">消息总线</text>
           </g>
-          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="外部系统" data-legend-x="325" data-legend-baseline="924" data-legend-width="83">
-            <rect x="325" y="915" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="347" y="924" class="t-muted" font-size="10" font-weight="500">外部系统</text>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="外部系统" data-legend-x="325" data-legend-baseline="940" data-legend-width="83">
+            <rect x="325" y="931" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="347" y="940" class="t-muted" font-size="10" font-weight="500">外部系统</text>
           </g>
         </g>
       </svg>
@@ -5592,7 +5600,6 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <li>网关代码里没有任何出口引用；目前只有本地验证脚本在调它（这是有意留的待接线）</li>
           <li>三个出口共用同一套接口，但算送达的标准各不相同：等应答 / 看 HTTP 状态码 / 写成功即算</li>
           <li>⚠️ 底部那一行是本地验证路径，不是生产链路；落地时整行移除</li>
-          <li>演示脚本可用 --from-db 从时序库取一条真实数据当样例（本图未画该连线，避免与主链交叉）</li>
         </ul>
       </div>
 
