@@ -3,6 +3,7 @@
   "diagram_type": "dataflow",
   "meta": {
     "title": "CEMS 数据采集全链路",
+    "output": "docs/diagrams/cems-full-chain.html",
     "quality_profile": "showcase",
     "viewBox": [1080, 780],
     "locale": "zh-CN",
@@ -22,7 +23,7 @@
     { "id": "cache", "type": "database", "label": "续传缓存", "sublabel": "段文件", "stage": 1, "row": 1, "tag": "M4" },
     { "id": "outlet", "type": "backend", "label": "北向出口", "sublabel": "HJ212 HTTP Modbus", "stage": 1, "row": 3, "tag": "M5" },
     { "id": "emqx", "type": "messagebus", "label": "EMQX", "sublabel": "QoS 1", "stage": 2, "row": 2, "tag": "M6" },
-    { "id": "platform", "type": "external", "label": "环保平台", "sublabel": "待联调", "stage": 2, "row": 3, "tag": "M7" },
+    { "id": "platform", "type": "external", "label": "环保平台", "sublabel": "参数可配 接入即对接", "stage": 2, "row": 3, "tag": "M7" },
     { "id": "subscriber", "type": "backend", "label": "接入层", "sublabel": "校验 折算 告警", "stage": 3, "row": 2, "tag": "M8" },
     { "id": "tdengine", "type": "database", "label": "TDengine", "sublabel": "测点表 告警表", "stage": 4, "row": 2, "tag": "M9" },
     { "id": "web", "type": "frontend", "label": "Web 大屏与报表", "sublabel": "nginx 80", "stage": 4, "row": 0, "tag": "M10" }
