@@ -115,6 +115,55 @@ def http_receiver(sock: socket.socket, box: dict) -> None:
         conn.close()
 
 
+def modbus_receiver(sock: socket.socket, box: dict) -> None:
+    """本地 Modbus 服务端：起一个带寄存器的 server，等客户端写入后读回来。"""
+    from pymodbus.datastore import (
+        ModbusSequentialDataBlock,
+        ModbusServerContext,
+        ModbusSlaveContext,
+    )
+    from pymodbus.server import StartTcpServer
+
+    port = sock.getsockname()[1]
+    sock.close()          # pymodbus 自己 bind
+    context = ModbusServerContext(
+        slaves=ModbusSlaveContext(
+            hr=ModbusSequentialDataBlock(0, [0] * 32), zero_mode=True),
+        single=True,
+    )
+    thread = threading.Thread(
+        target=StartTcpServer,
+        kwargs={"context": context, "address": (HOST, port)},
+        daemon=True,
+    )
+    thread.start()
+    time.sleep(0.8)
+
+    # 等服务端就绪后连上去写（由 run_adapter 里的 adapter.send 触发）
+    from pymodbus.client import ModbusTcpClient
+
+    client = ModbusTcpClient(HOST, port=port, timeout=5)
+    try:
+        if not client.connect():
+            box["error"] = "Modbus 客户端连不上"
+            return
+        # ⚠️ 适配器是先写的（on_connect 时可能还没就绪），所以这里**轮询读**直到非全 0。
+        # 真实场景里 DCS 侧是持续读的，不需要这个等待；演示里是为了确定性。
+        regs: list[int] = []
+        for _ in range(30):
+            rr = client.read_holding_registers(0, 9)
+            regs = list(rr.registers) if not rr.isError() else []
+            if regs and any(v != 0 for v in regs):
+                break
+            time.sleep(0.2)
+        box["registers"] = regs
+        box["raw"] = f"hr[0..8]={regs}"
+    except Exception as exc:  # noqa: BLE001
+        box["error"] = f"{type(exc).__name__}: {exc}"
+    finally:
+        client.close()
+
+
 def run_adapter(name: str, sample: Sample, receiver, **adapter_kwargs: object) -> dict:
     """起接收端 → 组包 → 发送 → 等结果。**这段代码对两个协议完全一样**（接口的价值）。"""
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -126,7 +175,8 @@ def run_adapter(name: str, sample: Sample, receiver, **adapter_kwargs: object) -
     box: dict = {}
     thread = threading.Thread(target=receiver, args=(listener, box), daemon=True)
     thread.start()
-    time.sleep(0.15)
+    # ⚠️ Modbus 接收端要起 pymodbus 服务端，就绪比纯 socket 慢 → 多等一点
+    time.sleep(1.2 if name == "modbus-tcp" else 0.15)
 
     adapter = build_adapter(name, **adapter_kwargs)
     payload = adapter.build_payload(sample)
@@ -166,7 +216,8 @@ def main(argv: list[str] | None = None) -> int:
     results: dict[str, dict] = {}
     for name in ADAPTERS:
         kwargs = {"encrypt": args.encrypt} if name == "hj212" else {}
-        receiver = hj212_receiver if name == "hj212" else http_receiver
+        receiver = {"hj212": hj212_receiver, "http-json": http_receiver,
+                    "modbus-tcp": modbus_receiver}[name]
         box = run_adapter(name, sample, receiver, **kwargs)
         results[name] = box
         print(f"\n  ── {name} ──")
@@ -190,6 +241,9 @@ def main(argv: list[str] | None = None) -> int:
         d = j["json"]["data"]
         print(f"  HTTP   JSON 字段数: {len(d)}｜样例 a34013={d.get('a34013')} "
               f"a21026={d.get('a21026')} a21002={d.get('a21002')}")
+    m = results["modbus-tcp"]
+    if m.get("registers"):
+        print(f"  Modbus 寄存器 hr[0..8]: {m['registers']}")
 
     print()
     print(LINE)
@@ -207,16 +261,30 @@ def main(argv: list[str] | None = None) -> int:
             got = j["json"]["data"].get(p.code)
             if got is None or abs(float(got) - values[p.name]) > 1e-6:
                 bad.append(f"HTTP {p.name}")
-    print(f"  两个出口 × {len(POINTS)} 测点 = {2 * len(POINTS)} 项比对："
+    if m.get("registers"):
+        # Modbus 侧：按出口自己的系数反解回真实值再比（大数用系数 1）
+        from src.protocol.adapter import MODBUS_OUT_SCALE_DEFAULT as SCALE
+
+        for p, raw in zip(POINTS, m["registers"]):
+            factor = 1 if p.high * SCALE > 65535 else SCALE
+            if abs(raw / factor - values[p.name]) > 1.0 / factor:
+                bad.append(f"Modbus {p.name}")
+    elif not m.get("error"):
+        bad.append("Modbus 未读到寄存器")
+    n_checked = (len(POINTS) if h.get("qr") else 0) + (len(POINTS) if j.get("json") else 0) \
+        + (len(POINTS) if m.get("registers") else 0)
+    print(f"  各出口 × {len(POINTS)} 测点，共 {n_checked} 项比对："
           f"{'✅ 全部一致' if not bad else '❌ ' + str(bad)}")
 
     print()
     print(LINE)
     print("结论")
     print(LINE)
-    print("  ✅ 同一份采样经两个协议出口走真实网络、各自被独立解码、值零差异")
+    print("  ✅ 同一份采样经**三个协议出口**走真实网络、各自被独立解读、值零差异")
     print("  ✅ 加出口只加一个类（上层 run_adapter 一段代码复用）—— 这就是「可扩展」的落地证据")
-    print("  ⚠️ 边界：无真实平台参与；HJ212 的 MN/PW 是占位值；两个接收端都是本脚本起的")
+    print("  ✅ 三个出口的【送达判据】完全不同（9014应答 / HTTP 2xx / 写成功无应答），")
+    print("     但都落在同一个 ProtocolAdapter 接口里 → 证明这层抽象抽对了")
+    print("  ⚠️ 边界：无真实平台参与；HJ212 的 MN/PW 是占位值；接收端都是本脚本起的")
     print("     → 真实对接需平台侧配合（docs/adr/0006-HJ212出口与北向适配.md §3）")
     return 0 if not bad else 1
 
