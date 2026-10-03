@@ -365,14 +365,33 @@ def main() -> int:
         cols = ["ts", *[p.column for p in POINTS]]
 
         # ---- T1 源 → MQTT ----
-        expected = max(1, int(args.seconds / POLL_INTERVAL))
+        # ⚠️ 预期条数**不能只按 --seconds 算**：网关从"启动 → 首发 → 停止观察"之间
+        #    有自己的启动延迟与收尾（实测比 `seconds/周期` 多 2~3 条），
+        #    `--seconds` 越短，这个固定开销占比越大（12s 时理论 2 条、实际 5 条）。
+        #    正确做法是**按实际观测到的时间跨度自校准**：N 条报文应当覆盖
+        #    (N-1)×周期 秒；若观测跨度与条数自洽，说明采集节奏正确。
+        theoretical = max(1, int(args.seconds / POLL_INTERVAL))
         print("\n[T1] 源 → MQTT（采集/发布层）")
-        _check(bool(listened), "旁听到报文", f"{len(listened)} 条（预期约 {expected} 条）")
+        _check(bool(listened), "旁听到报文",
+               f"{len(listened)} 条（--seconds={args.seconds} 的理论值约 {theoretical} 条）")
         if listened:
+            if len(listened) >= 2:
+                first = parse_payload(listened[0])[0]
+                last = parse_payload(listened[-1])[0]
+                span = (
+                    datetime.strptime(last, "%Y-%m-%d %H:%M:%S")
+                    - datetime.strptime(first, "%Y-%m-%d %H:%M:%S")
+                ).total_seconds()
+                ideal = (len(listened) - 1) * POLL_INTERVAL
+                _check(
+                    abs(span - ideal) <= POLL_INTERVAL + 1,
+                    "条数与时间跨度自洽（相邻间隔 ≈ 采集周期）",
+                    f"{len(listened)} 条覆盖 {span:.0f}s，理论 {(len(listened) - 1)}×{POLL_INTERVAL:.0f}={ideal:.0f}s",
+                )
             _check(
-                abs(len(listened) - expected) <= 2,
-                "发布条数与采集时长一致（±2）",
-                f"实到 {len(listened)}，预期 {expected}",
+                len(listened) >= theoretical,
+                "至少达到 --seconds 的理论条数（不会少发）",
+                f"实到 {len(listened)} ≥ 理论 {theoretical}",
             )
 
         # ---- T2 MQTT → 库 ----

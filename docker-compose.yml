@@ -167,7 +167,7 @@ services:
       # EMQX 默认 max_mqueue_len=1000、session_expiry_interval=2h，
       # 按 5 秒/条算只能扛约 83 分钟 —— 断网更久就丢最旧的（且只在补传时才看得出来）。
       # 这里调到 20000 条（约 27 小时）+ 24 小时会话有效期；
-      # 队列是占内存的，按你的断网容忍时长调，别无限放大。
+      # 队列占内存，按需要的断网容忍时长调整，不要无限放大。
       EMQX_MQTT__MAX_MQUEUE_LEN: "20000"
       EMQX_MQTT__SESSION_EXPIRY_INTERVAL: "24h"
       # ⚠️ 上面两条只解决"排队多久"，解决不了"broker 重启后队列还在不在"：

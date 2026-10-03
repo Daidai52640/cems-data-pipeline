@@ -108,7 +108,7 @@ def test_web_cache_refuses_to_start_on_bad_tag() -> None:
         # ⚠️ 必须显式给 utf-8：护栏的报错文案是中文，而 Windows 上 text=True 会用
         # 平台默认编码（本机 GBK）去解码 → UnicodeDecodeError → stderr 变成 None
         # → 下面的断言从"报错信息里有没有 TD_DEVICE"退化成 TypeError（测试自身崩掉，
-        # 而不是失败）。这是本仓 AGENTS.md 记的同一类 GBK 陷阱。
+        # 而不是失败）。这是本机在 Windows 上反复踩到的 GBK 解码陷阱（同一类问题已在别处出现过）。
         encoding="utf-8", errors="replace",
     )
     assert proc.returncode != 0

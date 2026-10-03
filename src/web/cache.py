@@ -156,7 +156,7 @@ def _device_scope(plant: str, device: str) -> str:
 
     回落而不是"用空串"：`TD_PLANT` 为空会得到 `/device1` 这种看起来像路径、实际少了一半
     信息的串，两个都不设时更是所有设备挤进同一个命名空间 —— 那正是本模块要修掉的隐患。
-    这种情况必须能从启动日志里看出来（级别按 AGENTS.md §4 的"配置回落"取 WARNING）。
+    这种情况必须能从启动日志里看出来（级别取 WARNING：这是配置回落（有默认值兜底），不是错误，但必须能从启动日志看出来）。
     """
     if not plant:
         LOGGER.warning("TD_PLANT 为空，设备维度回落默认值 plant1（请检查环境变量）")

@@ -88,7 +88,7 @@ def device_predicate(device: Optional[str] = None) -> str:
 
     设备名来自命令行或环境变量，不是外部不可信输入；这里仍做一次白名单校验
     （只允许字母/数字/下划线/中划线），避免把引号拼进 SQL 造成注入
-    （见 AGENTS.md §5「SQL 注入」）。
+    —— 这些值会被拼进 SQL，不加白名单就等于把注入面留在配置里。
     """
     scope = resolve_device(device)
     if not all(char.isalnum() or char in "_-" for char in scope):
