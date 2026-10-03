@@ -101,7 +101,7 @@ def set_child_table(device: str) -> str:
     """按设备把目标子表切成 `{plant}_{device}`，返回切好之后的表名。
 
     只在 `main()` 里调一次（`CHILD_TABLE` 是全模块共用的目标表）。设备名会做
-    白名单校验，避免把引号拼进 SQL / 表名（AGENTS.md §5）。
+    白名单校验：这两个值会拼进 SQL 与表名，不校验就等于把注入面留在配置里。
     """
     global CHILD_TABLE
     scope = resolve_device(device)
