@@ -165,8 +165,9 @@ class DeviceCurve:
 
         ★ 格式由 `src.gateway.gateway.build_payload()` 原样产出，本函数**只把它的
           秒级时间戳换成错峰后的那一个字符串**，字段、顺序、量纲、Flag 全都不动。
-          ⚠️ 为什么不改 build_payload 的时间源：本项目的硬约束是**不改 src/**；
-             而这里的替换是"同一格式换一个秒值"，不引入任何格式差异。
+          ⚠️ 为什么不改 build_payload 的时间源：本脚本的定位是**不碰生产代码路径**
+             （免得"压测工具反过来改被测对象"）；而这里的替换是"同一格式换一个秒值"，
+             不引入任何格式差异。
         """
         offset = int(self.ts_offset)
         if ts_base is None:
@@ -547,7 +548,7 @@ class LoadGen:
         return self._summarise(start, published_end)
 
     def _device_loop(self, publisher: mqtt.Client, worker_index: int, workers: int) -> None:
-        """发布线程：按 interval 节奏，轮流给"归我管"的设备发一条。
+        """发布线程：按 interval 节奏，轮流给"本线程负责"的设备发一条。
 
         一个 client 多个发布线程是 paho 支持的用法（publish 线程安全）；
         这样做的好处是：N=50 时仍然只有 1 条 TCP 连接，压的是链路本身而不是连接数。
@@ -577,7 +578,7 @@ class LoadGen:
                 if delay > 0:
                     time.sleep(delay)
                 cycle_base = self.publish_base_epoch + int(round(cycle * interval))
-                # 归我发的设备：worker_index, +workers, ...；每轮只发 1 台，按轮次取
+                # 本线程负责的设备：worker_index, +workers, ...；每轮只发 1 台，按轮次取
                 mine = list(range(worker_index, len(self.curves), workers))
                 curve = self.curves[mine[cycle % len(mine)]]
                 self._emit(publisher, curve, cycle_base, cycle)

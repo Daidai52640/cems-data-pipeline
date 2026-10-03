@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-r"""排放超标告警 · 离线回放验收（ADR-0002 §2.2 5) 的 V1 五个边界用例 + 交付要求的 4 项）。
+r"""排放超标告警 · 离线回放验收（ADR-0002 §2.2 5) 的 V1 边界用例 + 落库/快照/幂等）。
 
-⚠️ 本脚本**不在仓库内**（硬约束只允许改 subscriber_to_td.py / src/common/ / .env.example /
-   docker-compose.yml，所以没有新增 scripts/ 下的文件）。放在仓库外运行，只 import 仓库代码。
+⚠️ 离线运行：只 import 仓库代码，不连库、不连 broker，可反复跑；用到的边界数据由脚本自己造。
 
 覆盖：
   A 纯逻辑边界（不碰库）
@@ -21,8 +20,9 @@ r"""排放超标告警 · 离线回放验收（ADR-0002 §2.2 5) 的 V1 五个�
     真库低覆盖小时（14 条）→ insufficient，落 cems_hourly_verdict
 
 用法（PowerShell）：
-  $env:PYTHONIOENCODING="utf-8"; $env:PYTHONPATH="F:\Project1\cems-data-pipeline"
-  C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe verify_alarm_offline.py
+  $env:PYTHONIOENCODING="utf-8"
+  cd F:\Project1\cems-data-pipeline
+  python scripts\verify_alarm_offline.py
 退出码：0 = 全部通过，1 = 有失败项。
 """
 

@@ -78,8 +78,8 @@ def where_clause(predicate: str) -> str:
 
 
 # ---- 带设备过滤的取数（本地实现，不改 scripts/_td_ops.py 的既有口径） ----
-# `ops.count_rows` / `ops.ts_bounds` 没有 tag 参数，而本项目本次只允许改点名的文件，
-# 所以这里用 ops 的同一批底层函数（taos_sql / taos_scalar，仍是容器内 taos CLI、仍是
+# `ops.count_rows` / `ops.ts_bounds` 没有 tag 参数，而不想在这里改动它们的签名，
+# 所以复用 ops 的同一批底层函数（taos_sql / taos_scalar，仍是容器内 taos CLI、仍是
 # 纪元毫秒比较）加一层设备谓词，取数口径与 ops 的版本逐字一致。
 #
 # ⚠️ 为什么不给它们直接加参数：那两个函数被备份/恢复演练脚本共用，改签名会波及别处。
