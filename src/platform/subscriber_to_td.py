@@ -53,6 +53,8 @@ from src.common.points import (   # noqa: E402
 # 会被拼进 SQL 的标识符/tag 值白名单：**唯一真源**在 src/common/sql_safety.py，
 # 展示层读路径（src/web/cache.py 的 device_tag_parts）共用同一条正则。
 from src.common.sql_safety import SQL_NAME_RE, SQL_NAME_RULE   # noqa: E402
+# 接入层落盘队列（写库失败时的本地持久副本）：机制与崩溃安全见该模块头部说明
+from src.platform.ingest_spool import IngestSpool   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
@@ -199,8 +201,15 @@ COLUMN_TO_NAME: Final[dict[str, str]] = {point.column: point.name for point in P
 O2_FIELD_NAME: Final[str] = COLUMN_TO_NAME[O2_COLUMN]
 REFERENCE_LOG_EVERY: Final[int] = 20       # 折算值抽样日志周期（条），避免每条都刷屏
 
-# ---- 收发/拒收计数（把上游数据质量问题量化出来）----
-STATS: Final[dict[str, int]] = {"received": 0, "accepted": 0, "rejected": 0}
+# ---- 收发/拒收/落盘计数（把上游数据质量与"落盘队列"状态量化出来）----
+STATS: Final[dict[str, int]] = {
+    "received": 0,
+    "accepted": 0,
+    "rejected": 0,       # 报文不合格（格式/非有限值/超量程），有意拒收
+    "spooled": 0,        # 写库失败 → 已落本地队列（有持久副本，等补传）
+    "spool_lost": 0,     # 写库失败且落盘也失败 → 真丢（伴随 CRITICAL 日志）
+    "drained": 0,        # 由落盘队列补传成功入库的条数
+}
 
 # ---- 排放超标告警（ADR-0002 方案乙：接入层逐条判折算值）----
 # 判据参数（窗口 M/N、恢复系数、覆盖率门限…）全部在 src/common/alarm_judge.py 里定义，
@@ -236,6 +245,51 @@ LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
 
 LOGGER: Final[logging.Logger] = logging.getLogger("platform.subscriber_to_td")
+
+# ---- 接入层落盘队列（写库失败时的本地副本）----
+# ★ 为什么必须有它：订阅端拿到 QoS1 报文后，paho 在 on_message **正常返回**时发 PUBACK，
+#   broker 随即删掉队列里唯一的持久副本；网关那边也早在 broker PUBACK 时就删了 cache.jsonl。
+#   若写库失败后直接返回 → 这条数据在整条链路上**没有任何副本** = 永久丢失（旧「P1 未修」）。
+#   现在的口径：写库失败 → 先落本地队列（fsync）→ 后台补传 → **入库成功才删**。
+#   ⚠️ 代价：写库失败时多一次本地写；队列积压超上限会丢最旧（CRITICAL），容量默认 256 MB。
+# ★ 队列目录必须**每实例一份**（多设备部署的关键约束，与网关缓存目录同源）：两个订阅端
+#   实例若共用同一个目录，各自的补传线程会把对方的报文拿自己的标签写进自己的子表 →
+#   数据张冠李戴，且两边都以为成功。
+SUBSCRIBER_DATA_DIR_ENV: Final[str] = os.getenv("SUBSCRIBER_DATA_DIR", "").strip()
+
+
+def resolve_spool_dir(raw: str) -> Path:
+    """把 SUBSCRIBER_DATA_DIR 解析成绝对路径；空值回落 PROJECT_ROOT/data/subscriber。
+
+    - 未设置 → `PROJECT_ROOT/data/subscriber`（容器内即 /app/data/subscriber，配合 compose 的卷）
+    - 绝对路径 → 原样使用（容器里的推荐写法，如 /app/data-plant2/subscriber）
+    - 相对路径 → 相对**项目根**解析（不是 CWD），本机运行与容器运行不分叉
+    """
+    if not raw:
+        return PROJECT_ROOT / "data" / "subscriber"
+    candidate = Path(raw).expanduser()
+    return candidate if candidate.is_absolute() else (PROJECT_ROOT / candidate)
+
+
+SPOOL_DIR: Final[Path] = resolve_spool_dir(SUBSCRIBER_DATA_DIR_ENV)
+# 容量上限/裁剪比例：与网关 cache.jsonl 同一套"丢最旧、保最新"口径（见 ingest_spool 说明）
+SPOOL_MAX_BYTES: Final[int] = int(
+    os.getenv("SUBSCRIBER_SPOOL_MAX_BYTES", str(256 * 1024 * 1024))
+)
+SPOOL_TRIM_RATIO: Final[float] = float(os.getenv("SUBSCRIBER_SPOOL_TRIM_RATIO", "0.5"))
+# 补传节拍（秒）：TDengine 恢复后，积压最多在一个节拍内被取走
+SPOOL_RETRY_INTERVAL: Final[float] = float(os.getenv("SUBSCRIBER_SPOOL_RETRY_INTERVAL", "15"))
+# 单轮最多补传多少条：既限制一轮的内存/耗时，也避免长时间占着补传线程
+SPOOL_BATCH_LIMIT: Final[int] = int(os.getenv("SUBSCRIBER_SPOOL_BATCH_LIMIT", "500"))
+
+SPOOL: Final[IngestSpool] = IngestSpool(
+    SPOOL_DIR,
+    max_bytes=SPOOL_MAX_BYTES,
+    trim_ratio=SPOOL_TRIM_RATIO,
+    logger=LOGGER,
+)
+# 退出信号：main 的 finally 里置位，补传线程在下一个节拍醒来后自然结束
+SPOOL_STOP: Final[threading.Event] = threading.Event()
 
 
 # ==================== 2. 日志 ====================
@@ -937,6 +991,7 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
 
     STATS["accepted"] += 1
     writer: TdWriter = userdata["writer"]
+    spool: IngestSpool = userdata["spool"]
     if writer.write(ts, values):
         # 折算值全链路只在这里算一次：数学层（nan 语义）留给判定，协议层（哨兵值）留给出站
         math_references = reference_values(values)
@@ -972,6 +1027,90 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
                 LOGGER.info("告警判据统计: %s", userdata["judge"].stats)
         # 高频成功降到 debug；只在排查数据问题时才需要开
         LOGGER.debug("已入库: %s %s", ts, " ".join(f"{k}={v}" for k, v in values.items()))
+    else:
+        # ★ 入库失败：先把**原始报文**落到本地队列，再正常返回。
+        #   ⚠️ 顺序不能反：必须"落盘成功"之后才允许返回 —— 返回即代表 paho 会发 PUBACK、
+        #      broker 会删掉唯一副本；落盘失败还返回，就等于让这条数据凭空消失。
+        #   落盘成功 → 这条有持久副本，补传线程会重试入库（顺序/幂等/崩溃安全见 ingest_spool）。
+        if spool.append(payload):
+            STATS["spooled"] += 1
+            LOGGER.warning(
+                "[落盘队列] 入库失败，报文已落本地待补传（累计 %d 条）: %s",
+                STATS["spooled"], payload,
+            )
+        else:
+            # 落盘也失败（磁盘满/无权限）：这条真的丢了。append() 内部已打过 CRITICAL。
+            STATS["spool_lost"] += 1
+
+
+# ==================== 6b. 落盘队列补传 ====================
+
+def drain_spool_once(
+    writer: TdWriter,
+    spool: IngestSpool,
+    *,
+    batch_limit: int = SPOOL_BATCH_LIMIT,
+) -> int:
+    """把落盘队列里的一批报文补传进 TDengine，返回本轮成功条数。
+
+    语义（顺序与崩溃安全见 ingest_spool 头部）：
+      - 取批（原子改名）→ 逐条 parse + `writer.write` → 收尾（未成功的放回队首、删段）
+      - **第一条写失败就停**：说明 TDengine 整体不可用，没必要把整批都试一遍（每次失败都带重连）；
+        本条及之后（含未处理的尾部）原样放回，下一个节拍再试。
+      - 解析不了的行走 CRITICAL 后**丢弃**：入队前已校验过，落盘内容本不该解析失败；真遇到
+        说明队列文件被外部改坏，留着它只会永远卡住整个队列。
+      - ⚠️ 补传**不喂告警判据**（`AlarmJudge.on_sample` 有时间水位保护，迟到旧样本会被当重复丢掉）；
+        小时结算是从库里回读的，补传进去的行照样参与小时三态结论。
+      - ⚠️ 补传**不更新 `LAST_REFERENCE` 快照**：那是"最近一条已入库数据的折算出口"，
+        让迟到的旧样本把它往回拨没有意义。
+    """
+    if not spool.has_backlog():
+        return 0
+    batch = spool.take_batch()
+    if not batch:
+        return 0
+
+    head = batch[:batch_limit]
+    tail = batch[batch_limit:]
+    confirmed = 0
+    remaining: list[str] = []
+    for index, line in enumerate(head):
+        try:
+            ts, values = parse_payload(line)
+        except ValueError as exc:
+            LOGGER.critical(
+                "[落盘队列] 补传报文无法解析，丢弃这一条（不影响其余）: %s | %s", exc, line,
+            )
+            continue
+        if writer.write(ts, values):
+            confirmed += 1
+        else:
+            remaining = head[index:] + tail
+            break
+    spool.finish(remaining)
+    if confirmed:
+        STATS["drained"] += confirmed
+    if confirmed or remaining:
+        LOGGER.info(
+            "[落盘队列] 补传：成功 %d 条，放回 %d 条；剩余积压 %s",
+            confirmed, len(remaining), spool.backlog_stats(),
+        )
+    return confirmed
+
+
+def spool_retry_loop(writer: TdWriter, spool: IngestSpool) -> None:
+    """补传线程主体：启动先补一轮（清上次残留），之后每个节拍补一轮。
+
+    任何异常都只记日志、绝不退出线程 —— 它守护的是"不丢数据"，比它自己活着更重要。
+    用 `Event.wait` 而不是 `sleep`：main 退出时置位就能立刻结束，不必等满一个节拍。
+    """
+    while not SPOOL_STOP.is_set():
+        try:
+            drain_spool_once(writer, spool)
+        # 线程边界：任何异常都不能让补传线程静默死掉（下一轮继续）
+        except Exception:
+            LOGGER.exception("[落盘队列] 补传线程异常（下一轮继续）")
+        SPOOL_STOP.wait(SPOOL_RETRY_INTERVAL)
 
 
 # ==================== 7. 主流程 ====================
@@ -1000,6 +1139,27 @@ def main() -> None:
     writer = TdWriter()
     if not writer.connect():
         LOGGER.error("首次连接 TDengine 失败，将在收到数据时自动重试")
+
+    # 1a. 落盘队列：目录可写检查 + 补传线程
+    #     ⚠️ 目录必须**每实例一份**（多设备部署的关键约束，见配置区）。这一行是排查
+    #     "两个实例串味"的第一现场：它必须每实例互不相同。
+    if not SPOOL.check_writable():
+        LOGGER.critical(
+            "落盘队列目录不可写：写库失败时将没有副本可落（会丢数据）。目录: %s", SPOOL_DIR,
+        )
+    LOGGER.info(
+        "落盘队列已启用: 目录=%s（SUBSCRIBER_DATA_DIR=%s）；"
+        "写库失败先落盘、每 %.0fs 补传一轮，入库成功才删",
+        SPOOL_DIR,
+        SUBSCRIBER_DATA_DIR_ENV or "未设置，用默认 PROJECT_ROOT/data/subscriber",
+        SPOOL_RETRY_INTERVAL,
+    )
+    threading.Thread(
+        target=spool_retry_loop,
+        args=(writer, SPOOL),
+        name="ingest-spool-retry",
+        daemon=True,
+    ).start()
 
     # 1b. 初始化告警链路：判据状态从事件表折叠恢复 + 独立的告警表写入器
     alarm_writer = AlarmWriter(ALARM_TABLES)
@@ -1051,7 +1211,7 @@ def main() -> None:
         clean_session=MQTT_CLEAN_SESSION,
     )
     client.user_data_set({
-        "writer": writer, "judge": judge, "alarm_writer": alarm_writer,
+        "writer": writer, "judge": judge, "alarm_writer": alarm_writer, "spool": SPOOL,
     })
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
@@ -1071,6 +1231,7 @@ def main() -> None:
     except Exception:
         LOGGER.exception("MQTT 事件循环异常退出")
     finally:
+        SPOOL_STOP.set()          # 让补传线程在下一个节拍醒来后自然结束
         try:
             client.disconnect()
         except Exception as exc:
