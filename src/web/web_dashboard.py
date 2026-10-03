@@ -18,7 +18,7 @@ from typing import Any, Callable, Final, Optional
 from urllib.parse import quote
 
 import taosrest
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, redirect, request
 from werkzeug.exceptions import HTTPException
 
 # 让 src/common 能被导入：三种启动方式（python src/x.py、python -m src.x、任意 CWD）都能工作
@@ -425,20 +425,33 @@ def api_cache_clear() -> Response:
     return jsonify(cache.clear())
 
 
-@app.route("/")
-def index() -> Response:
-    """接口3：返回大屏页面（ECharts 画图）。"""
+def _render_page(template: str) -> Response:
+    """页面模板统一注入：刷新周期 / 测点表 / 面板表 / 测点数（都是契约现算，不写死）。"""
     html = (
-        HTML_PAGE
+        template
         .replace("__REFRESH_MS__", str(REFRESH_SECONDS * 1000))
         .replace("__REFRESH_SEC__", str(REFRESH_SECONDS))
         .replace("__POINTS_JSON__", POINT_VIEWS_JSON)
-            .replace("__PANELS_JSON__", PANELS_JSON)
-            # ⚠️ 测点数从契约现算，不写死：标题曾长期写着"8 测点"而契约早已是 9
-            #    （改契约时没人会记得改标题 —— 让它跟着 points.py 走就不会再错）
-            .replace("__POINT_COUNT__", str(len(POINTS)))
+        .replace("__PANELS_JSON__", PANELS_JSON)
+        .replace("__POINT_COUNT__", str(len(POINTS)))
     )
     return Response(html, mimetype="text/html")
+
+
+@app.route("/")
+def index() -> Response:
+    """首页：**监测数据表格**（默认视图，进入就能看见）。
+
+    视图切换在左上角那个按钮（`/chart`）——表格是"按窗口看数"，曲线是"看形状"，
+    两者共用同一套查询口径（`/api/report/range`），不会各说各话。
+    """
+    return _render_page(TABLE_PAGE)
+
+
+@app.route("/chart")
+def chart_page() -> Response:
+    """曲线视图（ECharts 多面板小倍数图）。由首页左上角的按钮进入，可切回表格。"""
+    return _render_page(HTML_PAGE)
 
 
 # ==================== 5. 报表接口（分钟/日/月/自由） ====================
@@ -491,6 +504,17 @@ def api_report_month() -> tuple[Response, int] | Response:
     )
 
 
+@app.route("/api/report/range")
+def api_report_range() -> tuple[Response, int] | Response:
+    """区间报表（页面表格/曲线共用）：区间由 start/end 给，粒度由 unit=1m|1h|1d 给。"""
+    return report_response(
+        "GET /api/report/range",
+        lambda: report.range_report(
+            request.args.get("start"), request.args.get("end"),
+            request.args.get("unit") or "1h", request_scope()),
+    )
+
+
 @app.route("/api/report/custom")
 def api_report_custom() -> tuple[Response, int] | Response:
     """自由报表：默认最近 24 小时，按小时聚合，可跨天/跨月。"""
@@ -502,15 +526,8 @@ def api_report_custom() -> tuple[Response, int] | Response:
 
 @app.route("/report")
 def report_page() -> Response:
-    """报表页面：4 类时间维度聚合，数据表格 + 覆盖率面板。
-
-    ⚠️ 本页**只有表格，没有图表**（ECharts 只挂在 `/` 实时大屏上）；
-    注释历史上写的是"折线图 + 数据表格"，与实现不符，已改回事实。
-    """
-    return Response(REPORT_PAGE.replace("__POINTS_JSON__", POINT_VIEWS_JSON)
-            # ⚠️ 测点数从契约现算，不写死：标题曾长期写着"8 测点"而契约早已是 9
-            #    （改契约时没人会记得改标题 —— 让它跟着 points.py 走就不会再错）
-            .replace("__POINT_COUNT__", str(len(POINTS))), mimetype="text/html")
+    """老入口：报表页已改到首页（`/`），这里只做重定向，保证旧链接不断。"""
+    return redirect("/")
 
 
 @app.route("/api/curve")
@@ -625,7 +642,7 @@ HTML_PAGE = """<!DOCTYPE html>
 <body>
   <h1>CEMS 烟气在线监测 · 曲线（__POINT_COUNT__ 测点）</h1>
   <div style="font-size:13px;margin-bottom:10px;">
-    <a href="/report" style="color:#38bdf8;text-decoration:none;">报表 →</a>
+    <a href="/" style="color:#38bdf8;text-decoration:none;">☰ 返回表格视图</a>
   </div>
   <div class="devices" id="devices"><span class="cap">设备：</span></div>
   <div class="modes" id="modes">
@@ -1160,379 +1177,308 @@ HTML_PAGE = """<!DOCTYPE html>
 
 # ==================== 6. 报表页面（4 类时间维度聚合 · 表格 + 覆盖率面板） ====================
 
-REPORT_PAGE = """<!DOCTYPE html>
+
+
+
+# ==================== 6. 主流程 ====================
+
+TABLE_PAGE = """<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CEMS 数据报表</title>
+<title>CEMS 监测数据（__POINT_COUNT__ 测点）</title>
 <style>
-  [hidden] { display:none !important; }   /* 同上：别让 display:flex 盖过 hidden */
-  body { margin:0; padding:20px; background:#0f172a; color:#e2e8f0; font-family:sans-serif; }
-  h1 { font-size:20px; margin:0 0 4px; }
-  .nav { font-size:13px; margin-bottom:14px; }
-  .nav a { color:#38bdf8; text-decoration:none; }
-  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-  .tab { padding:6px 16px; border:1px solid #334155; border-radius:8px; cursor:pointer;
-         background:#1e293b; color:#cbd5e1; font-size:13px; user-select:none; }
+  body { background:#0f172a; color:#e2e8f0; font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+         margin:0; padding:14px 18px 26px; }
+  h1 { font-size:19px; margin:0 0 12px; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .bar.second { margin-bottom:12px; }
+  .icon { padding:5px 11px; border:1px solid #334155; border-radius:6px; background:#1e293b; color:#cbd5e1;
+          cursor:pointer; font-size:14px; text-decoration:none; }
+  .icon:hover { border-color:#0ea5e9; color:#e2e8f0; }
+  select, input[type=datetime-local] { background:#1e293b; color:#e2e8f0; border:1px solid #334155;
+          border-radius:6px; padding:5px 8px; font-size:13px; }
+  .tab { padding:5px 12px; border:1px solid #334155; border-radius:6px; background:#1e293b;
+         color:#cbd5e1; font-size:13px; cursor:pointer; user-select:none; }
   .tab.active { background:#0ea5e9; border-color:#0ea5e9; color:#0f172a; font-weight:600; }
-  .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
-  .controls label { font-size:13px; color:#94a3b8; }
-  input, select { background:#1e293b; color:#e2e8f0; border:1px solid #334155;
-                  border-radius:6px; padding:5px 8px; font-size:13px; }
-  button { background:#0ea5e9; color:#0f172a; border:0; border-radius:6px; padding:6px 16px;
-           font-size:13px; font-weight:600; cursor:pointer; }
-  button:disabled { background:#475569; color:#94a3b8; cursor:not-allowed; }
-  #status { color:#94a3b8; font-size:13px; margin:8px 0; }
+  .label { font-size:13px; color:#94a3b8; }
+  .chk { font-size:13px; color:#cbd5e1; display:inline-flex; gap:5px; align-items:center; cursor:pointer; }
+  button.primary { background:#0ea5e9; color:#0f172a; border:0; border-radius:6px; padding:6px 14px;
+                   font-size:13px; font-weight:600; cursor:pointer; }
+  button.primary:disabled { background:#475569; color:#94a3b8; cursor:not-allowed; }
+  #tablewrap { overflow:auto; max-height:74vh; border:1px solid #334155; border-radius:8px; background:#0f172a; }
+  table { border-collapse:separate; border-spacing:0; font-size:13px; white-space:nowrap; }
+  th, td { border-right:1px solid #1e293b; border-bottom:1px solid #1e293b; padding:5px 10px; text-align:right; }
+  th { background:#182234; color:#cbd5e1; font-weight:600; text-align:center; position:sticky; z-index:3; }
+  thead tr:nth-child(1) th { top:0; }
+  thead tr:nth-child(2) th { top:29px; }
+  thead tr:nth-child(3) th { top:58px; }
+  th.time, td.time { position:sticky; left:0; z-index:4; background:#182234; text-align:left; }
+  td.time { background:#111c30; color:#e2e8f0; }
+  tbody tr:nth-child(even) td { background:#131e31; }
+  tbody tr:nth-child(even) td.time { background:#0f1929; }
+  td.grp { background:#111a2b; }
+  .eff { color:#4ade80; }
+  .over { color:#f87171; font-weight:600; }
+  .null { color:#64748b; }
+  #status { font-size:13px; color:#94a3b8; margin-top:10px; }
   #status.err { color:#f87171; }
-  .scroll { max-height:60vh; overflow:auto; border:1px solid #1e293b; border-radius:8px; }
-  table { width:100%; border-collapse:collapse; font-size:12px; }
-  th, td { border-bottom:1px solid #1e293b; padding:4px 8px; text-align:right; white-space:nowrap; }
-  th:first-child, td:first-child { text-align:left; position:sticky; left:0; background:#0f172a; }
-  th { color:#94a3b8; font-weight:600; position:sticky; top:0; background:#0f172a; }
-  /* 覆盖率卡片 */
-  .cards { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 12px; }
-  .card { background:#1e293b; border:1px solid #334155; border-radius:8px;
-          padding:10px 16px; min-width:120px; }
-  .card-label { font-size:12px; color:#94a3b8; margin-bottom:4px; }
-  .card-value { font-size:20px; font-weight:600; color:#e2e8f0; }
-  .card-value.gray { color:#94a3b8; }
-  .card-value.red { color:#f87171; }
-  /* 窗口状态三态 + 进行中：达标绿 / 超标红 / 数据不足灰（缺数据绝不画成绿）/ 进行中描边 */
-  .badge { display:inline-block; padding:2px 10px; border-radius:999px;
-           font-size:12px; font-weight:600; white-space:nowrap; }
-  .badge-ok { background:rgba(34,197,94,.15); color:#22c55e; }
-  .badge-over { background:rgba(248,113,113,.15); color:#f87171; }
-  .badge-ins { background:rgba(148,163,184,.18); color:#94a3b8; }
-  .badge-pending { background:transparent; border:1px solid #475569; color:#94a3b8; }
 </style>
 </head>
 <body>
-  <h1>CEMS 数据报表 · 时间维度聚合均值</h1>
-  <div class="nav"><a href="/">← 返回实时大屏</a></div>
-
-  <div class="tabs" id="tabs">
-    <div class="tab" data-tab="minute">分钟</div>
-    <div class="tab" data-tab="day">日</div>
-    <div class="tab" data-tab="month">月</div>
-    <div class="tab" data-tab="custom">自由</div>
+  <h1>CEMS 监测数据 · __POINT_COUNT__ 测点</h1>
+  <div class="bar">
+    <a class="icon" id="tochart" href="/chart" title="切换到曲线视图">☰</a>
+    <select id="device"></select>
+    <span class="tab active">常规监测因子</span>
+    <span style="width:10px"></span>
+    <span class="tab" data-unit="1d">日</span>
+    <span class="tab" data-unit="1h">小时</span>
+    <span class="tab" data-unit="1m">分钟</span>
+    <input type="datetime-local" id="start">
+    <span class="label">至</span>
+    <input type="datetime-local" id="end">
+    <button class="primary" id="query">🔍</button>
   </div>
-
-  <div class="controls">
-    <span data-ctl="minute">
-      <label>起</label> <input type="datetime-local" id="minute-start">
-      <label>止</label> <input type="datetime-local" id="minute-end">
-    </span>
-    <span data-ctl="day" hidden>
-      <label>日期</label> <input type="date" id="day-date">
-    </span>
-    <span data-ctl="month" hidden>
-      <label>年</label> <input type="number" id="month-year" style="width:90px">
-      <label>月</label> <select id="month-month"></select>
-    </span>
-    <span data-ctl="custom" hidden>
-      <label>起</label> <input type="datetime-local" id="custom-start">
-      <label>止</label> <input type="datetime-local" id="custom-end">
-    </span>
-    <button id="query">查询</button>
-    <button id="refresh">刷新</button>
-    <button id="export">导出 Excel</button>
+  <div class="bar second">
+    <span class="label">仅查看：</span>
+    <label class="chk"><input type="checkbox" id="f-over"> 超标 (<span id="c-over">0</span>)</label>
+    <label class="chk"><input type="checkbox" id="f-bad"> 异常 (<span id="c-bad">0</span>)</label>
+    <span style="width:14px"></span>
+    <label class="chk"><input type="checkbox" id="auto"> 开启自动刷新</label>
+    <span style="width:14px"></span>
+    <a class="icon" id="export" href="#" title="导出当前区间与粒度">⇤ 导出</a>
   </div>
-
-  <div id="status">选择时间范围后点「查询」</div>
-  <div class="cards" id="coverage" hidden>
-    <div class="card"><div class="card-label">整体覆盖率</div>
-      <div class="card-value" id="cov-overall">—</div></div>
-    <div class="card"><div class="card-label">覆盖率门限</div>
-      <div class="card-value" id="cov-threshold">—</div></div>
-    <div class="card"><div class="card-label">数据不足窗口数</div>
-      <div class="card-value gray" id="cov-insufficient">—</div></div>
-    <div class="card"><div class="card-label">断档数</div>
-      <div class="card-value red" id="cov-gap">—</div></div>
-  </div>
-  <div class="scroll">
-    <table id="table"><thead></thead><tbody></tbody></table>
-  </div>
+  <div id="tablewrap"><table id="tbl"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  <div id="status">加载中...</div>
 
 <script>
 (function() {
-  // 测点表由后端注入（真源 src/common/points.py），本页不再自己抄一份
+  var REFRESH_SEC = __REFRESH_SEC__;
   var POINTS = __POINTS_JSON__;
-  var statusEl = document.getElementById('status');
-  var queryBtn = document.getElementById('query');
-  var refreshBtn = document.getElementById('refresh');
-  var exportBtn = document.getElementById('export');
-  var activeTab = 'minute';
-  var busy = false;
+  var ZS_LIMIT = { dust:5, so2:35, nox:50 };       // 与后端 points.py 的限值同源口径
+  var O2_FOR_ZS_MAX = 19;
+  var GROUPS = [
+    { title:'颗粒物',   unit:'mg/m3', key:'dust' },
+    { title:'二氧化硫', unit:'mg/m3', key:'so2'  },
+    { title:'氮氧化物', unit:'mg/m3', key:'nox'  }
+  ];
+  var PLAINS = ['o2', 'velocity', 'temp', 'humidity', 'pressure'];
+  var unit = '1h';            // 1m | 1h | 1d
+  var scope = '';             // plant/device，空 = 后端默认设备
+  var defaultScope = '';
+  var rows = [];              // 最近一次查询回来的窗口
+  var filtered = [];
+  var timer = null;
 
-  // ---- 折算值 / 超标判据（口径与实时大屏一致：折算 = 实测 × 15 / (21 − O2)，基准氧 6%）----
-  var ZS_KEYS = ['dust', 'so2', 'nox'];
-  var ZS_LABELS = { dust: '颗粒物', so2: 'SO2', nox: 'NOx' };
-  var ZS_LIMITS = { dust: 5, so2: 35, nox: 50 };   // mg/m3
-  var O2_FOR_ZS_MAX = 19;                          // O2 > 19% 不折算
+  var el = function(id) { return document.getElementById(id); };
+  var meta = {};
+  POINTS.forEach(function(p) { meta[p.key] = p; });
 
-  function isFiniteNum(v) {
-    return typeof v === 'number' && isFinite(v);
+  function fmt(v, digits) {
+    if (v === null || v === undefined || (typeof v === 'number' && !isFinite(v))) { return null; }
+    return String(Math.round(v * 1000) / 1000);
   }
-
   function toConverted(key, measured, o2) {
-    if (!isFiniteNum(measured) || !isFiniteNum(o2)) { return null; }
-    if (o2 > O2_FOR_ZS_MAX) { return null; }
-    var denominator = 21 - o2;
-    if (denominator <= 0) { return null; }
-    return measured * 15 / denominator;
+    if (measured === null || measured === undefined) { return null; }
+    if (o2 === null || o2 === undefined) { return null; }
+    if (o2 >= O2_FOR_ZS_MAX) { return null; }
+    return measured * 15 / (21 - o2);
   }
-
-  function fmtNum(v) {
-    if (!isFiniteNum(v)) { return '—'; }
-    return String(Math.round(v * 100) / 100);
-  }
-
-  // 窗口状态（三态 + 进行中）。顺序不能乱：
-  //   pending（窗口未结束）→ 进行中；
-  //   insufficient（覆盖率 < 门限）→ 数据不足（灰），**既不判达标也不判超标**；
-  //   任一浓度折算值 > 限值（严格大于，等于算达标）→ 超标（红）；
-  //   浓度值全部算不出折算 → 同样按数据不足（灰），没有浓度依据不能给绿；
-  //   其余 → 达标（绿）。
-  function windowStatus(pt) {
-    if (pt.pending) { return { cls: 'badge-pending', text: '进行中' }; }
-    if (pt.insufficient) { return { cls: 'badge-ins', text: '数据不足' }; }
-    var over = false;
-    var judged = 0;
-    ZS_KEYS.forEach(function(k) {
-      var zs = toConverted(k, pt[k], pt.o2);
-      if (zs !== null) {
-        judged += 1;
-        if (zs > ZS_LIMITS[k]) { over = true; }
-      }
-    });
-    if (over) { return { cls: 'badge-over', text: '超标' }; }
-    if (judged === 0) { return { cls: 'badge-ins', text: '数据不足' }; }
-    return { cls: 'badge-ok', text: '达标' };
-  }
-
-  // 状态徽标悬停提示：逐污染物给出 折算 / 限值，方便核对
-  function statusTitle(pt) {
-    return ZS_KEYS.map(function(k) {
-      return ZS_LABELS[k] + ' 折算 ' + fmtNum(toConverted(k, pt[k], pt.o2))
-        + ' / 限值 ' + ZS_LIMITS[k];
-    }).join('\\n');
-  }
-
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function toLocalInput(d) {
     return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
       + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
-  function val(id) { return document.getElementById(id).value; }
-
-  function initControls() {
+  function labelOf(ts) {
+    // 与参考格式一致：分钟 'MM-DD HH:MM'、小时 'MM-DD HH~HH'、日 'MM-DD'
+    var s = String(ts);
+    if (unit === '1d') { return s.slice(5, 10); }
+    if (unit === '1h') {
+      var hh = parseInt(s.slice(11, 13), 10);
+      if (hh === 0) { return s.slice(5, 10) + ' 00~01'; }
+      return s.slice(5, 10) + ' ' + pad2(hh) + '~' + pad2(hh + 1);
+    }
+    return s.slice(5, 16);
+  }
+  function defaultsFor(u) {
     var now = new Date();
-    var HOUR_MS = 3600 * 1000;
-    document.getElementById('minute-end').value = toLocalInput(now);
-    document.getElementById('minute-start').value = toLocalInput(new Date(now.getTime() - HOUR_MS));
-    document.getElementById('custom-end').value = toLocalInput(now);
-    document.getElementById('custom-start').value =
-      toLocalInput(new Date(now.getTime() - 24 * HOUR_MS));
-    document.getElementById('day-date').value =
-      now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
-    document.getElementById('month-year').value = now.getFullYear();
-    var sel = document.getElementById('month-month');
-    for (var m = 1; m <= 12; m++) {
-      var opt = document.createElement('option');
-      opt.value = String(m);
-      opt.textContent = m + ' 月';
-      if (m === now.getMonth() + 1) { opt.selected = true; }
-      sel.appendChild(opt);
-    }
+    var days = (u === '1d') ? 9 : 1;
+    el('start').value = toLocalInput(new Date(now.getTime() - days * 24 * 3600 * 1000));
+    el('end').value = toLocalInput(now);
+  }
+  function scopeQuery() {
+    if (!scope) { return ''; }
+    var parts = scope.split('/');
+    return 'plant=' + encodeURIComponent(parts[0]) + '&device=' + encodeURIComponent(parts[1]);
+  }
+  function withScope(url) {
+    var q = scopeQuery();
+    if (!q) { return url; }
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + q;
   }
 
-  // 当前 Tab 对应的查询参数；查询和导出共用，保证"屏幕上看到的 = 导出文件里的"
-  function currentParams() {
-    var enc = encodeURIComponent;
-    if (activeTab === 'minute') {
-      return 'start=' + enc(val('minute-start')) + '&end=' + enc(val('minute-end'));
-    }
-    if (activeTab === 'day') {
-      return 'date=' + enc(val('day-date'));
-    }
-    if (activeTab === 'month') {
-      return 'year=' + enc(val('month-year')) + '&month=' + enc(val('month-month'));
-    }
-    return 'start=' + enc(val('custom-start')) + '&end=' + enc(val('custom-end'));
-  }
-
-  function buildUrl() {
-    return '/api/report/' + activeTab + '?' + currentParams();
-  }
-
-  function buildExportUrl() {
-    return '/api/report/export?type=' + activeTab + '&' + currentParams();
-  }
-
-  function showStatus(msg, isErr) {
-    statusEl.textContent = msg;
-    statusEl.className = isErr ? 'err' : '';
-  }
-
-  // 查询/导出期间禁用全部按钮，并按动作显示"查询中…"/"导出中…"
-  function setBusy(on, action) {
-    busy = on;
-    queryBtn.disabled = on;
-    refreshBtn.disabled = on;
-    exportBtn.disabled = on;
-    queryBtn.textContent = (on && action === 'query') ? '查询中…' : '查询';
-    exportBtn.textContent = (on && action === 'export') ? '导出中…' : '导出 Excel';
-  }
-
-  // 表格是唯一主视图：窗口内没数据的测点显示 —（不能显示 0，否则和"值就是 0"混淆）
-  function renderTable(points) {
-    var head = '<tr><th>时间</th>';
-    POINTS.forEach(function(p) {
-      head += '<th>' + p.label + (p.unit ? ' (' + p.unit + ')' : '') + '</th>';
+  // ---- 表头：两级合并（污染物 = 上报值 -> 浓度(标干值/折算值) + 设备标记；其余 = 监测值 + 设备标记）----
+  function buildHead() {
+    var r1 = '<tr><th class="time" rowspan="3">监测时间</th>';
+    GROUPS.forEach(function(g) {
+      r1 += '<th colspan="3">' + g.title + '(' + g.unit + ')</th>';
     });
-    head += '<th>采样条数</th><th>状态</th></tr>';
-    document.querySelector('#table thead').innerHTML = head;
+    PLAINS.forEach(function(k) { r1 += '<th colspan="2">' + meta[k].label + '(' + meta[k].unit + ')</th>'; });
+    var r2 = '<tr>';
+    GROUPS.forEach(function() { r2 += '<th colspan="3">上报值</th>'; });
+    PLAINS.forEach(function() { r2 += '<th rowspan="2">监测值</th><th rowspan="2">设备标记</th>'; });
+    var r3 = '<tr>';
+    GROUPS.forEach(function() { r3 += '<th colspan="2">浓度</th><th>设备标记</th>'; });
+    r1 += '</tr>'; r2 += '</tr>'; r3 += '</tr>';
+    el('thead').innerHTML = r1 + r2 + r3;
+  }
 
-    var rows = '';
-    points.forEach(function(pt) {
-      rows += '<tr><td>' + pt.ts + '</td>';
-      POINTS.forEach(function(p) {
-        var v = pt[p.key];
-        rows += '<td>' + (v === null || v === undefined ? '—' : v) + '</td>';
+  function markCell(state) {
+    if (state === 'over') { return '<span class="over">超标</span>'; }
+    if (state === 'null') { return '<span class="null">数据不足</span>'; }
+    return '<span class="eff">数据有效</span>';
+  }
+  function cell(v) {
+    var s = fmt(v);
+    return s === null ? '<span class="null">--</span>' : s;
+  }
+
+  function rowFlags(r) {
+    var over = false, bad = false;
+    var o2 = r.o2;
+    GROUPS.forEach(function(g) {
+      var measured = r[g.key];
+      if (measured === null || measured === undefined) { bad = true; return; }
+      var zs = toConverted(g.key, measured, o2);
+      if (zs !== null && zs > ZS_LIMIT[g.key]) { over = true; }
+    });
+    PLAINS.forEach(function(k) { if (r[k] === null || r[k] === undefined) { bad = true; } });
+    if (r.insufficient) { bad = true; }
+    return { over: over, bad: bad };
+  }
+
+  function render() {
+    var over = 0, bad = 0;
+    rows.forEach(function(r) { var f = rowFlags(r); if (f.over) { over++; } if (f.bad) { bad++; } });
+    el('c-over').textContent = over;
+    el('c-bad').textContent = bad;
+    var onlyOver = el('f-over').checked, onlyBad = el('f-bad').checked;
+    filtered = rows.filter(function(r) {
+      var f = rowFlags(r);
+      if (onlyOver && !f.over) { return false; }
+      if (onlyBad && !f.bad) { return false; }
+      return true;
+    });
+    var html = '';
+    filtered.forEach(function(r) {
+      html += '<tr><td class="time">' + labelOf(r.ts) + '</td>';
+      var o2 = r.o2;
+      GROUPS.forEach(function(g) {
+        var measured = r[g.key];
+        var zs = toConverted(g.key, measured, o2);
+        var state = (measured === null || measured === undefined) ? 'null'
+                  : ((zs !== null && zs > ZS_LIMIT[g.key]) ? 'over' : 'eff');
+        html += '<td class="grp">' + cell(measured) + '</td><td class="grp">' + cell(zs) + '</td>'
+              + '<td class="grp">' + markCell(state) + '</td>';
       });
-      rows += '<td>' + (pt.n === null || pt.n === undefined ? '—' : pt.n) + '</td>';
-      var st = windowStatus(pt);
-      rows += '<td style="text-align:center;"><span class="badge ' + st.cls
-        + '" title="' + statusTitle(pt) + '">' + st.text + '</span></td></tr>';
+      PLAINS.forEach(function(k) {
+        var v = r[k];
+        var state = (v === null || v === undefined) ? 'null' : 'eff';
+        html += '<td>' + cell(v) + '</td><td>' + markCell(state) + '</td>';
+      });
+      html += '</tr>';
     });
-    document.querySelector('#table tbody').innerHTML = rows;
+    el('tbody').innerHTML = html || '<tr><td colspan="20" style="text-align:center;color:#64748b">该区间没有数据</td></tr>';
   }
 
-  // 覆盖率卡片：overall/threshold 按百分比显示（overall 为 null 时显示 —），
-  // insufficient_windows / gap_count 直接显示接口给的计数，不重算。
-  function pctText(v) {
-    return isFiniteNum(v) ? (v * 100).toFixed(1) + '%' : '—';
-  }
-  function countText(v) {
-    return (v === null || v === undefined) ? '—' : String(v);
-  }
-  function renderCoverage(cov) {
-    var el = document.getElementById('coverage');
-    if (!cov) { el.hidden = true; return; }
-    el.hidden = false;
-    document.getElementById('cov-overall').textContent = pctText(cov.overall);
-    document.getElementById('cov-threshold').textContent = pctText(cov.threshold);
-    document.getElementById('cov-insufficient').textContent =
-      countText(cov.insufficient_windows);
-    document.getElementById('cov-gap').textContent = countText(cov.gap_count);
-  }
+  function showStatus(msg, err) { el('status').className = err ? 'err' : ''; el('status').textContent = msg; }
 
-  function query() {
-    if (busy) { return; }
-    setBusy(true, 'query');
+  function refresh() {
+    var url = withScope('/api/report/range?unit=' + unit
+      + '&start=' + encodeURIComponent(el('start').value)
+      + '&end=' + encodeURIComponent(el('end').value));
+    el('query').disabled = true;
     showStatus('查询中…', false);
-    fetch(buildUrl())
-      .then(function(res) {
-        return res.json().then(function(body) { return { ok: res.ok, body: body }; });
-      })
-      .then(function(r) {
-        if (!r.ok) {
-          var extra = r.body.trace_id ? '（追踪号 ' + r.body.trace_id + '）' : '';
-          showStatus('查询失败：' + (r.body.error || '未知错误') + extra, true);
-          return;
-        }
-        var points = r.body.points || [];
-        renderTable(points);
-        renderCoverage(r.body.coverage);
-        if (points.length) {
-          showStatus('共 ' + points.length + ' 个窗口（' + r.body.unit + '）　'
-            + r.body.start + ' ~ ' + r.body.end, false);
-        } else {
-          showStatus('该时间范围内没有数据（' + r.body.start + ' ~ ' + r.body.end + '）', false);
-        }
-      })
-      .catch(function() {
-        showStatus('后端连不上（确认 web_dashboard.py 在跑）', true);
-      })
-      .finally(function() { setBusy(false); });
+    fetch(url).then(function(res) {
+      return res.json().then(function(body) { return { ok: res.ok, body: body }; });
+    }).then(function(r) {
+      if (!r.ok) { showStatus('查询失败：' + (r.body.error || '未知错误'), true); return; }
+      rows = r.body.points || [];
+      render();
+      var cov = r.body.coverage || {};
+      var covText = (cov.overall === undefined || cov.overall === null) ? ''
+        : '　覆盖率 ' + Math.round(cov.overall * 1000) / 10 + '%（门限 ' + Math.round((cov.threshold || 0) * 100) + '%，不足 ' + (cov.insufficient_windows || 0) + ' 个窗口）';
+      showStatus(rows.length + ' 个窗口　' + r.body.start + ' ~ ' + r.body.end + covText
+        + '　设备 ' + (scope || defaultScope), false);
+    }).catch(function() {
+      showStatus('后端连不上（确认 web_dashboard.py 在跑）', true);
+    }).finally(function() { el('query').disabled = false; });
   }
 
-  // 导出复用当前参数：屏幕上看到的窗口范围，就是导出文件里的范围
-  function exportExcel() {
-    if (busy) { return; }
-    setBusy(true, 'export');
-    showStatus('导出中…', false);
-    fetch(buildExportUrl())
-      .then(function(res) {
-        if (!res.ok) {
-          // 参数非法/查库失败都是 JSON（不是 xlsx），按错误展示，绝不当文件下载
-          return res.json()
-            .then(function(body) {
-              var extra = body.trace_id ? '（追踪号 ' + body.trace_id + '）' : '';
-              showStatus('导出失败：' + (body.error || '未知错误') + extra, true);
-            })
-            .catch(function() { showStatus('导出失败：HTTP ' + res.status, true); });
-        }
-        var disposition = res.headers.get('Content-Disposition') || '';
-        return res.blob().then(function(blob) { saveBlob(blob, filenameFrom(disposition)); });
-      })
-      .catch(function() {
-        showStatus('后端连不上（确认 web_dashboard.py 在跑）', true);
-      })
-      .finally(function() { setBusy(false); });
-  }
-
-  // 中文文件名在 Content-Disposition 的 filename* 里（RFC 5987），要解码再用
-  function filenameFrom(disposition) {
-    var matched = /filename\\*=UTF-8''([^;]+)/i.exec(disposition);
-    if (matched) { return decodeURIComponent(matched[1]); }
-    var plain = /filename="([^"]+)"/i.exec(disposition);
-    return plain ? plain[1] : 'CEMS_report.xlsx';
-  }
-
-  function saveBlob(blob, filename) {
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    showStatus('已导出：' + filename, false);
-  }
-
-  function switchTab(name) {
-    activeTab = name;
-    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(el) {
-      var on = el.getAttribute('data-tab') === name;
-      el.className = 'tab' + (on ? ' active' : '');
+  function setUnit(next) {
+    unit = next;
+    Array.prototype.forEach.call(document.querySelectorAll('.tab[data-unit]'), function(t) {
+      t.className = 'tab' + (t.getAttribute('data-unit') === next ? ' active' : '');
     });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-ctl]'), function(el) {
-      el.hidden = el.getAttribute('data-ctl') !== name;
-    });
-    query();
+    defaultsFor(next);
+    refresh();
+  }
+  function syncExport() {
+    el('export').href = withScope('/api/report/export?type=range&unit=' + unit
+      + '&start=' + encodeURIComponent(el('start').value)
+      + '&end=' + encodeURIComponent(el('end').value));
+  }
+  function autoTick() {
+    if (!el('auto').checked) { return; }
+    refresh();
   }
 
-  document.getElementById('tabs').addEventListener('click', function(ev) {
-    var tab = ev.target.getAttribute && ev.target.getAttribute('data-tab');
-    if (tab) { switchTab(tab); }
+  el('query').addEventListener('click', function() { refresh(); syncExport(); });
+  document.querySelectorAll('.tab[data-unit]').forEach(function(t) {
+    t.addEventListener('click', function() { setUnit(t.getAttribute('data-unit')); syncExport(); });
   });
-  queryBtn.addEventListener('click', query);
-  refreshBtn.addEventListener('click', query);   // 手动刷新：不自动轮询
-  exportBtn.addEventListener('click', exportExcel);
+  el('f-over').addEventListener('change', render);
+  el('f-bad').addEventListener('change', render);
+  el('auto').addEventListener('change', function() {
+    if (timer) { clearInterval(timer); timer = null; }
+    if (el('auto').checked) { timer = setInterval(autoTick, REFRESH_SEC * 1000); }
+  });
+  el('export').addEventListener('click', function() { syncExport(); });
+  el('tochart').addEventListener('click', function(ev) {
+    ev.preventDefault();
+    var parts = scope.split('/');
+    var q = 'unit=' + unit + '&start=' + encodeURIComponent(el('start').value)
+      + '&end=' + encodeURIComponent(el('end').value);
+    if (scope) { q += '&plant=' + encodeURIComponent(parts[0]) + '&device=' + encodeURIComponent(parts[1]); }
+    window.location.href = '/chart?' + q;
+  });
 
-  initControls();
-  switchTab('minute');
+  fetch('/api/devices').then(function(res) { return res.json(); }).then(function(body) {
+    defaultScope = body.default_scope || '';
+    var list = body.devices || [];
+    var sel = el('device');
+    list.forEach(function(item) {
+      var opt = document.createElement('option');
+      opt.value = item.plant + '/' + item.device;
+      opt.textContent = item.device + '（' + item.plant + '）';
+      if (opt.value === defaultScope || (list.length === 1 && !defaultScope)) { opt.selected = true; }
+      sel.appendChild(opt);
+    });
+    scope = sel.value || '';
+    sel.addEventListener('change', function() { scope = sel.value; refresh(); syncExport(); });
+  }).catch(function() { showStatus('取设备列表失败（/api/devices）', true); });
+
+  buildHead();
+  defaultsFor(unit);
+  setUnit(unit);
+  syncExport();
 })();
 </script>
 </body>
 </html>
 """
 
-
-# ==================== 6. 主流程 ====================
 
 def main() -> None:
     """启动 Web 服务（阻塞运行）。"""
