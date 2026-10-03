@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""排放超标告警 · 线上验收（八服务在跑时执行；全部证据来自真库、由容器自己写入）。
 
-⚠️ 本脚本不在仓库内（硬约束只允许改 subscriber_to_td.py / src/common/ / .env.example /
-   docker-compose.yml）。它只读库 + 打印，不写任何数据。
+⚠️ 本脚本**只读**：查库 + 打印判定，不写任何数据、不改任何状态（可反复跑）。
 
 检查项：
   L1 告警三张表存在，且 cems_data 仍然只有 9 个物理量列（**没有**加折算列）
@@ -21,8 +20,9 @@ r"""排放超标告警 · 线上验收（八服务在跑时执行；全部证据
   （两台设备各贡献一批行，一边多一边少也能凑出"相等"）。
 
 用法：
-  $env:PYTHONIOENCODING="utf-8"; $env:PYTHONPATH="F:\Project1\cems-data-pipeline"
-  python verify_alarm_live.py [--since "2026-10-02 18:26:00"] [--device device1]
+  $env:PYTHONIOENCODING="utf-8"
+  cd F:\Project1\cems-data-pipeline
+  python scripts\verify_alarm_live.py [--since "2026-10-02 18:26:00"] [--device device1]
 """
 
 from __future__ import annotations
