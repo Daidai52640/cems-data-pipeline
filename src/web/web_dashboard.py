@@ -48,10 +48,26 @@ TD_STABLE: Final[str] = os.getenv("TD_STABLE", "cems_data")
 # 列名与顺序统一来自 src/common/points.py，这里不再抄一份。
 POINTS: Final[tuple[str, ...]] = COLUMNS
 
-# ---- 测点在图表上的呈现方式（中文名 / Y 轴分组 / 配色）----
-# 列名和单位来自测点契约，这里只补"画在图上长什么样"。
-# 实时大屏和报表页共用同一份，注入前端，避免页面上再各抄一份测点表。
-# Y 轴分组：0=浓度(SO2/NOx/颗粒物) 1=O2/湿度 2=流量/温度/压力 3=流速
+# ---- 图表面板（small multiples）：一个量纲一根轴，绝不共用刻度 ----
+# ★ 为什么不是一个图里挂 4 根 Y 轴（改造前的做法，实测"乱"）：
+#   9 个测点的量程差 3 个数量级（流量 0~65000、压力 85~105），
+#   把量程差得远的曲线塞进同一根轴，小量程的那条会被压成一条直线（看不出任何变化），
+#   左右挂 4 根轴又会引出"哪条线读哪根轴"的误读 —— 这是数据可视化里公认的坑
+#   （双重轴图的批评见 Datawrapper《Dual-axis charts》：easily misread；ECharts 手册也只
+#    建议左右各一根轴）。所以改成**按量纲拆成多个上下排列的面板**，每格一根自己的 Y 轴，
+#   横轴共用并联动 —— 形状可比、数值可读，且不存在"读错轴"。
+#
+# 分组依据是**单位 + 量程数量级**（列名/单位来自测点契约，这里只声明怎么分组与配色）：
+CHART_PANELS: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
+    ("污染物浓度", "mg/m3", ("dust", "so2", "nox")),
+    ("氧含量 / 湿度", "%", ("o2", "humidity")),
+    ("烟气流量", "m3/h", ("flow",)),
+    ("烟气流速", "m/s", ("velocity",)),
+    ("烟气温度", "degC", ("temp",)),
+    ("烟气压力", "kPa", ("pressure",)),
+)
+
+# 测点在图表上的呈现方式：中文名 / 所属面板下标 / 配色
 POINT_PRESENTATION: Final[dict[str, tuple[str, int, str]]] = {
     "so2": ("SO2", 0, "#ef4444"),
     "nox": ("NOx", 0, "#3b82f6"),
@@ -59,9 +75,9 @@ POINT_PRESENTATION: Final[dict[str, tuple[str, int, str]]] = {
     "o2": ("O2", 1, "#22c55e"),
     "humidity": ("湿度", 1, "#06b6d4"),
     "flow": ("流量", 2, "#84cc16"),
-    "temp": ("温度", 2, "#f59e0b"),
-    "pressure": ("压力", 2, "#ec4899"),
     "velocity": ("流速", 3, "#14b8a6"),
+    "temp": ("温度", 4, "#f59e0b"),
+    "pressure": ("压力", 5, "#ec4899"),
 }
 
 
@@ -80,6 +96,27 @@ def build_point_views_json() -> str:
 
 
 POINT_VIEWS_JSON: Final[str] = build_point_views_json()
+
+
+def build_panels_json() -> str:
+    """生成前端用的面板定义（JSON）。契约里的测点必须**恰好**落在某一个面板里，否则报错。"""
+    placed = [key for _title, _unit, keys in CHART_PANELS for key in keys]
+    missing = [point.column for point in CONTRACT_POINTS if point.column not in placed]
+    if missing:
+        raise RuntimeError(f"测点 {missing} 没有被分到任何图表面板（CHART_PANELS）")
+    if len(placed) != len(set(placed)):
+        raise RuntimeError("CHART_PANELS 里有测点被分到了两个面板")
+    # 每个面板的轴名用契约里的单位，不在这里另写一份单位表
+    units = {point.column: point.unit for point in CONTRACT_POINTS}
+    panels = [
+        {"title": title, "unit": unit, "points": list(keys),
+         "unitsMatch": all(units[key] == unit for key in keys)}
+        for title, unit, keys in CHART_PANELS
+    ]
+    return json.dumps(panels, ensure_ascii=False)
+
+
+PANELS_JSON: Final[str] = build_panels_json()
 
 # ---- 查询与刷新 ----
 QUERY_MINUTES: Final[int] = int(os.getenv("QUERY_MINUTES", "10"))        # 查询最近 N 分钟数据
@@ -148,7 +185,7 @@ def safe_error(exc: Exception, where: str) -> tuple[dict[str, Any], int]:
 
 # ==================== 3. 数据查询 ====================
 
-def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, ...]]:
+def query_recent(minutes: int = QUERY_MINUTES, scope: str = "") -> list[tuple[Any, ...]]:
     """查 TDengine 最近 N 分钟数据，按时间升序返回 [(ts, 各测点值...), ...]。
 
     查询失败抛 TdQueryError（由接口层兜住，不影响 Web 进程存活）。
@@ -170,7 +207,8 @@ def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, ...]]:
         conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
         cur = conn.cursor()
         columns = ", ".join(POINTS)
-        plant, device = cache.DEVICE_SCOPE_PARTS
+        # 请求级设备维度（空 = 本实例配置的那台）；非法值抛 ValueError，由路由翻成 400
+        plant, device = cache.scope_split(scope)
         cur.execute(
             f"SELECT ts, {columns} FROM {TD_DB}.{TD_STABLE} "
             f"WHERE ts >= now - {minutes}m AND ts <= now "
@@ -195,6 +233,59 @@ def query_recent(minutes: int = QUERY_MINUTES) -> list[tuple[Any, ...]]:
 app = Flask(__name__)
 
 
+def request_scope() -> str:
+    """从查询参数取设备维度（`?plant=&device=`），返回 `plant/device` 串。
+
+    - 都不传 ⇒ 本实例配置的那台设备（`TD_PLANT/TD_DEVICE`），单设备部署行为不变；
+    - 只传 `device` ⇒ plant 用本实例配置值补齐（前端只需要传一台设备名）；
+    - 非法值抛 `ValueError`，由路由翻成 400 —— **不静默回落**：
+      静默回落会让"我想看 device2，页面却给了 device1 的数据"这种错看不出来。
+    """
+    return cache.scope_from_request(request.args.get("plant"), request.args.get("device"))
+
+
+def query_devices() -> list[dict[str, str]]:
+    """库里**有数据的**全部 (plant, device)，供页面上的设备选择器用。
+
+    ★ 为什么用 `SELECT DISTINCT plant, device` 而不是 `SHOW TABLES`：
+      子表会留下空壳（C19 血缘演练的 `trace_run*` 表就是空表），
+      按行 DISTINCT 只返回真正有数据的设备 —— 实测正是 plant1/device1 与 plant2/device2 两台。
+    """
+    conn: Any = None
+    try:
+        conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
+        cur = conn.cursor()
+        cur.execute(f"SELECT DISTINCT plant, device FROM {TD_DB}.{TD_STABLE}")
+        rows = list(cur.fetchall())
+    except Exception as exc:
+        LOGGER.error("查询设备列表失败: %s", exc)
+        raise TdQueryError(str(exc)) from exc
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception as exc:
+                LOGGER.debug("关闭 TDengine 连接时出错（忽略）: %s", exc)
+    devices = [{"plant": str(row[0]), "device": str(row[1])} for row in rows]
+    # 本实例配置的那台排在最前，其余按名称稳定排序 —— 选择器顺序别每次刷新都跳
+    # ⚠️ 设备维度的唯一真源在 cache（`TD_PLANT/TD_DEVICE` 是那边的配置项），这里不要另读环境变量
+    default_plant, default_device = cache.DEVICE_SCOPE_PARTS
+    devices.sort(key=lambda item: (item["plant"] != default_plant or item["device"] != default_device,
+                                   item["plant"], item["device"]))
+    return devices
+
+
+@app.route("/api/devices")
+def api_devices() -> tuple[Response, int] | Response:
+    """接口0：库里有数据的设备清单 + 本实例默认设备（页面选择器用，直连 TDengine 不缓存）。"""
+    try:
+        devices = query_devices()
+    except TdQueryError as exc:
+        body, _status = safe_error(exc, "GET /api/devices")
+        return jsonify({**body, "devices": [], "default_scope": cache.DEVICE_SCOPE}), 503
+    return jsonify({"devices": devices, "default_scope": cache.DEVICE_SCOPE})
+
+
 @app.route("/api/data")
 def api_data() -> tuple[Response, int] | Response:
     """接口1：返回最近数据（JSON），前端每 REFRESH_SECONDS 秒调用一次。
@@ -207,25 +298,30 @@ def api_data() -> tuple[Response, int] | Response:
     两者都来自刚读出来的真实行，不额外查库、不依赖容器墙钟。
     """
     try:
-        rows = query_recent()
+        scope = request_scope()
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    try:
+        rows = query_recent(QUERY_MINUTES, scope)
     except TdQueryError as exc:
         # 查库失败不崩服务：返回空数据 + 通用提示，细节只在服务端日志里
         body, _ = safe_error(exc, "GET /api/data")
-        empty: dict[str, Any] = {"ts": [], **body}
+        empty: dict[str, Any] = {"ts": [], "scope": scope, **body}
         empty.update({name: [] for name in POINTS})
         return jsonify(empty), 503
 
     if rows:
         timestamps = [cache.ts_text(row[0]) for row in rows]
-        cache.note_data_ts(max(timestamps))
+        cache.note_data_ts(max(timestamps), scope)
         # ⚠️ 这里**不能**先按"是否比边界旧"过滤：分钟最大值必须覆盖**每一个**观测到的分钟。
         # 先前加了这道过滤，后果是"窗口里新来的那条恰好比边界新"就被丢掉，
         # 该分钟的最大值不变 → 缓存不失效（实测 200 s 内测不到刷新）。
         # 不做过滤也不会误杀：比边界新的分钟本来就不满足"窗口已闭合"，
         # 压根不会进缓存，它的最大值怎么变都无所谓（见 _closure）。
-        cache.note_minute_max(timestamps)
+        cache.note_minute_max(timestamps, scope)
 
-    payload: dict[str, Any] = {"ts": [str(row[0]) for row in rows]}   # 时间轴
+    payload: dict[str, Any] = {"ts": [str(row[0]) for row in rows],   # 时间轴
+                              "scope": scope}                      # 这两个数来自哪台设备
     for index, name in enumerate(POINTS, start=1):                    # 各测点序列
         payload[name] = [row[index] for row in rows]
     return jsonify(payload)
@@ -337,6 +433,7 @@ def index() -> Response:
         .replace("__REFRESH_MS__", str(REFRESH_SECONDS * 1000))
         .replace("__REFRESH_SEC__", str(REFRESH_SECONDS))
         .replace("__POINTS_JSON__", POINT_VIEWS_JSON)
+            .replace("__PANELS_JSON__", PANELS_JSON)
             # ⚠️ 测点数从契约现算，不写死：标题曾长期写着"8 测点"而契约早已是 9
             #    （改契约时没人会记得改标题 —— 让它跟着 points.py 走就不会再错）
             .replace("__POINT_COUNT__", str(len(POINTS)))
@@ -354,6 +451,10 @@ def report_response(
     """报表接口统一出口：参数错 400（文案直接可用），查库错走 safe_error 转 503。"""
     try:
         return jsonify(builder())
+    except ValueError as exc:
+        # 设备维度不合法（`request_scope`）与时间参数不合法同一层级：都是 400
+        LOGGER.warning("[%s] 参数不合法: %s", where, exc)
+        return jsonify({"error": str(exc)}), 400
     except report.ReportParamError as exc:
         LOGGER.warning("[%s] 参数不合法: %s", where, exc)
         return jsonify({"error": str(exc)}), 400
@@ -368,7 +469,7 @@ def api_report_minute() -> tuple[Response, int] | Response:
     """分钟报表：默认最近 1 小时，按分钟聚合均值。"""
     return report_response(
         "GET /api/report/minute",
-        lambda: report.minute_report(request.args.get("start"), request.args.get("end")),
+        lambda: report.minute_report(request.args.get("start"), request.args.get("end"), request_scope()),
     )
 
 
@@ -377,7 +478,7 @@ def api_report_day() -> tuple[Response, int] | Response:
     """日报表：默认今天，按小时聚合，固定 24 个整点。"""
     return report_response(
         "GET /api/report/day",
-        lambda: report.day_report(request.args.get("date")),
+        lambda: report.day_report(request.args.get("date"), request_scope()),
     )
 
 
@@ -386,7 +487,7 @@ def api_report_month() -> tuple[Response, int] | Response:
     """月报表：默认当月，按天聚合，按当月实际天数补齐。"""
     return report_response(
         "GET /api/report/month",
-        lambda: report.month_report(request.args.get("year"), request.args.get("month")),
+        lambda: report.month_report(request.args.get("year"), request.args.get("month"), request_scope()),
     )
 
 
@@ -395,7 +496,7 @@ def api_report_custom() -> tuple[Response, int] | Response:
     """自由报表：默认最近 24 小时，按小时聚合，可跨天/跨月。"""
     return report_response(
         "GET /api/report/custom",
-        lambda: report.custom_report(request.args.get("start"), request.args.get("end")),
+        lambda: report.custom_report(request.args.get("start"), request.args.get("end"), request_scope()),
     )
 
 
@@ -421,7 +522,11 @@ def api_curve() -> tuple[Response, int] | Response:
     """
     where = "GET /api/curve"
     try:
-        return jsonify(curve.build_curve(request.args.get("start"), request.args.get("end")))
+        return jsonify(curve.build_curve(
+            request.args.get("start"), request.args.get("end"), request_scope()))
+    except ValueError as exc:
+        LOGGER.warning("[%s] 设备参数不合法: %s", where, exc)
+        return jsonify({"error": str(exc)}), 400
     except (curve.CurveParamError, report.ReportParamError) as exc:
         LOGGER.warning("[%s] 参数不合法: %s", where, exc)
         return jsonify({"error": str(exc)}), 400
@@ -438,7 +543,10 @@ def api_report_export() -> tuple[Response, int] | Response:
     """
     where = "GET /api/report/export"
     try:
-        content, filename = report_export.export_workbook(request.args)
+        content, filename = report_export.export_workbook(request.args, request_scope())
+    except ValueError as exc:
+        LOGGER.warning("[%s] 设备参数不合法: %s", where, exc)
+        return jsonify({"error": str(exc)}), 400
     except (report_export.ExportParamError, report.ReportParamError) as exc:
         # 参数问题返回 400 + JSON，绝不能把错误信息塞进 xlsx 里让用户下载
         LOGGER.warning("[%s] 参数不合法: %s", where, exc)
@@ -505,6 +613,13 @@ HTML_PAGE = """<!DOCTYPE html>
   .controls button { background:#0ea5e9; color:#0f172a; border:0; border-radius:6px;
                      padding:6px 16px; font-size:13px; font-weight:600; cursor:pointer; }
   .controls button:disabled { background:#475569; color:#94a3b8; cursor:not-allowed; }
+  .devices { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 10px; }
+  .devices .cap { font-size:13px; color:#94a3b8; }
+  .devices .dev { padding:4px 12px; border:1px solid #334155; border-radius:999px; cursor:pointer;
+                  background:#1e293b; color:#cbd5e1; font-size:13px; user-select:none; }
+  .devices .dev.active { background:#22c55e; border-color:#22c55e; color:#0f172a; font-weight:600; }
+  .devices .dev.muted { opacity:.45; cursor:default; }
+  .panelnote { font-size:12px; color:#64748b; margin:-4px 0 8px; }
 </style>
 </head>
 <body>
@@ -512,6 +627,7 @@ HTML_PAGE = """<!DOCTYPE html>
   <div style="font-size:13px;margin-bottom:10px;">
     <a href="/report" style="color:#38bdf8;text-decoration:none;">报表 →</a>
   </div>
+  <div class="devices" id="devices"><span class="cap">设备：</span></div>
   <div class="modes" id="modes">
     <span class="mode" data-mode="realtime">实时</span>
     <span class="mode" data-mode="free">自由区间</span>
@@ -521,6 +637,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <label>止</label> <input type="datetime-local" id="free-end">
     <button id="free-query">查询</button>
   </div>
+  <div class="panelnote">以下每个面板是**各自独立的 Y 轴刻度**（按量纲分组，避免把量程相差几个数量级的曲线画在同一根轴上）；横轴共用，鼠标悬停会联动。</div>
   <div id="chart"></div>
   <div id="status">加载中...</div>
 
@@ -531,9 +648,15 @@ HTML_PAGE = """<!DOCTYPE html>
   var REFRESH_MS = __REFRESH_MS__;
   var REFRESH_SEC = __REFRESH_SEC__;
 
-  // 测点表由后端注入（真源是 src/common/points.py + POINT_PRESENTATION），页面不再自己抄一份。
-  // axis: 0=左轴 浓度(mg/m3)；1=右轴1 O2/湿度(%)；2=右轴2 流量/温度/压力；3=右轴3 流速(m/s)
+  // 测点表与面板表由后端注入（真源是 src/common/points.py + CHART_PANELS / POINT_PRESENTATION）
+  // p.axis 现在是**面板下标**：每个面板一格、一根自己的 Y 轴（见 CHART_PANELS 的注释）
   var POINTS = __POINTS_JSON__;
+  var PANELS = __PANELS_JSON__;
+  // 画布高度按面板数现算（每格一根自己的 Y 轴），页面纵向滚动
+  var PANEL_TOP = 46, PANEL_H = 92, PANEL_GAP = 26, PANEL_BOTTOM = 62;
+  var ALL_AXES = PANELS.map(function(panel, index) { return index; });
+  chartEl.style.height = (PANEL_TOP + PANELS.length * (PANEL_H + PANEL_GAP)
+    - PANEL_GAP + PANEL_BOTTOM) + 'px';
   var AXIS_STYLE = { color: '#94a3b8' };
   // 单次请求超时：fetch 默认不会超时，请求卡住时 finally 不执行、轮询会悄悄停掉
   var FETCH_TIMEOUT_MS = 15000;
@@ -572,6 +695,7 @@ HTML_PAGE = """<!DOCTYPE html>
     status.textContent = '图表库加载失败（网络问题），请检查网络后刷新';
     return;
   }
+
   var myChart = echarts.init(chartEl);
   var mode = 'realtime';      // realtime | free
   var timer = null;           // 只记实时模式的下一轮定时器，切模式时要能取消
@@ -630,6 +754,59 @@ HTML_PAGE = """<!DOCTYPE html>
       syncOverMarks();
     });
   });
+
+
+  // ---- 设备维度（V3 双设备）：入口就是这一排按钮，不再"只在库里、页面上看不见" ----
+  var deviceBox = document.getElementById('devices');
+  var scope = '';                      // '' = 用后端配置的默认设备
+  var defaultScope = '';
+  function scopeLabel() {
+    if (!scope) { return defaultScope || '(默认)'; }
+    return scope;
+  }
+  function scopeQuery() {
+    if (!scope) { return ''; }
+    var parts = scope.split('/');       // 'plant/device'
+    return 'plant=' + encodeURIComponent(parts[0]) + '&device=' + encodeURIComponent(parts[1]);
+  }
+  function withScope(url) {
+    var q = scopeQuery();
+    if (!q) { return url; }
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + q;
+  }
+  function paintDevices() {
+    Array.prototype.forEach.call(deviceBox.querySelectorAll('.dev'), function(el) {
+      var on = (el.getAttribute('data-scope') === scope);
+      el.className = 'dev' + (on ? ' active' : '');
+    });
+  }
+  function loadDevices() {
+    fetch('/api/devices')
+      .then(function(res) { return res.json(); })
+      .then(function(body) {
+        defaultScope = body.default_scope || '';
+        var list = body.devices || [];
+        if (!list.length) { deviceBox.textContent = '设备：库里还没有数据'; return; }
+        list.forEach(function(item) {
+          var span = document.createElement('span');
+          span.className = 'dev';
+          span.setAttribute('data-scope', item.plant + '/' + item.device);
+          span.title = 'plant=' + item.plant + ' device=' + item.device;
+          span.textContent = item.device + '（' + item.plant + '）';
+          span.addEventListener('click', function() {
+            var next = item.plant + '/' + item.device;
+            if (next === defaultScope) { next = ''; }   // 默认设备用不带参数的 URL
+            if (next === scope) { return; }
+            scope = next;
+            paintDevices();
+            if (mode === 'realtime') { loadRealtime(); } else { loadFree(); }
+          });
+          deviceBox.appendChild(span);
+        });
+        paintDevices();
+      })
+      .catch(function() { deviceBox.textContent = '设备：取设备列表失败（接口 /api/devices）'; });
+  }
 
   function showError(msg) {
     status.className = 'err';
@@ -692,9 +869,33 @@ HTML_PAGE = """<!DOCTYPE html>
     var mustReset = (axisMode !== lastAxisMode);
     lastAxisMode = axisMode;
 
-    var xAxis = useTimeAxis
-      ? { type: 'time', axisLabel: AXIS_STYLE }
-      : { type: 'category', data: d.ts, axisLabel: AXIS_STYLE };
+    // 每个面板一个 grid + 一组 x/y 轴，横轴联动（axisPointer.link），
+    // 于是"每个量纲自己的刻度"与"同一条时间线"两件事同时成立
+    var xAxis = PANELS.map(function(panel, index) {
+      var last = (index === PANELS.length - 1);
+      return {
+        gridIndex: index,
+        type: useTimeAxis ? 'time' : 'category',
+        data: useTimeAxis ? undefined : d.ts,
+        axisLabel: last ? AXIS_STYLE : { show: false },
+        axisTick: { show: last },
+        axisLine: { lineStyle: { color: '#334155' } }
+      };
+    });
+    var yAxis = PANELS.map(function(panel, index) {
+      return {
+        gridIndex: index,
+        type: 'value',
+        name: panel.title + ' (' + panel.unit + ')',
+        nameTextStyle: AXIS_STYLE,
+        axisLabel: AXIS_STYLE,
+        // ⚠️ scale:true = 不强制包含 0。压力这种 85~105 的量程如果从 0 起，曲线会被压平
+        //    （这正是改造前把流量/温度/压力塞进同一根轴的病根）。
+        scale: true,
+        splitNumber: 3,
+        splitLine: { lineStyle: { color: 'rgba(51,65,85,0.5)' } }
+      };
+    });
     var o2Column = d.o2 || [];
     var series = POINTS.map(function(p) {
       var values = d[p.key] || [];
@@ -706,6 +907,7 @@ HTML_PAGE = """<!DOCTYPE html>
         id: 'pt-' + p.key,
         name: p.label,
         type: 'line',
+        xAxisIndex: p.axis,
         yAxisIndex: p.axis,
         data: data,
         smooth: true,
@@ -733,7 +935,8 @@ HTML_PAGE = """<!DOCTYPE html>
         id: 'over-' + p.key,
         name: p.label + '·超标点',
         type: 'scatter',
-        yAxisIndex: 0,
+        xAxisIndex: p.axis,
+        yAxisIndex: p.axis,
         // 对应的曲线被图例关掉时，它的超标点一起收起（否则只剩红点飘在空图上）
         data: hiddenPoints[p.label] ? [] : marks,
         symbolSize: 9,
@@ -790,18 +993,30 @@ HTML_PAGE = """<!DOCTYPE html>
         textStyle: { color: '#cbd5e1' },
         type: 'scroll'
       },
-      grid: { left: 60, right: 190, top: 60, bottom: 50 },
+      // 面板纵向排布：顶部留给共享图例，底部留给时间轴 + 缩放条
+      grid: PANELS.map(function(panel, index) {
+        return {
+          left: 74, right: 24,
+          top: PANEL_TOP + index * (PANEL_H + PANEL_GAP),
+          height: PANEL_H, containLabel: false
+        };
+      }),
+      axisPointer: {
+        link: [{ xAxisIndex: 'all' }],       // 悬停联动：一条竖线贯穿所有面板
+        label: { backgroundColor: '#334155' }
+      },
+      // 横轴缩放：实时模式下也能拖选一段时间窗，且刷新不会把它重置
+      //（不写 start/end —— merge 时才留得住用户的缩放；整帧重建时自然回到全量）
+      dataZoom: [
+        { type: 'inside', xAxisIndex: ALL_AXES, filterMode: 'none' },
+        { type: 'slider', xAxisIndex: ALL_AXES, filterMode: 'none',
+          bottom: 8, height: 18, borderColor: '#334155',
+          textStyle: { color: '#94a3b8' }, fillerColor: 'rgba(14,165,233,0.18)',
+          handleStyle: { color: '#0ea5e9' } }
+      ],
       animationDurationUpdate: 300,
       xAxis: xAxis,
-      yAxis: [
-        { type: 'value', name: '浓度 (mg/m3)', axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
-        { type: 'value', name: 'O2/湿度 (%)', position: 'right',
-          axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
-        { type: 'value', name: '流量/温度/压力', position: 'right', offset: 60,
-          axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE },
-        { type: 'value', name: '流速 (m/s)', position: 'right', offset: 120,
-          axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE }
-      ],
+      yAxis: yAxis,
       series: series
     }, mustReset);
   }
@@ -823,7 +1038,7 @@ HTML_PAGE = """<!DOCTYPE html>
   // ---- 实时模式：仍然用 /api/data，按 REFRESH_MS 定时刷新 ----
   function loadRealtime() {
     var token = viewToken;
-    fetchWithTimeout('/api/data')
+    fetchWithTimeout(withScope('/api/data'))
       .then(function(res) { return res.json(); })
       .then(function(d) {
         if (token !== viewToken) { return; }      // 已经切走了，这帧作废
@@ -836,8 +1051,8 @@ HTML_PAGE = """<!DOCTYPE html>
           return;
         }
         render(d, false);
-        showInfo('实时模式 | 最近 ' + d.ts[d.ts.length - 1] + ' | ' + latestText(d)
-          + ' | 每' + REFRESH_SEC + '秒自动刷新');
+        showInfo('设备 ' + scopeLabel() + ' | 实时模式 | 最近 ' + d.ts[d.ts.length - 1] + ' | '
+          + latestText(d) + ' | 每' + REFRESH_SEC + '秒自动刷新');
       })
       .catch(function(err) {
         if (token === viewToken) {
@@ -869,7 +1084,7 @@ HTML_PAGE = """<!DOCTYPE html>
     document.getElementById('free-query').disabled = true;
     showInfo('查询中…');
     var token = viewToken;
-    var url = '/api/curve?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end);
+    var url = withScope('/api/curve?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end));
     fetchWithTimeout(url)
       .then(function(res) {
         return res.json().then(function(body) { return { ok: res.ok, body: body }; });
@@ -934,6 +1149,7 @@ HTML_PAGE = """<!DOCTYPE html>
   document.getElementById('free-query').addEventListener('click', loadFree);
   window.addEventListener('resize', function() { myChart.resize(); });
 
+  loadDevices();
   setMode('realtime');
 })();
 </script>

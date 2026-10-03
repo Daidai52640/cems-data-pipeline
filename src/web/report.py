@@ -235,6 +235,7 @@ def query_aggregate(
     *,
     fill_null: bool = False,
     kind: str = "aggregate",
+    scope: str = "",
 ) -> list[tuple[Any, ...]]:
     """按窗口聚合求均值；聚合在 TDengine 侧用 INTERVAL + AVG 完成，不把原始点拉回 Python。
 
@@ -255,7 +256,9 @@ def query_aggregate(
       非法 `TD_PLANT`/`TD_DEVICE` 在导入期就拒绝启动，见 src/common/sql_safety.py）。
     """
     avg_columns = ", ".join(f"AVG({column})" for column in COLUMNS)
-    plant, device = cache.device_tag_parts()
+    # 请求级设备维度（空 = 本实例配置的那台，单设备部署行为不变）
+    plant, device = cache.scope_split(scope)
+    scope = scope or cache.DEVICE_SCOPE
     sql = (
         f"SELECT _wstart, {avg_columns}, COUNT(*) FROM {TD_DB}.{TD_STABLE} "
         f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts < '{end.strftime(TS_FORMAT)}' "
@@ -270,7 +273,7 @@ def query_aggregate(
     return _execute_cached(
         f"{sql} ORDER BY _wstart ASC",
         where=f"aggregate/{kind}",
-        context=cache.prepare(kind, window, start, end, device=cache.DEVICE_SCOPE),
+        context=cache.prepare(kind, window, start, end, device=scope),
     )
 
 
@@ -533,7 +536,7 @@ def clamp_to_now(end: datetime, now: datetime) -> datetime:
     return end
 
 
-def query_raw(start: datetime, end: datetime, limit: int) -> list[tuple[Any, ...]]:
+def query_raw(start: datetime, end: datetime, limit: int, scope: str = "") -> list[tuple[Any, ...]]:
     """原始点查询（曲线的短区间用）：不聚合，直接取原始行。
 
     列名来自测点契约白名单，时间来自已解析的 datetime，没有任何原始输入拼接进 SQL。
@@ -545,7 +548,7 @@ def query_raw(start: datetime, end: datetime, limit: int) -> list[tuple[Any, ...
     混成一条曲线（与 `query_aggregate` 同一理由）。取值同源于 `cache.device_tag_parts()`。
     """
     columns = ", ".join(("ts", *COLUMNS))
-    plant, device = cache.device_tag_parts()
+    plant, device = cache.scope_split(scope)
     sql = (
         f"SELECT {columns} FROM {TD_DB}.{TD_STABLE} "
         f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts <= '{end.strftime(TS_FORMAT)}' "
@@ -565,6 +568,7 @@ def aggregate_series(
     pad_grid: bool,
     max_points: Optional[int] = None,
     kind: str = "aggregate",
+    scope: str = "",
 ) -> dict[str, Any]:
     """把一段区间聚合成均值序列 —— 报表页、Excel 导出、曲线三处共用这一份口径。
 
@@ -579,7 +583,7 @@ def aggregate_series(
         return envelope(unit, aligned_start, aligned_end, [], window=window)
     check_span(aligned_start, aligned_end, window, label, max_points)
 
-    rows = query_aggregate(aligned_start, aligned_end, unit, fill_null=pad_grid, kind=kind)
+    rows = query_aggregate(aligned_start, aligned_end, unit, fill_null=pad_grid, kind=kind, scope=scope)
     if pad_grid:
         count = int((aligned_end - aligned_start) / window)
         grid = [aligned_start + index * window for index in range(count)]
@@ -595,7 +599,7 @@ def aggregate_series(
 
 # ==================== 4. 四类报表 ====================
 
-def minute_report(start_text: Optional[str], end_text: Optional[str]) -> dict[str, Any]:
+def minute_report(start_text: Optional[str], end_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """分钟报表：默认最近 1 小时，按分钟聚合（只统计完整分钟窗口）。
 
     ⚠️ 这里**必须**补网格（`pad_grid=True`）：原先不补，整分钟无数据的窗口会被
@@ -608,11 +612,11 @@ def minute_report(start_text: Optional[str], end_text: Optional[str]) -> dict[st
     end = clamp_to_now(parse_time(end_text, "end", now), now)
     return aggregate_series(
         start, end, UNIT_MINUTE, WINDOW_MINUTE, label="分钟报表", pad_grid=True,
-        kind="minute",
+        kind="minute", scope=scope,
     )
 
 
-def day_report(date_text: Optional[str]) -> dict[str, Any]:
+def day_report(date_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """日报表：默认今天，按小时聚合，固定 24 个整点。
 
     ⚠️ "今天"的报表里，晚于当前时刻的整点还没到期：它们以 n=0 出现在网格里，
@@ -625,11 +629,11 @@ def day_report(date_text: Optional[str]) -> dict[str, Any]:
     # 用半开区间 [当天 00:00, 次日 00:00)，否则跨到次日会产生第 25 个窗口
     return aggregate_series(
         first, next_day, UNIT_HOUR, WINDOW_HOUR, label="日报表", pad_grid=True,
-        kind="day",
+        kind="day", scope=scope,
     )
 
 
-def month_report(year_text: Optional[str], month_text: Optional[str]) -> dict[str, Any]:
+def month_report(year_text: Optional[str], month_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """月报表：默认当月，按天聚合；按当月实际天数补齐 28/30/31（闰年 2 月 29）。
 
     同日报表：当月还没到的日期 `pending=true`（`expected=0`）、不算缺口，但仍带 coverage 出现；
@@ -643,11 +647,11 @@ def month_report(year_text: Optional[str], month_text: Optional[str]) -> dict[st
     next_month = first + timedelta(days=days)
     return aggregate_series(
         first, next_month, UNIT_DAY, WINDOW_DAY, label="月报表", pad_grid=True,
-        kind="month",
+        kind="month", scope=scope,
     )
 
 
-def custom_report(start_text: Optional[str], end_text: Optional[str]) -> dict[str, Any]:
+def custom_report(start_text: Optional[str], end_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """自由报表：默认最近 24 小时，按小时聚合，可跨天/跨月。
 
     按小时网格补齐：整段无数据时也返回完整网格（值 null）而不是空数组，
@@ -662,5 +666,5 @@ def custom_report(start_text: Optional[str], end_text: Optional[str]) -> dict[st
         )
     return aggregate_series(
         start, end, UNIT_HOUR, WINDOW_HOUR, label="自由报表", pad_grid=True,
-        kind="custom",
+        kind="custom", scope=scope,
     )

@@ -113,15 +113,15 @@ def build_filename(report_type: str, envelope: dict[str, Any]) -> str:
 
 # ==================== 3. 工作簿组装 ====================
 
-def run_report(report_type: str, query: Mapping[str, str]) -> dict[str, Any]:
+def run_report(report_type: str, query: Mapping[str, str], scope: str = "") -> dict[str, Any]:
     """按 type 调 report.py 里对应的报表函数（复用同一套校验与聚合口径）。"""
     if report_type == "minute":
-        return report.minute_report(query.get("start"), query.get("end"))
+        return report.minute_report(query.get("start"), query.get("end"), scope)
     if report_type == "day":
-        return report.day_report(query.get("date"))
+        return report.day_report(query.get("date"), scope)
     if report_type == "month":
-        return report.month_report(query.get("year"), query.get("month"))
-    return report.custom_report(query.get("start"), query.get("end"))
+        return report.month_report(query.get("year"), query.get("month"), scope)
+    return report.custom_report(query.get("start"), query.get("end"), scope)
 
 
 def fill_data_sheet(sheet: Any, envelope: dict[str, Any]) -> None:
@@ -188,7 +188,7 @@ def build_workbook(report_type: str, envelope: dict[str, Any]) -> bytes:
     return buffer.getvalue()
 
 
-def export_workbook(query: Mapping[str, str]) -> tuple[bytes, str]:
+def export_workbook(query: Mapping[str, str], scope: str = "") -> tuple[bytes, str]:
     """导出入口：返回 (xlsx 字节, 中文文件名)。
 
     参数非法抛 ExportParamError / report.ReportParamError，查库失败抛 report.ReportQueryError，
@@ -199,7 +199,7 @@ def export_workbook(query: Mapping[str, str]) -> tuple[bytes, str]:
         raise ExportParamError(
             f"type 应为 {'/'.join(REPORT_TYPES)} 之一，收到 {report_type!r}"
         )
-    envelope = run_report(report_type, query)
+    envelope = run_report(report_type, query, scope)
     content = build_workbook(report_type, envelope)
     filename = build_filename(report_type, envelope)
     LOGGER.info(
