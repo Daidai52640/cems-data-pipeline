@@ -758,7 +758,10 @@ HTML_PAGE = """<!DOCTYPE html>
   }
   function paintDevices() {
     Array.prototype.forEach.call(deviceBox.querySelectorAll('.dev'), function(el) {
-      var on = (el.getAttribute('data-scope') === scope);
+      // ⚠️ `scope` 为空串表示"本实例的默认设备"，它也要高亮 —— 否则点回默认设备时
+      //    两个按钮都不亮，看起来像"点了没反应 / 还停在另一台上"。
+      var target = scope || defaultScope;
+      var on = (el.getAttribute('data-scope') === target);
       el.className = 'dev' + (on ? ' active' : '');
     });
   }
