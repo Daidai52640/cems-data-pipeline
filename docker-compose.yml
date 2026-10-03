@@ -1,5 +1,5 @@
 # =============================================================================
-# CEMS 工业数据采集链路 —— 全链路一键启动
+# CEMS 工业数据采集链路 —— 全链路编排（docker compose）
 #
 # 一条命令启动 8 个服务：
 #   Nginx(反向代理) + Redis(查询缓存)
@@ -21,8 +21,10 @@
 #   EMQX 1883 默认匿名可发布、TDengine 6041 用演示口令、18083 默认 admin/public，
 #   一旦绑到 0.0.0.0，同一 WiFi 下任何设备都能免登录读全量数据、甚至删库。
 #   nginx 的 80 同理走 BIND_ADDR —— 它前面就是这套展示面，绝不能默认对外。
-#   需要在局域网演示大屏时，在 .env 里设 BIND_ADDR=0.0.0.0，
-#   并且务必同时改掉 TD_PASS 与 EMQX 默认口令。
+#   需要在局域网演示大屏时，在 .env 里设 BIND_ADDR=0.0.0.0，并把 TD_PASS 改成自己的口令。
+#   ⚠️ EMQX 的 1883 本项目**没有接任何认证**（网关 / 接入层都不带凭据；`admin/public` 只是
+#      18083 管理台口令），改它挡不住匿名 MQTT。要对外暴露，必须先给 EMQX 开认证，并在
+#      src/gateway/gateway.py、src/platform/subscriber_to_td.py 里补 MQTT 用户名口令。
 # =============================================================================
 
 name: cems
@@ -158,7 +160,15 @@ services:
 
   # ---------------- 基础设施：MQTT Broker ----------------
   emqx:
-    image: emqx/emqx:latest
+    # ⚠️ 这里是 **digest 而不是 tag**，故意的：
+    #   `emqx/emqx:latest` 是**可变别名** —— 同一份 compose 在不同时间解析到不同构建。
+    #   而这条链上的持久会话、离线队列上限、配置键语义都跟大版本绑（EMQX 官方 5.x→6.0
+    #   不兼容清单里明确写了 durable sessions 的内部表示变更），跟着 latest 漂一次就是数据面问题。
+    #   digest = manifest 的 sha256，内容寻址、不可变：钉住它才叫"同一份配置"。
+    #   现值实测身份：EMQX Enterprise 6.3.0（OCI label org.opencontainers.image.version，
+    #   构建日 2026-09-03）。本机到 Docker Hub 不通，所以 tag→digest 的映射无法在线上核验；
+    #   这个 digest 直接取自本机镜像的 RepoDigests，是"当下真正在跑的那一份"。
+    image: emqx/emqx@sha256:3b6d9c0c419930074b7e0e6cba07baceea584b2094d22f16ff02f6c075c3d5b8
     container_name: emqx
     restart: unless-stopped
     environment:
@@ -196,7 +206,10 @@ services:
 
   # ---------------- 基础设施：时序数据库 ----------------
   tdengine:
-    image: tdengine/tdengine:latest
+    # ⚠️ 同 emqx：用 digest 不用 `latest`。TDengine 的 STABLE / SQL 语义随版本变，
+    #   而库里的历史数据与 `KEEP 365d` 是长期资产，不能因为"重建时拿到了新版"而换行为。
+    #   现值实测身份：TDengine Community Edition 3.3.6.13（容器内 `taos -V`）。
+    image: tdengine/tdengine@sha256:79d32ce8a42f64c7dbfc33946a36b3e176ea23c0cd695a1bc9e8aa889ca03b88
     container_name: tdengine
     restart: unless-stopped
     environment:
@@ -366,7 +379,9 @@ services:
   # 判据与正确性边界见 src/web/cache.py 顶部；它**不是**业务数据的真源，
   # 所以任何时刻把它整个删掉都不影响功能，只会让查询回到直连库。
   redis:
-    image: redis:7-alpine
+    # 同 emqx/tdengine：digest 钉身份。`redis:7-alpine` 只锚大版本，7.x 内仍会静默漂。
+    # 现值实测身份：Redis 7.4.11（容器内 `redis-server --version`）。
+    image: redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     container_name: cems-redis
     restart: unless-stopped
     environment:
@@ -404,7 +419,11 @@ services:
   # ---------------- 基础设施：反向代理（对外唯一入口） ----------------
   # 为什么要这一层（并发模型 / 静态资源 / TLS 终结位置）见 deploy/nginx/nginx.conf 顶部。
   nginx:
-    image: nginx:alpine
+    # 同 emqx/tdengine：digest 钉身份。原来的 `nginx:alpine` 连大版本都没锚，浮动幅度最大。
+    # 现值实测身份：nginx 1.31.6（容器内 `nginx -v`）。
+    # ⚠️ 反向代理的语义（`proxy_pass` 尾斜杠、`X-Forwarded-*` 处理、默认超时）跨版本会变，
+    #    它前面就是对外入口，配置是按这份 nginx 调过的。
+    image: nginx@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2
     container_name: cems-nginx
     restart: unless-stopped
     environment:
