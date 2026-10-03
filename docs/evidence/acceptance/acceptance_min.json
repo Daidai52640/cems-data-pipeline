@@ -1,0 +1,160 @@
+{
+  "generated_at": "2026-10-03 18:07:14",
+  "database": "cems.cems_data",
+  "web_url": "http://127.0.0.1:5001",
+  "passed": 25,
+  "failed": 0,
+  "skipped": 0,
+  "results": [
+    {
+      "item": "A1",
+      "pass": true,
+      "claim": "plant1/device1 最近 90 秒有 17 条新数据（正常区间 6~24）",
+      "evidence": "ts > NOW-90s 的 COUNT(*) = 17（plant1）"
+    },
+    {
+      "item": "A1",
+      "pass": true,
+      "claim": "plant2/device2 最近 90 秒有 17 条新数据（正常区间 6~24）",
+      "evidence": "ts > NOW-90s 的 COUNT(*) = 17（plant2）"
+    },
+    {
+      "item": "A2",
+      "pass": true,
+      "claim": "40 行 × 9 测点全部落在量程白名单内",
+      "evidence": "逐值检查 360 个，越界 0 个"
+    },
+    {
+      "item": "A2",
+      "pass": true,
+      "claim": "数值精度符合契约（FLOAT 列，无异常位数）",
+      "evidence": "小数位异常 0 个"
+    },
+    {
+      "item": "A2",
+      "pass": true,
+      "claim": "每一行的 9 个测点都齐全（不缺列）",
+      "evidence": "完整行 40/40"
+    },
+    {
+      "item": "A3",
+      "pass": true,
+      "claim": "两台设备的逐分钟均值互不相同（31 个可比分钟，最小相对差 16.22%）",
+      "evidence": "逐值完全相同的分钟数 = 0（镜像故障的特征是全同）"
+    },
+    {
+      "item": "A3",
+      "pass": true,
+      "claim": "近 30 分钟内不存在'两台设备同一时刻读数完全相同'的行",
+      "evidence": "命中 0 行"
+    },
+    {
+      "item": "A4",
+      "pass": true,
+      "claim": "折算公式落地正确（基准氧 6.0%）",
+      "evidence": "实测 40.0 @ O2=3.0% → 代码 33.333333，手算 33.333333"
+    },
+    {
+      "item": "A4",
+      "pass": true,
+      "claim": "氧含量 ≥21% 时折算结果不可用（判无效，而不是判达标/超标）",
+      "evidence": "to_reference_o2(40.0, 21.0) = nan"
+    },
+    {
+      "item": "A4",
+      "pass": true,
+      "claim": "折算值正好等于限值判**达标**（严格大于才算超标），限值：Dust<=5、SO2<=35、NOx<=50",
+      "evidence": "等于限值的 3 个测点判定结果：0 个误判超标"
+    },
+    {
+      "item": "A4",
+      "pass": true,
+      "claim": "真实数据按同一公式复算，超标口径一致（本项只报数，不做阈值断言）",
+      "evidence": "最近 200 行里可复算 600 个，折算超标 41 个（限值 5/35/50 mg/m³）"
+    },
+    {
+      "item": "A5",
+      "pass": true,
+      "claim": "每个时间窗都带覆盖率与'样本不足'标记（59/59）",
+      "evidence": "缺任一标记都会让'没数据'看起来像'数据正常'"
+    },
+    {
+      "item": "A5",
+      "pass": true,
+      "claim": "没有任何'整窗零条数却判达标'的窗口",
+      "evidence": "违规窗口 0 个"
+    },
+    {
+      "item": "A5",
+      "pass": true,
+      "claim": "真实断档小时（2026-10-03 12:00）在结论表里不是'达标'",
+      "evidence": "该小时库内 0 行；结论表 verdict = {'insufficient'}"
+    },
+    {
+      "item": "A6",
+      "pass": true,
+      "claim": "库有明确保留策略：数据保留 365d,365d,365d、分片时长 30d（副本 2 组）",
+      "evidence": "information_schema.ins_databases → keep=365d,365d,365d duration=30d vgroups=2"
+    },
+    {
+      "item": "A6",
+      "pass": true,
+      "claim": "库内已有 30570 行历史数据",
+      "evidence": "时间跨度 1790785691000 → 1791022031000"
+    },
+    {
+      "item": "A6",
+      "pass": true,
+      "claim": "数据挂在 Docker 命名卷上（`docker compose down` 不删数据，只有 -v 才删）",
+      "evidence": "命名卷：cems_tdengine-log, cems_tdengine-data, d89d08cf70efd001a0722b1a8ab2cf8377bc963f50397aeabc9b59de479058b8"
+    },
+    {
+      "item": "A6",
+      "pass": true,
+      "claim": "存在可校验的备份产物：7 份 manifest（落点 F:\\cems-backup）",
+      "evidence": "最新 cems_full_20261001_210527：rows=None，size=190107"
+    },
+    {
+      "item": "A7",
+      "pass": true,
+      "claim": "链路当前处于'正常工作'状态（有实时数据流入）",
+      "evidence": "最近 60 秒入库 24 行"
+    },
+    {
+      "item": "A7",
+      "pass": true,
+      "claim": "cems-gateway 的断网缓存机制在位（数据目录里能找到缓存文件 4 个）",
+      "evidence": "cache.jsonl：/app/data/cache.jsonl 0"
+    },
+    {
+      "item": "A7",
+      "pass": true,
+      "claim": "cems-gateway-plant2 的断网缓存机制在位（数据目录里能找到缓存文件 2 个）",
+      "evidence": "cache.jsonl：（无 cache.jsonl）"
+    },
+    {
+      "item": "A7",
+      "pass": true,
+      "claim": "接入层重启后 broker 能补投离线消息（持久会话生效）",
+      "evidence": "订阅端日志里最近一次会话恢复 = True"
+    },
+    {
+      "item": "A8",
+      "pass": true,
+      "claim": "监测大屏（nginx 入口） 可打开（HTTP 200，13307 字节）",
+      "evidence": "GET / → 200"
+    },
+    {
+      "item": "A8",
+      "pass": true,
+      "claim": "健康接口自报正常：数据新鲜度 4.363 秒，最近 1 分钟 11 条",
+      "evidence": "GET /api/health → HTTP 200，{\"data_age_seconds\":4.363,\"healthy\":true,\"ok\":true,\"reason\":\"fresh\",\"rows_last_1min\":11,\"stale_after_seconds\":15.0,\"td\":\"up\"}"
+    },
+    {
+      "item": "A8",
+      "pass": true,
+      "claim": "健康判据有明确的新鲜度门限（15.0 秒），不会'看着绿其实是死的'",
+      "evidence": "stale_after_seconds=15.0（判断依据：超过它就 reason=stale_data）"
+    }
+  ]
+}
