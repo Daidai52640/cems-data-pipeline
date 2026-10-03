@@ -193,7 +193,7 @@ pip install -r requirements.txt
 
 ---
 
-## 我用了哪些源文件
+## 源文件
 
 - `docker-compose.yml` —— 8 基础 + 2 profile 共 10 个服务/容器、端口、环境变量、nginx 403 口径
 - `src/common/points.py` —— 9 个测点、量程、编码、限值与基准氧
