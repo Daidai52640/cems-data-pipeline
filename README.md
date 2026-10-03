@@ -22,7 +22,7 @@
 
 - 每 5 秒通过 Modbus TCP 轮询 9 个寄存器，按 HJ 212 因子顺序组装成一条 JSON 样本。
 - 通过 MQTT（QoS 1）发布到 EMQX；发布前在本地 `data/cache.jsonl` 留一份待确认记录，收到 broker 确认后删除。
-- **断网时自动缓存**（容量上限 64MB，超出丢弃最旧数据），恢复后按 30 秒间隔自动补传，保证数据不丢。
+- **断网时自动缓存**（容量上限 64MB，超出丢弃最旧数据），恢复后按 30 秒间隔自动补传，保证**网关→broker 这一段**的报文不丢（接入层自身的缺口见文末「已知边界」第 2 条）。
 - 双设备时每台设备一个独立网关实例（第二套为 profile `plant2`，缓存目录 `data/plant2/`）。
 
 ### 3. 接入层（MQTT 订阅 + 入库 TDengine）
@@ -48,22 +48,9 @@
 
 ## 快速开始
 
-### 一键启动（Windows）
+### 启动（Docker Compose）
 
-双击 **`一键启动.bat`**（内部调用同目录的 `start.ps1`），自动完成：环境检查 → 构建镜像 → 启动容器 → 轮询健康接口 → 打开浏览器。
-
-| 启动方式 | 命令 | 说明 |
-|---|---|---|
-| 完整启动（默认） | `.\一键启动.bat` | 构建 + 启动 + 打开页面 |
-| 快速重启（不构建） | `.\一键启动.bat -NoBuild` | 镜像已构建，跳过 build |
-| 只启动不打开浏览器 | `.\一键启动.bat -NoBrowser` | 服务器启动后不自动开页面 |
-| 本地模式（4 个窗口） | `.\一键启动.bat -Mode Local` | 不用 Docker，按层开 4 个 Python 窗口逐层看日志 |
-| 只打印动作 | `.\一键启动.bat -DryRun` | 不构建不启动，只打印将要执行的命令 |
-| 传统构建器 | `.\一键启动.bat -ClassicBuild` | 用 `DOCKER_BUILDKIT=0` 构建（BuildKit 报错时用） |
-| 停止全部容器 | `.\一键启动.bat -Stop` | 等价 `docker compose down`，数据卷保留 |
-| 查看帮助 | `.\一键启动.bat -?` | 显示所有参数说明 |
-
-### Docker Compose（Linux/macOS 同样适用）
+本项目**统一用 Docker Compose 启动**（不再提供 `一键启动.bat` / `start.ps1` 这类一键启动脚本；Windows / Linux / macOS 命令一致）。
 
 ```bash
 # 构建镜像并启动 8 个基础服务（后台运行）
@@ -84,6 +71,12 @@ docker compose down -v
 
 启动后访问 `http://localhost`（经 nginx 反代）。
 
+> **换机器 / 清空镜像后重建的前提**：四个基础设施镜像（EMQX / TDengine / Redis / nginx）在
+> `docker-compose.yml` 里**按 digest 钉死**（不用 `latest`，理由见 `.env.example` 末节台账），
+> 应用镜像 `cems-pipeline:latest` 则是 `pull_policy: never` 的本机构建产物。
+> 所以 `docker compose up -d --build` 需要**这些镜像已在本机**：应用镜像由 `build` 现做，
+> 另外四个得先带过来。本机到 Docker Hub 不通，compose 不会联网解析成功。
+
 ### 访问入口
 
 | 服务 | 地址 | 说明 |
@@ -94,28 +87,21 @@ docker compose down -v
 | TDengine | 6041（REST）/ 6030（原生） | 默认 root/taosdata |
 | Modbus 设备 | 5020 | 仿真设备 Modbus TCP 端口 |
 
-### 本机方式（不用 Docker）
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-.\一键启动.bat -NoBuild    # 会自动拉起本机 EMQX/TDengine（若已安装）或用 Docker 只起中间件
-```
-
 ### 端口暴露 / 安全
 
 默认所有端口只绑定 `127.0.0.1`（本机访问）。如需局域网/外网访问：
 
 1. 在 `.env` 中设置 `BIND_ADDR=0.0.0.0`（或具体网卡 IP）；
-2. **务必修改默认口令**：EMQX（admin/public）、TDengine（root/taosdata）；
-3. 不要把 5020（Modbus 设备）、6041（TDengine REST）暴露到公网；
-4. 如需修改宿主机端口，设置 `NGINX_HOST_PORT`、`WEB_HOST_PORT` 等变量（见 `docker-compose.yml`）。
+2. **改掉 TDengine 口令**：在 `.env` 里设 `TD_PASS`（默认 `root/taosdata` 是演示值）；
+3. ⚠️ **MQTT 目前没有任何认证**：EMQX 的 1883 默认允许匿名发布/订阅，网关与接入层都没有配置 MQTT 用户名口令（`admin/public` 只是 Dashboard 管理台口令）。把 1883 暴露到局域网等于让同网段任何主机都能读写监测数据——**要对外暴露，必须先给 EMQX 开认证并让网关/接入层带上凭据（属代码改动，当前未做）**。没做这件事之前，请保持默认的 `127.0.0.1` 绑定；
+4. 不要把 5020（Modbus 设备）、6041（TDengine REST）暴露到公网；
+5. 如需修改宿主机端口，设置 `NGINX_HOST_PORT`、`WEB_HOST_PORT` 等变量（见 `docker-compose.yml`）。
 
 > **Docker Desktop 构建鉴权错误**：若 `docker compose up -d --build` 报
 > `unauthorized: authentication required` / `not authorized`，是 Docker 客户端把本机构建请求
 > 错误带上了 registry 凭证。处理：`docker logout`，或在 Docker Desktop 设置中登出 registry 账号后重试；
 > 本项目镜像 `pull_policy: never`，构建不依赖任何 registry。
+> （注意区分：这条只针对**构建**；四个基础设施镜像已按 digest 钉住，本来也不需要 registry 参与解析。）
 
 ---
 
@@ -198,7 +184,7 @@ pip install -r requirements.txt
 
 - `docker-compose.yml` —— 8 基础 + 2 profile 共 10 个服务/容器、端口、环境变量、nginx 403 口径
 - `src/common/points.py` —— 9 个测点、量程、编码、限值与基准氧
-- `README.md`（原有版本） —— 架构分层、一键启动参数、本机方式、端口暴露、构建鉴权处理等正确内容
+- `README.md`（原有版本） —— 架构分层、启动命令、端口暴露、构建鉴权处理等正确内容
 - `docs/runbooks/双设备启用与验证.md` —— 两个开关、逐值对比验收、回退
 - `docs/runbooks/全链路验收设计.md` —— 覆盖率门限 0.75、6 条已知边界、验收契约
 - `docs/runbooks/恢复演练与对账口径.md` —— 备份落点、RTO 数字、备份行数与耗时
