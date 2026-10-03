@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Web 展示大屏：Flask 提供 TDengine 近段数据接口，前端用 ECharts 画 8 个烟气测点的实时曲线。"""
+"""Web 展示大屏：Flask 提供 TDengine 近段数据接口，前端用 ECharts 画各烟气测点的实时曲线。
+
+⚠️ 测点数**不写死**：页面标题与曲线都用 `points.py` 的契约现算（历史上标题曾长期写着
+"8 测点"而契约早已是 9，改契约时没人会记得回来改这个数）。
+"""
 
 from __future__ import annotations
 
@@ -397,7 +401,11 @@ def api_report_custom() -> tuple[Response, int] | Response:
 
 @app.route("/report")
 def report_page() -> Response:
-    """报表页面：4 类时间维度聚合，折线图 + 数据表格。"""
+    """报表页面：4 类时间维度聚合，数据表格 + 覆盖率面板。
+
+    ⚠️ 本页**只有表格，没有图表**（ECharts 只挂在 `/` 实时大屏上）；
+    注释历史上写的是"折线图 + 数据表格"，与实现不符，已改回事实。
+    """
     return Response(REPORT_PAGE.replace("__POINTS_JSON__", POINT_VIEWS_JSON)
             # ⚠️ 测点数从契约现算，不写死：标题曾长期写着"8 测点"而契约早已是 9
             #    （改契约时没人会记得改标题 —— 让它跟着 points.py 走就不会再错）
@@ -568,9 +576,60 @@ HTML_PAGE = """<!DOCTYPE html>
   var mode = 'realtime';      // realtime | free
   var timer = null;           // 只记实时模式的下一轮定时器，切模式时要能取消
   var busy = false;
+  // ---- 图例交互状态（用户在图例里关掉某条曲线，不能被 5 秒后的新数据重置） ----
+  // ⚠️ 这两份状态是"用户意图"的唯一真源：每次 setOption 都把 legend.selected 显式带回去，
+  //    否则一旦发生整帧重建（notMerge），ECharts 会退回"全部选中"的默认值 ——
+  //    表现就是"只想看两条曲线，5 秒后又被重置成九条"。
+  var hiddenPoints = {};      // 测点 label -> true：用户在图例里关掉了它
+  var overMarks = {};         // 测点 key -> 该测点的超标散点数据（最近一帧），供图例切换时同步显隐
+  // 轴的种类：category（实时，固定窗口）| time（自由区间，可能跨天）。它决定本帧能否走 merge：
+  // merge 模式下上一种轴的 xAxis.data 会残留到另一种轴上，所以轴类型一变必须整帧重建。
+  var lastAxisMode = null;
   // 视图代次：切模式就 +1。在途请求回来时若代次对不上，说明它属于上一个模式，
   // 必须整帧丢弃 —— 否则上一轮实时请求回来会把自由区间的画面和状态栏盖回去（表现为"闪一下"）
   var viewToken = 0;
+
+  // 图例状态的唯一真源是**图表自己的** legend.selected：用户点图例会改它，
+  // 任何 dispatchAction 也会改它。只靠事件回调记账会漏（legendSelect /
+  // legendUnSelect 触发的是 legendselected / legendunselected 两个**不同**事件），
+  // 所以这里一律先读回图表状态，再决定要不要把成对的散点一起收起。
+  function readLegendSelected(ev) {
+    if (ev && ev.selected) { return ev.selected; }
+    try {
+      var o = myChart.getOption();
+      return (o && o.legend && o.legend[0] && o.legend[0].selected) || null;
+    } catch (e) { return null; }
+  }
+
+  function applyLegendSelected(sel) {
+    if (!sel) { return; }
+    POINTS.forEach(function(p) {
+      if (Object.prototype.hasOwnProperty.call(sel, p.label)) {
+        hiddenPoints[p.label] = (sel[p.label] === false);
+      }
+    });
+  }
+
+  // 超标散点不是图例条目（不占图例行），要手工跟着主线一起显隐，
+  // 否则会出现"曲线被关掉了、红点还孤零零飘着"。
+  function syncOverMarks() {
+    POINTS.forEach(function(p) {
+      if (!ZS_MAP[p.key]) { return; }
+      myChart.setOption({
+        series: [{
+          id: 'over-' + p.key,
+          data: hiddenPoints[p.label] ? [] : (overMarks[p.key] || [])
+        }]
+      });
+    });
+  }
+
+  ['legendselectchanged', 'legendselected', 'legendunselected'].forEach(function(name) {
+    myChart.on(name, function(ev) {
+      applyLegendSelected(readLegendSelected(ev));
+      syncOverMarks();
+    });
+  });
 
   function showError(msg) {
     status.className = 'err';
@@ -624,6 +683,15 @@ HTML_PAGE = """<!DOCTYPE html>
   // 两个接口返回的都是列式结构，共用这一个渲染函数
   // useTimeAxis：自由区间的点可能跨天跨月，category 轴会把标签挤成一团，改用 time 轴
   function render(d, useTimeAxis) {
+    var axisMode = useTimeAxis ? 'time' : 'category';
+    // 先把图表里当前的图例选中态读回来 —— 它是用户意图，绝不能被这一帧的新数据覆盖
+    applyLegendSelected(readLegendSelected(null));
+    // ★ 只有"轴类型变了"才整帧重建；同类型的两帧之间走 merge。
+    //   notMerge=true 会把用户的图例选中态、图例滚动位置、tooltip 当前指向一起丢掉，
+    //   并且每帧都重放一次入场动画 —— 这正是"实时刷新把交互重置掉"的根因。
+    var mustReset = (axisMode !== lastAxisMode);
+    lastAxisMode = axisMode;
+
     var xAxis = useTimeAxis
       ? { type: 'time', axisLabel: AXIS_STYLE }
       : { type: 'category', data: d.ts, axisLabel: AXIS_STYLE };
@@ -634,6 +702,8 @@ HTML_PAGE = """<!DOCTYPE html>
         ? d.ts.map(function(ts, index) { return [ts.replace(' ', 'T'), values[index]]; })
         : values;
       return {
+        // 稳定 id：merge 时按 id 认人，保证"这条线还是这条线"，不会张冠李戴
+        id: 'pt-' + p.key,
         name: p.label,
         type: 'line',
         yAxisIndex: p.axis,
@@ -658,11 +728,14 @@ HTML_PAGE = """<!DOCTYPE html>
           marks.push([x, values[i]]);
         }
       }
+      overMarks[p.key] = marks;          // 记住最近一帧，图例切换时不用重算
       series.push({
+        id: 'over-' + p.key,
         name: p.label + '·超标点',
         type: 'scatter',
         yAxisIndex: 0,
-        data: marks,
+        // 对应的曲线被图例关掉时，它的超标点一起收起（否则只剩红点飘在空图上）
+        data: hiddenPoints[p.label] ? [] : marks,
         symbolSize: 9,
         z: 10,
         silent: true,
@@ -670,6 +743,9 @@ HTML_PAGE = """<!DOCTYPE html>
         itemStyle: { color: COLOR_OVER, borderColor: '#fecaca', borderWidth: 1 }
       });
     });
+
+    var legendSelected = {};
+    POINTS.forEach(function(p) { legendSelected[p.label] = !hiddenPoints[p.label]; });
 
     myChart.setOption({
       tooltip: {
@@ -708,6 +784,9 @@ HTML_PAGE = """<!DOCTYPE html>
       },
       legend: {
         data: POINTS.map(function(p) { return p.label; }),
+        // 显式把用户的选择带回来：本帧是 merge 时它本来就还在，
+        // 本帧是整帧重建（轴类型切换）时靠它把选择恢复回去。
+        selected: legendSelected,
         textStyle: { color: '#cbd5e1' },
         type: 'scroll'
       },
@@ -724,7 +803,7 @@ HTML_PAGE = """<!DOCTYPE html>
           axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE }
       ],
       series: series
-    }, true);
+    }, mustReset);
   }
 
   function latestText(d) {
@@ -863,7 +942,7 @@ HTML_PAGE = """<!DOCTYPE html>
 """
 
 
-# ==================== 6. 报表页面（4 类时间维度聚合 · 折线图 + 表格） ====================
+# ==================== 6. 报表页面（4 类时间维度聚合 · 表格 + 覆盖率面板） ====================
 
 REPORT_PAGE = """<!DOCTYPE html>
 <html lang="zh">
