@@ -353,6 +353,11 @@ services:
       MQTT_CLIENT_ID: cems-subscriber-plant1   # 持久会话靠它认人，不要改成随机值
       TD_PLANT: plant1
       TD_DEVICE: device1
+      # ★ 落盘队列（写库失败时的本地副本）：目录**每实例一份**，与网关缓存同卷不同子目录
+      SUBSCRIBER_DATA_DIR: /app/data/subscriber
+    volumes:
+      # 与网关共用宿主 ./data，但只写子目录 subscriber/（网关写的是 ./data 根下的 cache.jsonl）
+      - ./data:/app/data
     depends_on: *subscriber-depends
     healthcheck: *subscriber-healthcheck
 
@@ -371,6 +376,10 @@ services:
       MQTT_CLIENT_ID: ${SUBSCRIBER2_CLIENT_ID:-cems-subscriber-plant2}   # 持久会话靠它认人
       TD_PLANT: ${PLANT2:-plant2}
       TD_DEVICE: ${DEVICE2:-device2}
+      # 每实例一份：第二套用 ./data/plant2 下的子目录（与 gateway2 同卷不同子目录）
+      SUBSCRIBER_DATA_DIR: /app/data-plant2/subscriber
+    volumes:
+      - ./data/plant2:/app/data-plant2
     depends_on: *subscriber-depends
     healthcheck: *subscriber-healthcheck
 
