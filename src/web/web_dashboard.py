@@ -1341,26 +1341,23 @@ TABLE_PAGE = """<!DOCTYPE html>
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + q;
   }
 
-  // ---- 表头：两级合并（污染物 = 上报值 -> 浓度(标干值/折算值) + 设备标记；其余 = 监测值 + 设备标记）----
+  // ---- 表头：三行合并（污染物 = 颗粒物(单位) -> 浓度 -> 标干值/折算值；其余测点一列到底）----
+  // ⚠️ 没有「设备标记」列：项目里不存在逐点有效性字段（接入层对整条报文收/拒，
+  //    TDengine 每个测点只有一列数值），凭空造一列会让报表看起来有数据支撑而其实没有。
   function buildHead() {
     var r1 = '<tr><th class="time" rowspan="3">监测时间</th>';
     GROUPS.forEach(function(g) {
-      r1 += '<th colspan="3">' + g.title + '(' + g.unit + ')</th>';
+      r1 += '<th colspan="2">' + g.title + '(' + g.unit + ')</th>';
     });
-    PLAINS.forEach(function(k) { r1 += '<th colspan="2">' + meta[k].label + '(' + meta[k].unit + ')</th>'; });
+    PLAINS.forEach(function(k) {
+      r1 += '<th rowspan="3">' + meta[k].label + '(' + meta[k].unit + ')</th>';
+    });
     var r2 = '<tr>';
-    GROUPS.forEach(function() { r2 += '<th colspan="3">上报值</th>'; });
-    PLAINS.forEach(function() { r2 += '<th rowspan="2">监测值</th><th rowspan="2">设备标记</th>'; });
+    GROUPS.forEach(function() { r2 += '<th colspan="2">浓度</th>'; });
     var r3 = '<tr>';
-    GROUPS.forEach(function() { r3 += '<th colspan="2">浓度</th><th>设备标记</th>'; });
+    GROUPS.forEach(function() { r3 += '<th>标干值</th><th>折算值</th>'; });
     r1 += '</tr>'; r2 += '</tr>'; r3 += '</tr>';
     el('thead').innerHTML = r1 + r2 + r3;
-  }
-
-  function markCell(state) {
-    if (state === 'over') { return '<span class="over">超标</span>'; }
-    if (state === 'null') { return '<span class="null">数据不足</span>'; }
-    return '<span class="eff">数据有效</span>';
   }
   function cell(v) {
     var s = fmt(v);
@@ -1400,19 +1397,19 @@ TABLE_PAGE = """<!DOCTYPE html>
       GROUPS.forEach(function(g) {
         var measured = r[g.key];
         var zs = toConverted(g.key, measured, o2);
-        var state = (measured === null || measured === undefined) ? 'null'
-                  : ((zs !== null && zs > ZS_LIMIT[g.key]) ? 'over' : 'eff');
-        html += '<td class="grp">' + cell(measured) + '</td><td class="grp">' + cell(zs) + '</td>'
-              + '<td class="grp">' + markCell(state) + '</td>';
+        // 超标仍然用红字标出来（值本身带样式），不再单占一列"设备标记"
+        var cls = (zs !== null && measured !== null && measured !== undefined
+                   && zs > ZS_LIMIT[g.key]) ? ' class="over"' : '';
+        html += '<td class="grp">' + cell(measured) + '</td><td class="grp"' + cls + '>'
+              + cell(zs) + '</td>';
       });
       PLAINS.forEach(function(k) {
         var v = r[k];
-        var state = (v === null || v === undefined) ? 'null' : 'eff';
-        html += '<td>' + cell(v) + '</td><td>' + markCell(state) + '</td>';
+        html += '<td>' + cell(v) + '</td>';
       });
       html += '</tr>';
     });
-    el('tbody').innerHTML = html || '<tr><td colspan="20" style="text-align:center;color:#64748b">该区间没有数据</td></tr>';
+    el('tbody').innerHTML = html || '<tr><td colspan="13" style="text-align:center;color:#64748b">该区间没有数据</td></tr>';
   }
 
   function showStatus(msg, err) { el('status').className = err ? 'err' : ''; el('status').textContent = msg; }
