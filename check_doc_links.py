@@ -4,6 +4,11 @@
     python check_doc_links.py
 
 只读，不修改任何文件。跳过 http(s):// 与 mailto: 链接。
+
+⚠️ 输出里有 ✅/❌，而 Windows 控制台默认代码页是 GBK —— 直接
+`print("❌")` 会抛 `UnicodeEncodeError: 'gbk' codec can't encode character`，
+脚本在**能报错的那一行崩掉**，反而看不到有哪些断链（实测踩过）。
+所以下面显式把 stdout 重配成 UTF-8（errors="replace" 兜底，不因编码再崩）。
 """
 from __future__ import annotations
 
@@ -11,6 +16,12 @@ import pathlib
 import re
 import sys
 import unicodedata
+
+# 必须在任何 print 之前执行：见文件头说明
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, OSError):  # 极老的解释器 / 被重定向到不可重配的流
+    pass
 
 ROOT = pathlib.Path(__file__).resolve().parent
 LINK_RE = re.compile(r"!?\[([^\]]*)\]\(([^)\s]+)\)")
