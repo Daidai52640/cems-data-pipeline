@@ -579,7 +579,9 @@ def api_report_export() -> tuple[Response, int] | Response:
     """
     where = "GET /api/report/export"
     try:
-        content, filename = report_export.export_workbook(request.args, request_scope())
+        _scope = request_scope()
+        content, filename = report_export.export_workbook(
+            request.args, _scope, device_label(*cache.scope_split(_scope)))
     except ValueError as exc:
         LOGGER.warning("[%s] 设备参数不合法: %s", where, exc)
         return jsonify({"error": str(exc)}), 400
