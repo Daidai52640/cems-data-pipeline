@@ -78,7 +78,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 # tag 值白名单（唯一真源，与平台接入层共用；只依赖标准库，不拖 paho 之类的重依赖进 Web）
-from src.common.sql_safety import check_sql_name   # noqa: E402
+from src.common.sql_safety import SQL_NAME_RULE, check_sql_name, is_sql_name   # noqa: E402
 
 # ==================== 1. 配置区 ====================
 
@@ -98,6 +98,8 @@ STATS_PREFIX: Final[str] = f"cems:{CACHE_VERSION}:cnt:"
 KEY_DATA_TS: Final[str] = f"cems:{CACHE_VERSION}:meta:data_ts"       # 最新数据时间戳（窗口闭合判据）
 KEY_MINMAX: Final[str] = f"cems:{CACHE_VERSION}:meta:minmax"         # 分钟 -> 该分钟观测到的最大时间戳
 KEY_MINMAX_TS: Final[str] = f"cems:{CACHE_VERSION}:meta:minmax_ts"   # 分钟 -> 该分钟的时间戳（用于排序/裁剪）
+
+
 KEY_EVENTS: Final[str] = f"cems:{CACHE_VERSION}:meta:events"         # 失效原因记账
 KEY_LAST_QUERY: Final[str] = f"cems:{CACHE_VERSION}:meta:last_query"  # 最近一次查询的窗口（诊断用）
 
@@ -199,6 +201,60 @@ def device_tag_parts() -> tuple[str, str]:
 #: 导入期自检：非法 tag 值**拒绝启动**（`SystemExit`），与平台接入层同一口径。
 #: 单设备默认值 plant1 / device1 合法，所以正常部署零行为变化。
 device_tag_parts()
+
+
+def _watermark_suffix(device: str) -> str:
+    """水位键的设备后缀：**默认设备不加后缀**，别的设备加短哈希。
+
+    ★ 为什么默认设备不加：单设备部署（`TD_PLANT/TD_DEVICE` 就是默认值）的键名与改造前
+      **逐字节相同**，Redis 里已有条目与水位继续有效，行为零变化。
+    ★ 为什么别的设备用哈希而不是原文：tag 是用户可控字符串，直接拼进键名既不安全也易读错；
+      哈希足够区分（12 位十六进制），键长恒定。
+    """
+    if device == DEVICE_SCOPE:
+        return ""
+    return ":" + hashlib.sha1(device.encode("utf-8")).hexdigest()[:12]
+
+
+def watermark_keys(device: str = DEVICE_SCOPE) -> tuple[str, str, str]:
+    """返回 (data_ts 键, 分钟最大值键, 分钟清单键) —— 三者必须属于同一台设备。
+
+    ⚠️ 不要绕开这个函数直接拼 KEY_*：漏加设备维度就会回到"设备 A 的数据把设备 B
+      还没写完的窗口判成已闭合"那个失真（见 §6 的长注释）。
+    """
+    suffix = _watermark_suffix(device)
+    return KEY_DATA_TS + suffix, KEY_MINMAX + suffix, KEY_MINMAX_TS + suffix
+
+
+def scope_split(scope: str) -> tuple[str, str]:
+    """把 scope 串（`plant/device`）拆成 tag 两段，**带白名单校验**。
+
+    scope 为空 ⇒ 回落到本实例配置的设备（= 改造前的唯一取值，单设备部署行为不变）。
+    非法值抛 `ValueError`（**不是** `check_sql_name` 的 `SystemExit`：那个是给导入期
+    拒绝启动用的，脏请求参数不该把 worker 打死），由路由翻译成 400。
+    """
+    if not scope:
+        return device_tag_parts()
+    plant, _, device = scope.partition("/")
+    if not is_sql_name(plant) or not is_sql_name(device):
+        raise ValueError(f"设备维度 {scope!r} 不合法：{SQL_NAME_RULE}")
+    return plant, device
+
+
+def scope_from_request(plant: Optional[str], device: Optional[str]) -> str:
+    """请求参数 (plant, device) -> scope 串；缺省/只给一半都按本实例配置补齐。
+
+    前端只需传 `device`（plant 用它所属的那台）也能工作。返回空串以外的值保证
+    `scope_split` 能解析。非法值抛 `ValueError`。
+    """
+    want_plant = (plant or "").strip()
+    want_device = (device or "").strip()
+    if not want_plant and not want_device:
+        return DEVICE_SCOPE
+    for name, value in (("plant", want_plant), ("device", want_device)):
+        if value and not is_sql_name(value):
+            raise ValueError(f"{name} 参数不合法：{value!r}；{SQL_NAME_RULE}")
+    return f"{want_plant or TD_PLANT}/{want_device or TD_DEVICE}"
 
 
 # ==================== 2. 客户端（懒连接 + 全链路降级） ====================
@@ -450,13 +506,14 @@ def _source_key(cache_key: str) -> str:
 
 # ==================== 4. 窗口闭合判据 ====================
 
-def _closure(end: datetime) -> tuple[bool, str, str]:
+def _closure(end: datetime, device: str = DEVICE_SCOPE) -> tuple[bool, str, str]:
     """判断查询上界是否已"闭合"。返回 (是否闭合, 判据, 水位文本)。
 
     判据用的是"最新**数据时间戳**"（而不是容器墙钟）：
     时间戳直接来自库内行，与产生它的时钟同源，天然没有跨时钟误差。
     """
-    data_text = CLIENT.get_str(KEY_DATA_TS)
+    data_ts_key, _minmax_key, _minmax_ts_key = watermark_keys(device)
+    data_text = CLIENT.get_str(data_ts_key)
     if not data_text:
         return False, "无 data_ts 水位（还没有观测到库内数据）", ""
     data_ts = parse_ts_text(data_text)
@@ -537,61 +594,52 @@ def _encode_cell(cell: Any) -> Any:
 #   判据变成"缓存这条窗口时看到的最大值" vs "库里现在的最大值"——
 #   只有**该分钟真的多了一条更晚的数据**才判脏；重复看到同一批行不会误杀。
 #
-# ---- 水位为什么**不**按设备分开（判断，含证据与耦合条件）----
-# ⚠️ 状态更新（2026-10-02）：下面第 1 条改造项（读路径按设备过滤）**已经落地**
-#    （commit d9e599d；report.py 的聚合/原始点 SQL、web_dashboard.py:155-159 都用
-#    `cache.device_tag_parts()` 拼 `AND plant = '...' AND device = '...'`，
-#    该函数同时做 tag 白名单校验，见 §1）。
-#    第 2、3 条（水位键按设备拆）**仍未做**，是已知的剩余项，不在本次改动范围内。
-#    所以本节原来的第一条论据（"观测流里没有设备维"）已经不成立，别照着它继续论证。
+# ---- 水位为什么必须按设备分开（历史判断 + 现在的做法）----
+# ⚠️ 2026-10-02 的判断是"水位全局一份、够用"，前提是**只有一个 web 实例、只看一台设备**。
+#    2026-10-03 起 web 可以在页面上切设备（V3 双设备），这个前提消失，于是按当时写好的
+#    三步改法一次改完（原文："一次改完，别只改一半"）：
+#      1) ✅ 读路径加设备过滤（report.py 的聚合/原始点 SQL、web_dashboard.query_recent，
+#         用 `cache.device_tag_parts()` 拼 `AND plant = '...' AND device = '...'`，带白名单校验）；
+#      2) ✅ KEY_DATA_TS / KEY_MINMAX / KEY_MINMAX_TS 三个键加设备维度（`watermark_keys()`）；
+#      3) ✅ note_data_ts / note_minute_max / _trim_minute_max / _closure /
+#         observed_window_detail / signature 都接收 device（水位的语义 = "这台设备的
+#         库内数据的最新时间戳"）。
 #
-# 当前结论：水位（KEY_DATA_TS / KEY_MINMAX / KEY_MINMAX_TS）仍是**全局一份**。
+# 不改会怎样（这就是当初记下来的失真）：
+#   两台设备共用一份 data_ts 时，设备 A 的新数据会把设备 B 还没写完的窗口判成"已闭合"
+#   （`_closure` 的上界条件被放松），B 的缓存条目返回偏旧的数据；而且**写后失效兜不住** ——
+#   B 的迟到行落在"该分钟最大值本来就没变"的分钟里，signature 不变、判不出脏。
 #
-# 证据（读代码即可复现，不需要起 Redis / 不需要造第二台设备的数据）：
-#   · 水位的**观测源**是 `/api/data`（web_dashboard.api_data → query_recent），它现在的 SQL 是
-#     `FROM {TD_DB}.{TD_STABLE} WHERE ts >= now - Nm AND ts <= now AND plant = '...'
-#      AND device = '...'`（web_dashboard.py:155-159），**已按设备过滤**；
-#     report.py 的聚合 SQL 同样带这一组 tag 条件（report.py:257-261）。
-#   · 也就是说，这条观测流里现在**有**"哪台设备"这一维，但存水位的 Redis 键没有：
-#     每个 web 实例观测的是自己那台设备，却把结果写进同一份全局键。
-#
-# 失真什么时候会真的发生（前提条件，不是"现在就有"）：
-#   若按设备起**多个 web 实例**并**共用一个 Redis DB**，共用一份全局 data_ts，
-#   设备 A 的新数据会把设备 B 还没写完的窗口判成"已闭合"（`_closure` 的 a 条件被放松），
-#   于是 B 的条目会返回偏旧的数据；而且这种偏旧**不会被写后失效兜住** —— B 的迟到行落在
-#   一个"全局分钟最大值本来就没变"的分钟里（A 在同一分钟里有更晚的行），signature 不变、判不出脏。
-#   这就是 observed_window_detail 那条注释里"窗口最大值不变 → 判据失灵"的同类漏洞，
-#   只不过这次是被别的设备的数据填住的。
-#   当前 docker-compose.yml 只有**一个** web 实例（web 的 TD_PLANT/TD_DEVICE 固定 plant1/device1），
-#   观测流里只有那台设备的行，所以这条失真尚未激活；多 web 实例共用一个 Redis 时才会激活。
-#
-# 真要多实例前的改法（一次改完，别只改一半）：
-#   1) ✅ 读路径加设备过滤（report.py 的聚合 SQL、web_dashboard.query_recent，按 tag 过滤）—— 已做；
-#   2) ⏳ KEY_DATA_TS / KEY_MINMAX / KEY_MINMAX_TS 三个键加设备维度；
-#   3) ⏳ note_data_ts / note_minute_max / _closure / observed_window_detail / signature
-#      都带上设备参数（水位的语义变成"这台设备的库内数据的最新时间戳"）。
+# 兼容性：默认设备（`DEVICE_SCOPE`）的键名**不加后缀**，单设备部署的键与行为逐字节不变；
+#   其余设备加 `:sha1(scope)[:12]` 后缀（`_watermark_suffix`）。切换设备后水位从空开始，
+#   由 `/api/data` 的下一次轮询填上（≤ REFRESH_SECONDS），期间表现为"不进缓存、直连查库"。
 KEY_MINMAX_TTL_SECONDS: Final[int] = int(os.getenv("CACHE_MINMAX_TTL_SECONDS", "86400"))
 
 
-def note_data_ts(latest: str) -> None:
-    """记录"观测到的最新数据时间戳"。只前进不后退。"""
+def note_data_ts(latest: str, device: str = DEVICE_SCOPE) -> None:
+    """记录"观测到的最新数据时间戳"。只前进不后退。按设备各记一份。"""
     latest = (latest or "")[:19]
     if len(latest) < 19 or not _ready("note_data_ts"):
         return
-    current = CLIENT.get_str(KEY_DATA_TS) or ""
+    data_ts_key, _minmax_key, _minmax_ts_key = watermark_keys(device)
+    current = CLIENT.get_str(data_ts_key) or ""
     if latest > current:
-        CLIENT.set_str(KEY_DATA_TS, latest, WATERMARK_TTL_SECONDS)
+        CLIENT.set_str(data_ts_key, latest, WATERMARK_TTL_SECONDS)
 
 
-def note_minute_max(observed: list[str]) -> int:
+def note_minute_max(observed: list[str], device: str = DEVICE_SCOPE) -> int:
     """登记"每个分钟里观测到的最大时间戳"（HGETALL 一次读回，写入用 HSET 批量）。
 
     返回被更新的分钟数（值确实变大才算更新）。
+
+    ⚠️ 按设备各记一份：两台设备的数据流如果共用一份分钟最大值，
+      设备 A 的迟到行会把设备 B 的窗口指纹搅乱（§6 长注释里的失真来源）。
     """
     unique = sorted({text[:19] for text in observed if text and len(text) >= 19})
     if not unique or not _ready("note_minute_max"):
         return 0
-    current = CLIENT._cmd("hgetall", KEY_MINMAX) or {}
+    _data_ts_key, minmax_key, minmax_ts_key = watermark_keys(device)
+    current = CLIENT._cmd("hgetall", minmax_key) or {}
     updates: dict[str, str] = {}
     for text in unique:
         minute = text[:16] + ":00"
@@ -600,35 +648,40 @@ def note_minute_max(observed: list[str]) -> int:
             updates[minute] = best
     if not updates:
         return 0
-    CLIENT._cmd("hset", KEY_MINMAX, mapping=updates)
+    CLIENT._cmd("hset", minmax_key, mapping=updates)
     # 记录分钟本身（用于按时间裁剪）与 TTL
-    CLIENT._cmd("hset", KEY_MINMAX_TS, mapping={minute: minute for minute in updates})
-    CLIENT._cmd("expire", KEY_MINMAX, MINMAX_KEEP * 900)
-    CLIENT._cmd("expire", KEY_MINMAX_TS, MINMAX_KEEP * 900)
-    _trim_minute_max()
+    CLIENT._cmd("hset", minmax_ts_key, mapping={minute: minute for minute in updates})
+    CLIENT._cmd("expire", minmax_key, MINMAX_KEEP * 900)
+    CLIENT._cmd("expire", minmax_ts_key, MINMAX_KEEP * 900)
+    _trim_minute_max(device)
     return len(updates)
 
 
-def _trim_minute_max() -> None:
+def _trim_minute_max(device: str = DEVICE_SCOPE) -> None:
     """只保留最近 MINMAX_KEEP 个分钟（按分钟文本排序，等价于按时间排序）。"""
-    count = CLIENT._cmd("hlen", KEY_MINMAX)
+    _data_ts_key, minmax_key, minmax_ts_key = watermark_keys(device)
+    count = CLIENT._cmd("hlen", minmax_key)
     if count is None or int(count) <= MINMAX_KEEP:
         return
-    minutes = CLIENT._cmd("hkeys", KEY_MINMAX) or []
+    minutes = CLIENT._cmd("hkeys", minmax_key) or []
     for minute in sorted(minutes)[: int(count) - MINMAX_KEEP]:
-        CLIENT._cmd("hdel", KEY_MINMAX, minute)
-        CLIENT._cmd("hdel", KEY_MINMAX_TS, minute)
+        CLIENT._cmd("hdel", minmax_key, minute)
+        CLIENT._cmd("hdel", minmax_ts_key, minute)
 
 
-def observed_window_max(range_start_key: str, range_end_key: str) -> Optional[str]:
+def observed_window_max(
+    range_start_key: str, range_end_key: str, device: str = DEVICE_SCOPE,
+) -> Optional[str]:
     """窗口 [range_start, range_end) 内"观测到的最大数据时间戳"（诊断用）。"""
-    detail = observed_window_detail(range_start_key, range_end_key)
+    detail = observed_window_detail(range_start_key, range_end_key, device)
     if not detail:
         return None
     return max(detail.values())
 
 
-def observed_window_detail(range_start_key: str, range_end_key: str) -> dict[str, str]:
+def observed_window_detail(
+    range_start_key: str, range_end_key: str, device: str = DEVICE_SCOPE,
+) -> dict[str, str]:
     """窗口内**逐分钟**观测到的最大时间戳：{分钟 -> 该分钟最大 ts}。
 
     ⚠️⚠️ 为什么失效判据必须用"逐分钟明细"而不是"整个窗口的最大值"（踩过）：
@@ -639,7 +692,8 @@ def observed_window_detail(range_start_key: str, range_end_key: str) -> dict[str
     往 18:38 分钟插一条 18:38:56，窗口最大值仍是 18:40:55 → 判据完全没反应。
     改成"逐分钟明细整体比对"后，任意一个分钟变动都能被发现。
     """
-    all_max = CLIENT._cmd("hgetall", KEY_MINMAX)
+    _data_ts_key, minmax_key, _minmax_ts_key = watermark_keys(device)
+    all_max = CLIENT._cmd("hgetall", minmax_key)
     if not all_max:
         return {}
     return {
@@ -648,7 +702,9 @@ def observed_window_detail(range_start_key: str, range_end_key: str) -> dict[str
     }
 
 
-def signature(range_start_key: str, range_end_key: str) -> tuple[str, int]:
+def signature(
+    range_start_key: str, range_end_key: str, device: str = DEVICE_SCOPE,
+) -> tuple[str, int]:
     """窗口的"内容指纹"：窗口内**被观测到的那些分钟**的 (分钟, 最大值) 序列。
 
     返回 (指纹, 观测到的分钟数)。未观测到的分钟不参与 —— 它们"确定没数据"。
@@ -667,7 +723,7 @@ def signature(range_start_key: str, range_end_key: str) -> tuple[str, int]:
         - 纯稳态 → 集合与取值都不变 → 命中。
       残留风险与 TTL 兜底见模块头部"已知残留风险"。
     """
-    detail = observed_window_detail(range_start_key, range_end_key)
+    detail = observed_window_detail(range_start_key, range_end_key, device)
     digest = hashlib.sha1()
     for minute in sorted(detail):
         digest.update(minute.encode("utf-8"))
@@ -677,8 +733,9 @@ def signature(range_start_key: str, range_end_key: str) -> tuple[str, int]:
     return digest.hexdigest()[:16], len(detail)
 
 
-def dirty_count() -> int:
-    value = CLIENT._cmd("hlen", KEY_MINMAX)
+def dirty_count(device: str = DEVICE_SCOPE) -> int:
+    _data_ts_key, minmax_key, _minmax_ts_key = watermark_keys(device)
+    value = CLIENT._cmd("hlen", minmax_key)
     return int(value or 0)
 
 
@@ -725,19 +782,22 @@ def query_cached(
       ② 读侧自检：条目的窗口上界已经追平/越过 data_ts 水位 → 水位已进窗口，条目不可信；
       ③ 未闭合：窗口本身还没写完（含当前秒）→ 根本不缓存。
 
-    ★ 设备维度已经在 `context["key"]` 里（由 `prepare` 烘焙，见模块头第 6 条）：
-      读写都只发生在**这一台设备**的命名空间内，所以这三道判定判的都是"这台设备的这个窗口"，
-      不存在"命中到另一台设备的条目"这条路径。水位仍是全局一份（理由见 §6）。
+    ★ 设备维度在两处：`context["key"]`（条目命名空间）与 `context["device"]`（水位命名空间，
+      见 `watermark_keys`）。所以这三道判定判的都是"**这台设备**的这个窗口"，
+      既不会命中到别的设备的条目，也不会被别的设备的数据误判成"已闭合"。
     """
     if not _ready(where):
         return fetch()
 
     key = context["key"]
+    device = context.get("device") or DEVICE_SCOPE
     blob = CLIENT.get_str(key)
     if blob is not None:
         decoded = decode_rows(blob)
-        current_sig, observed = signature(context["range_start_key"], context["range_end_key"])
-        data_text = CLIENT.get_str(KEY_DATA_TS) or ""
+        current_sig, observed = signature(
+            context["range_start_key"], context["range_end_key"], device)
+        data_ts_key, _minmax_key, _minmax_ts_key = watermark_keys(device)
+        data_text = CLIENT.get_str(data_ts_key) or ""
         if decoded is None:
             CLIENT._cmd("delete", key)                      # 值坏了：清掉，走回源
         else:
@@ -768,7 +828,8 @@ def query_cached(
                 CLIENT.incr(f"{STATS_PREFIX}hit")
                 return rows
 
-    closed, reason, data_text = _closure(parse_ts_text(context["range_end_key"]) or datetime.min)
+    closed, reason, data_text = _closure(
+        parse_ts_text(context["range_end_key"]) or datetime.min, device)
     if not closed:
         # 未闭合：直连，不读写缓存（这就是"不缓存当前秒数据"的落地点）
         CLIENT.incr(f"{STATS_PREFIX}bypass_future")
@@ -780,7 +841,8 @@ def query_cached(
     CLIENT.incr(f"{STATS_PREFIX}query")
     rows = fetch()
     # 存值前记下"这一版结果对应哪一份观测指纹"——命中判定 ① 要用它
-    current_sig, observed = signature(context["range_start_key"], context["range_end_key"])
+    current_sig, observed = signature(
+        context["range_start_key"], context["range_end_key"], device)
     encoded = encode_rows(rows, {"sig": current_sig, "observed_minutes": observed})
     if encoded is None:
         LOGGER.info("[%s] 结果集超过 %d 字节，跳过缓存", where, MAX_VALUE_BYTES)
@@ -850,7 +912,10 @@ def stats() -> dict[str, Any]:
         "cache_keys": keys,
         "minute_max_entries": dirty_count(),
         "watermarks": {
-            "data_ts": CLIENT.get_str(KEY_DATA_TS),
+            # ⚠️ 水位已按设备隔离，这里报的是**本实例配置的那台设备**的水位；
+            #    别的设备（在页面上切换过去看的）用自己的水位键，不在这里列。
+            "device_scope": DEVICE_SCOPE,
+            "data_ts": CLIENT.get_str(watermark_keys(DEVICE_SCOPE)[0]),
             "last_query": CLIENT.get_str(KEY_LAST_QUERY),
         },
         "events": {
