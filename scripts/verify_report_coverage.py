@@ -57,6 +57,16 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Final
 
+# ⚠️ Windows 控制台默认代码页是 GBK，而下面的报告里用了 ⚠/⇒ 这类字符 ——
+#    输出被重定向/被捕获时（`python ... > log`、`... | Select-Object`）会抛
+#    `UnicodeEncodeError: 'gbk' codec can't encode character`，**在能报结论之前就崩**。
+#    这里显式把 stdout/stderr 重配成 UTF-8，errors="replace" 兜底，绝不因为编码再崩。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, OSError):        # 极老解释器 / 不可重配的流
+        pass
+
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))

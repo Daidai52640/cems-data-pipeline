@@ -46,6 +46,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+# ⚠️ Windows 控制台默认代码页是 GBK，而下面的报告里用了 ⚠/⇒ 这类字符 ——
+#    输出被重定向/被捕获时（`python ... > log`、`... | Select-Object`）会抛
+#    `UnicodeEncodeError: 'gbk' codec can't encode character`，**在能报结论之前就崩**，
+#    看起来像"脚本坏了"而不是"编码不对"（实测踩过：T1 判据那行带 ⇒）。
+#    这里显式把 stdout/stderr 重配成 UTF-8，errors="replace" 兜底，绝不因为编码再崩。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, OSError):        # 极老解释器 / 不可重配的流
+        pass
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -473,8 +484,22 @@ def main() -> int:
             #    只 +0 会让最后一个有数据的分钟被排除（实测：库 2 分钟、聚合只 1 分钟）。
             #    右边界取"最后一行的分钟 + 1"，保证覆盖到含最后一行的那一分钟。
             end = end + timedelta(minutes=1)
+            # ★ 必须显式传 scope，否则聚合读的**不是本次跑的这批数据**。
+            #   `report.query_aggregate()` 的 scope 为空时回落到 `cache.DEVICE_SCOPE`
+            #   （= web 实例配置的 plant/device，默认 plant1/device1），SQL 里就是
+            #   `AND plant='plant1' AND device='device1'`。而本次跑的是 TD_PLANT=trace +
+            #   TD_DEVICE=run<唯一后缀> 的**一次性临时链路** —— 于是 T4 拿"真实设备正在
+            #   采集的数据"去比"trace 的行数"，表现为聚合条数恒定多出一截。
+            #   实测（2026-10-03，--seconds 20）：库 6 行 / 聚合 14 行，其中 00:00 那分钟
+            #   "库 4 / 聚合 12" —— 多出来的正是 plant1/device1 在同一分钟的实时样本。
+            #   这不是测量噪声也不是聚合口径问题，是**验证工装自己读错了设备维度**。
+            #   修法：把 scope 钉成本次 trace 的设备（`src/web/cache.py` 的 scope_split
+            #   接受 `plant/device` 串，白名单校验通过）。
+            scope = f"{run.plant}/{run.run_id}"
             try:
-                got = report.query_aggregate(start, end, "1m", kind="lineage-check")
+                got = report.query_aggregate(
+                    start, end, "1m", kind="lineage-check", scope=scope,
+                )
             except Exception as exc:                          # noqa: BLE001
                 _skip("报表聚合与库一致", f"报表查询失败: {type(exc).__name__}: {exc}")
                 got = None
@@ -489,16 +514,12 @@ def main() -> int:
                 _check(not missing, "聚合覆盖了库里所有有数据的分钟",
                        f"库 {len(db_minutes)} 分钟，聚合 {len(rep_minutes)} 分钟"
                        + (f"，缺 {missing[:3]}" if missing else ""))
-                # ⚠️ 条数口径：T4 目前是**已知限制**，不硬判 PASS/FAIL。
-                #    现象：接口聚合的 COUNT 比"同一时刻自己直查库"多出 2 行
-                #    （实测：库 7 / 聚合 9，都在同一分钟）。已排查并排除的：
-                #      · 不是聚合口径问题 —— 相同窗口下 `INTERVAL(1m)` 与裸 `COUNT(*)`
-                #        完全一致（实测 24 = 12+12）；子表级 GROUP BY 也一致
-                #      · 不是"采集期间还在写" —— 取证前已 `docker pause` 冻结链路
-                #      · 不是时区代表性 —— 两侧都经 `normalize_ts` 归一到本地口径
-                #    仍未定位那 2 行的来源；**数据完整性不依赖这条判据**：
-                #    T2 已用"逐值零容差"证明报文 ↔ 库一致（7/7），T8 证明无丢无余。
-                #    因此这里只报数，不判成败，避免把"未定位的测量差异"当成系统缺陷。
+                # 条数口径：现在能硬判了 —— 基准 rows 是"紧接着聚合之前"回读的同一批
+                # trace 行（上下文已冻结，链路不再写库），窗口又按这批数据的首末分钟取，
+                # 所以同设备同窗口下两边**必须逐行相等**。
+                # ⚠️ 只在"分钟集合完全一致"时判：不一致时条数差异是上面那条判据的后果，
+                #    再报一次 FAIL 属于重复计分（真正的病因由"聚合覆盖…"那条承担）。
+                #    若这里重新出现差值，先查 scope 是不是又丢/传错了 —— 别当成噪声放过。
                 rep_total = sum(int(r[-1]) for r in got)
                 db_total = len(stamps)
                 detail = " ".join(
@@ -507,12 +528,12 @@ def main() -> int:
                     f"/聚合{int(r[-1])}"
                     for r in got
                 )
-                print(f"  [INFO] 聚合条数之和 = {rep_total}，库条数 = {db_total}（逐分钟 {detail}）")
-                if rep_total != db_total:
-                    SKIPS.append(
-                        f"聚合条数与库条数严格相等（差 {rep_total - db_total}，"
-                        "与聚合口径无关，见代码注释；完整性由 T2/T8 承担）"
-                    )
+                if not missing:
+                    _check(rep_total == db_total, "聚合条数与库条数相等",
+                           f"聚合 {rep_total} 条 vs 库 {db_total} 条（逐分钟 {detail}）")
+                else:
+                    print(f"  [INFO] 聚合条数之和 = {rep_total}，库条数 = {db_total}"
+                          f"（逐分钟 {detail}）")
 
         # ---- T7 幂等 ----
         print("\n[T7] 重复投递幂等")
