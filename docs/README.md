@@ -110,7 +110,7 @@
 | `cems-full-chain.architecture.json` | 图的源规格（改它再 archify finalize 重新生成） |
 
 ### 根目录
-仓库根目录只放 `README.md`（项目说明）与构建/启动文件（`docker-compose.yml`、`Dockerfile`、`start.ps1`、`一键启动.bat`、`check_doc_links.py`、依赖清单）；文档一律在 `docs/` 下，见本页索引。
+仓库根目录只放 `README.md`（项目说明）与构建/启动文件（`docker-compose.yml`、`Dockerfile`、`check_doc_links.py`、依赖清单）；文档一律在 `docs/` 下，见本页索引。
 
 ---
 
