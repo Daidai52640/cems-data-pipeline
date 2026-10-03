@@ -1,17 +1,14 @@
 {
   "schemaVersion": 1,
-  "receiptId": "d87e155b-9dda-490a-ae9d-0230238a3c0e",
-  "status": "current",
+  "receiptId": "d071d4f7-76af-4b7b-9370-087c537c0cd0",
+  "status": "failed",
   "command": "deliver",
-  "type": "dataflow",
-  "input": "F:\\Project1\\cems-data-pipeline\\docs\\diagrams\\cems-full-chain.dataflow.json",
+  "stage": "check",
+  "input": "F:\\Project1\\cems-data-pipeline\\docs\\diagrams\\cems-full-chain.architecture.json",
   "output": "F:\\Project1\\cems-data-pipeline\\docs\\diagrams\\cems-full-chain.html",
-  "specification": {
-    "sha256": "6ebe8c7683f429eb1fb90b6275f95e240a44854b055535d452e104d7172f7592",
-    "bytes": 2899
-  },
   "artifact": {
-    "sha256": "fc8a2d798297624827b675a8f9a3ddc43039237d1209bebdb66a7c9a625dcc32",
-    "bytes": 760183
-  }
+    "sha256": "a7134695c7dcf883d8007a4d6677669386e6c26fcfdbfb98ca2ecef484563904",
+    "bytes": 787158
+  },
+  "error": "Final artifact check failed; the previous artifact was preserved."
 }

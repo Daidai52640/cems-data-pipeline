@@ -5037,8 +5037,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <path data-edge-from="subscriber" data-edge-to="tdengine" data-edge-label="存数据 + 存告警" data-edge-key="4" data-edge-id="sub-to-db" data-composition-points="1245,80.95;1325,80.95" data-composition-crossover="halo" data-composition-independent="true" d="M 1245 80.95 L 1325 80.95" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:5">
-          <path data-graph-role="automatic-crossover-underlay" d="M 640 118 L 640 190" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="gateway" data-edge-to="cachefile" data-edge-label="发不出去就先存本地" data-edge-key="5" data-edge-id="gw-to-cache" data-composition-points="640,118;640,190" data-composition-crossover="halo" data-composition-independent="true" d="M 640 118 L 640 190" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 633 118 L 633 146 Q 633 154 641 154 L 642 154 Q 650 154 650 162 L 650 190" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="gateway" data-edge-to="cachefile" data-edge-label="发不出去就先存本地" data-edge-key="5" data-edge-id="gw-to-cache" data-composition-points="633,118;633,154;650,154;650,190" data-composition-crossover="halo" data-composition-independent="true" d="M 633 118 L 633 146 Q 633 154 641 154 L 642 154 Q 650 154 650 162 L 650 190" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:6">
           <path data-graph-role="automatic-crossover-underlay" d="M 650 248 L 650 310" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
@@ -5081,8 +5081,12 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <path data-edge-from="hj212" data-edge-to="monitor" data-edge-label="发出并等应答" data-edge-key="15" data-edge-id="hj212-to-monitor" data-composition-points="900,689;820,689" data-composition-crossover="halo" data-composition-independent="true" d="M 900 689 L 820 689" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:16">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1419.5 118 L 1419.5 179 Q 1419.5 187 1427.5 187 L 1514 187 Q 1522 187 1522 195 L 1522 508 Q 1522 516 1514 516 L 1423 516 Q 1415 516 1415 524 L 1415 540" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="tdengine" data-edge-to="demo" data-edge-label="取一条真实数据当样例" data-edge-key="16" data-edge-id="db-to-demo" data-composition-points="1419.5,118;1419.5,187;1522,187;1522,516;1415,516;1415,540" data-composition-crossover="halo" data-composition-independent="true" d="M 1419.5 118 L 1419.5 179 Q 1419.5 187 1427.5 187 L 1514 187 Q 1522 187 1522 195 L 1522 508 Q 1522 516 1514 516 L 1423 516 Q 1415 516 1415 524 L 1415 540" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 647 118 L 647 134 Q 647 142 655 142 L 1298 142 Q 1306 142 1306 150 L 1306 561 Q 1306 569 1314 569 L 1330 569" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="gateway" data-edge-to="demo" data-edge-label="实时分支（非阻塞交出）" data-edge-key="16" data-edge-id="gw-to-demo" data-composition-points="647,118;647,142;1306,142;1306,569;1330,569" data-composition-crossover="halo" data-composition-independent="true" d="M 647 118 L 647 134 Q 647 142 655 142 L 1298 142 Q 1306 142 1306 150 L 1306 561 Q 1306 569 1314 569 L 1330 569" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:17">
+          <path data-graph-role="automatic-crossover-underlay" d="M 1419.5 118 L 1419.5 179 Q 1419.5 187 1427.5 187 L 1514 187 Q 1522 187 1522 195 L 1522 508 Q 1522 516 1514 516 L 1430 516 Q 1422 516 1422 524 L 1422 540" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="tdengine" data-edge-to="demo" data-edge-label="取一条真实数据当样例" data-edge-key="17" data-edge-id="db-to-demo" data-composition-points="1419.5,118;1419.5,187;1522,187;1522,516;1422,516;1422,540" data-composition-crossover="halo" data-composition-independent="true" d="M 1419.5 118 L 1419.5 179 Q 1419.5 187 1427.5 187 L 1514 187 Q 1522 187 1522 195 L 1522 508 Q 1522 516 1514 516 L 1430 516 Q 1422 516 1422 524 L 1422 540" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
 
         <!-- Components -->
@@ -5237,15 +5241,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="1412.5" y="360" class="t-backend" font-size="7" text-anchor="middle">本机端口 80</text>
         </g>
 
-        <g id="node-demo" data-node-id="demo" data-node-label="本地回环验证" tabindex="0" role="button" aria-label="聚焦本地回环验证，验证用，非生产环节, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="验证用，非生产环节" data-node-tag="验证用，非生产环节" data-node-context="架构组件">
-          <title>本地回环验证 · 验证用，非生产环节 · 架构组件 · 验证用，非生产环节</title>
+        <g id="node-demo" data-node-id="demo" data-node-label="本地回环验证" tabindex="0" role="button" aria-label="聚焦本地回环验证，出口验证入口：实时分支 + 库存样例，非生产环节, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="出口验证入口：实时分支 + 库存样例，非生产环节" data-node-tag="验证用，非生产环节" data-node-context="架构组件">
+          <title>本地回环验证 · 出口验证入口：实时分支 + 库存样例，非生产环节 · 架构组件 · 验证用，非生产环节</title>
           <rect x="1330" y="540" width="170" height="58" rx="6" class="c-mask"/>
           <rect x="1330" y="540" width="170" height="58" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1336 546) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="1415" y="567" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">本地回环验证</text>
-        <text data-detail="context" x="1415" y="583" class="t-muted" font-size="9" text-anchor="middle">验证用，非生产环节</text>
+        <text data-detail="context" x="1415" y="583" class="t-muted" font-size="6" text-anchor="middle">出口验证入口：实时分支 + 库存样例，非生产环节</text>
         <text data-detail="fine" x="1415" y="590" class="t-backend" font-size="7" text-anchor="middle">验证用，非生产环节</text>
         </g>
 
@@ -5308,8 +5312,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <text x="1285" y="70.95" class="t-edge-emphasis" font-size="8" text-anchor="middle">存数据 + 存告警</text>
         </g>
         <g data-detail="context" data-edge-from="gateway" data-edge-to="cachefile" data-edge-label="发不出去就先存本地" data-edge-key="5" data-edge-id="gw-to-cache">
-          <rect x="537.5999999999999" y="147" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="585.8" y="157" class="t-edge-dashed" font-size="8" text-anchor="middle">发不出去就先存本地</text>
+          <rect x="530.5999999999999" y="129" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="578.8" y="139" class="t-edge-dashed" font-size="8" text-anchor="middle">发不出去就先存本地</text>
         </g>
         <g data-detail="context" data-edge-from="cachefile" data-edge-to="resend" data-edge-label="取出待补的" data-edge-key="6" data-edge-id="cache-to-resend">
           <rect x="586" y="272" width="58" height="14" rx="3" class="c-mask"/>
@@ -5324,8 +5328,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <text x="1127.3" y="157" class="t-edge-dashed" font-size="8" text-anchor="middle">整点触发</text>
         </g>
         <g data-detail="context" data-edge-from="hourly" data-edge-to="tdengine" data-edge-label="写小时结论" data-edge-key="9" data-edge-id="hourly-to-db">
-          <rect x="1256" y="137.5" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="1285" y="147.5" class="t-edge-dashed" font-size="8" text-anchor="middle">写小时结论</text>
+          <rect x="1221" y="150.5" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="1250" y="160.5" class="t-edge-dashed" font-size="8" text-anchor="middle">写小时结论</text>
         </g>
         <g data-detail="context" data-edge-from="tdengine" data-edge-to="dashboard" data-edge-label="查数据出图" data-edge-key="10" data-edge-id="db-to-dash">
           <rect x="1340.45" y="147" width="58" height="14" rx="3" class="c-mask"/>
@@ -5351,7 +5355,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <rect x="826.2" y="669" width="67.6" height="14" rx="3" class="c-mask"/>
           <text x="860" y="679" class="t-edge-dashed" font-size="8" text-anchor="middle">发出并等应答</text>
         </g>
-        <g data-detail="context" data-edge-from="tdengine" data-edge-to="demo" data-edge-label="取一条真实数据当样例" data-edge-key="16" data-edge-id="db-to-demo">
+        <g data-detail="context" data-edge-from="gateway" data-edge-to="demo" data-edge-label="实时分支（非阻塞交出）" data-edge-key="16" data-edge-id="gw-to-demo">
+          <rect x="918.7" y="122" width="115.6" height="14" rx="3" class="c-mask"/>
+          <text x="976.5" y="132" class="t-edge-dashed" font-size="8" text-anchor="middle">实时分支（非阻塞交出）</text>
+        </g>
+        <g data-detail="context" data-edge-from="tdengine" data-edge-to="demo" data-edge-label="取一条真实数据当样例" data-edge-key="17" data-edge-id="db-to-demo">
           <rect x="1417.75" y="167" width="106" height="14" rx="3" class="c-mask"/>
           <text x="1470.75" y="177" class="t-edge-dashed" font-size="8" text-anchor="middle">取一条真实数据当样例</text>
         </g>

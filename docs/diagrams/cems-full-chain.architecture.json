@@ -350,7 +350,7 @@
       "id": "demo",
       "type": "backend",
       "label": "本地回环验证",
-      "sublabel": "验证用，非生产环节",
+      "sublabel": "出口验证入口：实时分支 + 库存样例，非生产环节",
       "tag": "验证用，非生产环节",
       "pos": [
         1330,
@@ -567,6 +567,13 @@
       "from": "hj212",
       "to": "monitor",
       "label": "发出并等应答",
+      "variant": "dashed"
+    },
+    {
+      "id": "gw-to-demo",
+      "from": "gateway",
+      "to": "demo",
+      "label": "实时分支（非阻塞交出）",
       "variant": "dashed"
     },
     {
