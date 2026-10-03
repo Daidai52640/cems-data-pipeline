@@ -7,7 +7,7 @@
   A. 断档窗口必须**出现在结果里**：21:26 ⇒ n=0、coverage=0.0、insufficient=true
   B. 断档两侧：21:24（11 条）coverage=0.9167 不判不足；
      21:27（9 条）coverage=0.75 **正好等于门限**⇒ 按"覆盖率 < 门限"的口径不判不足
-     （与 docs/告警判据设计.md §3.4 的 `覆盖率 < 门限` 一致：等于门限不算不足）
+     （与 docs/adr/0002-告警判据选型.md §3.4 的 `覆盖率 < 门限` 一致：等于门限不算不足）
   C. 正常窗口不被误标：21:28（12 条）coverage=1.0、insufficient=false
   D. envelope 汇总自洽：窗口数/不足窗口数/整体覆盖率/缺口清单互相对得上，
      且"逐点 insufficient"与"汇总 insufficient_windows"完全一致（不会各说各话）

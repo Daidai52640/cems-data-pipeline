@@ -50,16 +50,17 @@
 
 ### 一键启动（Windows）
 
-双击 **`一键启动.bat`**（内部调用 `scripts/start.ps1`），自动完成：环境检查 → 构建镜像 → 启动容器 → 轮询健康接口 → 打开浏览器。
+双击 **`一键启动.bat`**（内部调用同目录的 `start.ps1`），自动完成：环境检查 → 构建镜像 → 启动容器 → 轮询健康接口 → 打开浏览器。
 
 | 启动方式 | 命令 | 说明 |
 |---|---|---|
 | 完整启动（默认） | `.\一键启动.bat` | 构建 + 启动 + 打开页面 |
 | 快速重启（不构建） | `.\一键启动.bat -NoBuild` | 镜像已构建，跳过 build |
 | 只启动不打开浏览器 | `.\一键启动.bat -NoBrowser` | 服务器启动后不自动开页面 |
-| 启动并跟踪日志 | `.\一键启动.bat -Tail` | 启动后 `docker compose logs -f` |
-| 组合使用 | `.\一键启动.bat -NoBuild -NoBrowser -Tail` | 跳过构建和浏览器，直接看日志 |
-| 清理后重新启动 | `.\一键启动.bat -ForceClean` | 清理旧容器/悬空镜像后再启动 |
+| 本地模式（4 个窗口） | `.\一键启动.bat -Mode Local` | 不用 Docker，按层开 4 个 Python 窗口逐层看日志 |
+| 只打印动作 | `.\一键启动.bat -DryRun` | 不构建不启动，只打印将要执行的命令 |
+| 传统构建器 | `.\一键启动.bat -ClassicBuild` | 用 `DOCKER_BUILDKIT=0` 构建（BuildKit 报错时用） |
+| 停止全部容器 | `.\一键启动.bat -Stop` | 等价 `docker compose down`，数据卷保留 |
 | 查看帮助 | `.\一键启动.bat -?` | 显示所有参数说明 |
 
 ### Docker Compose（Linux/macOS 同样适用）
@@ -173,7 +174,7 @@ pip install -r requirements.txt
 - [0008 多设备多实例路线](docs/adr/0008-多设备多实例路线.md)
 
 **其他**
-- [RELEASE v2.0.0 地基冻结](docs/RELEASE-v2.0.0-地基冻结.md)
+- [RELEASE v2.0.0 地基冻结（已归档）](docs/legacy/v2.0.0-地基冻结/RELEASE-v2.0.0-地基冻结.md)
 - [docs 目录说明](docs/README.md)
 - 旧版（6 容器 / 8 测点）资料归档于 `docs/legacy/v1.0-6容器-8测点/`
 
