@@ -3,7 +3,7 @@
 
 为什么需要这个脚本（要回答的问题）：
 报表覆盖率 = 窗口实际条数 / 窗口应有条数，而"应有条数"按**名义**采集周期 `POLL_INTERVAL=5.0 s`
-算（每分钟 12 条）。但实测真实周期是 5.146 s 左右（`docs/性能与可靠性指标.md` §2.1），
+算（每分钟 12 条）。但实测真实周期是 5.146 s 左右（`docs/reference/性能与可靠性指标.md` §2.1），
 所以**覆盖率天然到不了 100%**：分母按名义周期算，分子按真实节奏给。
 于是"门限设多少"不能拍脑袋 —— 设高了会把正常数据全标成"样本不足"，
 设低了会把真断档放过去。本脚本把两个分布量出来，给出：
@@ -54,7 +54,7 @@ from scripts._device_scope import (   # noqa: E402
 
 # 与 src/web/report.py 的默认口径保持一致
 POLL_INTERVAL_NOMINAL: Final[float] = 5.0      # 名义采集周期（网关 POLL_INTERVAL）
-DEFAULT_THRESHOLD: Final[float] = 0.75         # 候选门限 = docs/告警判据设计.md §3.4 的 ALARM_COVERAGE_MIN
+DEFAULT_THRESHOLD: Final[float] = 0.75         # 候选门限 = docs/adr/0002-告警判据选型.md §3.4 的 ALARM_COVERAGE_MIN
 WINDOW_SECONDS: Final[dict[str, int]] = {"1m": 60, "1h": 3600, "1d": 86400}
 
 
@@ -183,7 +183,7 @@ def main() -> int:
     parser.add_argument("--db", default=ops.TD_DB_DEFAULT)
     parser.add_argument("--stable", default=ops.TD_STABLE_DEFAULT)
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
-                        help="候选门限（默认 0.75，与 docs/告警判据设计.md §3.4 同值）")
+                        help="候选门限（默认 0.75，与 docs/adr/0002-告警判据选型.md §3.4 同值）")
     parser.add_argument("--tag", default="calibration", help="输出文件名后缀")
     parser.add_argument("--out-dir", default=str(PROJECT_ROOT / "docs" / "evidence" / "coverage"))
     parser.add_argument("--no-write", action="store_true", help="只打印，不落盘")

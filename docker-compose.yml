@@ -466,7 +466,7 @@ services:
       # 一键开关：设 0 时行为完全回到"每次都查库"（用于前后对照测量）
       CACHE_ENABLED: ${CACHE_ENABLED:-1}
       # 安全边界：查询上界必须早于"最新数据时间戳"这么多秒才允许进缓存。
-      # 取值依据 = 网关补传慢路径实测 max 32.1 s（docs/性能与可靠性指标.md §4.2）。
+      # 取值依据 = 网关补传慢路径实测 max 32.1 s（docs/reference/性能与可靠性指标.md §4.2）。
       CACHE_MARGIN_SECONDS: ${CACHE_MARGIN_SECONDS:-60}
       # 条目 TTL：兜底失效（水位丢失 / 外部直接改库 / 超长滞后补传）
       CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
@@ -480,13 +480,13 @@ services:
       # ⚠️ 调大等于放宽容忍断流的时间（"绿着但没数据"的窗口变长），调小会在抖动时误报。
       HEALTH_STALE_POLL_FACTOR: ${HEALTH_STALE_POLL_FACTOR:-3}
       # 门限（0~1）：低于它判 insufficient，绝不判达标。默认 0.75 =
-      # docs/告警判据设计.md §3.4 的 ALARM_COVERAGE_MIN；调到 0.84 以上会误标正常数据
+      # docs/adr/0002-告警判据选型.md §3.4 的 ALARM_COVERAGE_MIN；调到 0.84 以上会误标正常数据
       # （实测天花板 5.0/5.154 = 97.0%，干净 1 分钟窗口覆盖率 P05=91.7% / 最差 83.3%）。
       REPORT_COVERAGE_MIN: ${REPORT_COVERAGE_MIN:-0.75}
       # 缺口清单上限（只截清单，不截计数）：整段断档时避免响应体翻倍
       REPORT_GAP_MAX: ${REPORT_GAP_MAX:-200}
       # 在途样本宽限（秒）：只作用于进行中的窗口，防"刚过十几秒就说这一小时缺数"。
-      # 依据 = 网关补传实测最大滞后 32.1 s（docs/性能与可靠性指标.md §4.2），取 60 s；
+      # 依据 = 网关补传实测最大滞后 32.1 s（docs/reference/性能与可靠性指标.md §4.2），取 60 s；
       # 与 CACHE_MARGIN_SECONDS 同一依据、同一取值。
       REPORT_INFLIGHT_GRACE_SECONDS: ${REPORT_INFLIGHT_GRACE_SECONDS:-60}
     ports:
