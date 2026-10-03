@@ -380,8 +380,8 @@ def api_health() -> tuple[Response, int] | Response:
       `ok` 的语义**升级为"真健康"**，与 HTTP 状态严格一致（200 ⇔ ok=true），
       并新增同义字段 `healthy`、`reason`、`data_age_seconds`、`stale_after_seconds`。
       需要"库是否连得上"这个子判据的调用方读 `td` 字段。
-      （仓库内唯一的读者是 start.ps1：它只匹配 `"ok": false` 打一条提示，不会因为多一个
-        原因而失效；scripts/measure_nginx_redis.py 只量接口耗时，不解析字段。）
+      （仓库内没有解析这些字段的消费者：容器 healthcheck 直接按 HTTP 状态码判成败，
+        scripts/measure_nginx_redis.py 只量接口耗时。字段只增不减，不影响既有调用方。）
     """
     threshold = HEALTH_STALE_AFTER_SECONDS
     try:
