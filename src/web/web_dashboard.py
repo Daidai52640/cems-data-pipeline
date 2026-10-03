@@ -637,7 +637,17 @@ HTML_PAGE = """<!DOCTYPE html>
   [hidden] { display:none !important; }
   body { margin:0; padding:20px; background:#0f172a; font-family: sans-serif; }
   h1 { color:#e2e8f0; font-size:20px; margin:0 0 16px; }
-  #chart { width:100%; height:70vh; background:#0f172a; }
+  #chart { width:100%; height:64vh; background:#0f172a; }
+  .legendbar { display:flex; align-items:center; flex-wrap:wrap; gap:14px; margin:6px 0 8px;
+               font-size:13px; color:#cbd5e1; }
+  .legendbar .lg { cursor:pointer; user-select:none; display:inline-flex; align-items:center;
+                   gap:5px; }
+  .legendbar .lg.off { color:#475569; }
+  .legendbar .lg i { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .legendbar .lg.off i { opacity:.35; }
+  .legendbar .lgbtn { background:#1e293b; color:#cbd5e1; border:1px solid #334155;
+                      border-radius:6px; padding:3px 10px; font-size:12px; cursor:pointer; }
+  .legendbar #legend-items { display:inline-flex; flex-wrap:wrap; gap:14px; }
   #status { color:#94a3b8; font-size:13px; margin-top:10px; }
   #status.err { color:#f87171; }
   .modes { display:flex; gap:8px; margin-bottom:10px; }
@@ -676,6 +686,11 @@ HTML_PAGE = """<!DOCTYPE html>
     <button id="free-query">查询</button>
   </div>
   <div class="panelnote">以下每个面板是**各自独立的 Y 轴刻度**（按量纲分组，避免把量程相差几个数量级的曲线画在同一根轴上）；横轴共用，鼠标悬停会联动。</div>
+  <div class="legendbar">
+    <span id="legend-items"></span>
+    <button class="lgbtn" id="lg-all">全选</button>
+    <button class="lgbtn" id="lg-invert">反选</button>
+  </div>
   <div id="chart"></div>
   <div id="status">加载中...</div>
 
@@ -690,50 +705,6 @@ HTML_PAGE = """<!DOCTYPE html>
   // p.axis 现在是**面板下标**：每个面板一格、一根自己的 Y 轴（见 CHART_PANELS 的注释）
   var POINTS = __POINTS_JSON__;
   var PANELS = __PANELS_JSON__;
-  // 画布高度按面板数现算（每格一根自己的 Y 轴），页面纵向滚动
-  var PANEL_TOP = 46, PANEL_H = 92, PANEL_GAP = 26, PANEL_BOTTOM = 62;
-  var ALL_AXES = PANELS.map(function(panel, index) { return index; });
-  chartEl.style.height = (PANEL_TOP + PANELS.length * (PANEL_H + PANEL_GAP)
-    - PANEL_GAP + PANEL_BOTTOM) + 'px';
-  var AXIS_STYLE = { color: '#94a3b8' };
-  // 单次请求超时：fetch 默认不会超时，请求卡住时 finally 不执行、轮询会悄悄停掉
-  var FETCH_TIMEOUT_MS = 15000;
-
-  // ---- 折算值 / 超标判据（/api/data 与 /api/curve 都不含限值，按固定口径在前端现算）----
-  // 只对三个浓度测点折算，口径同 src/common/points.py（基准氧 6%，21−6=15）：
-  //   折算值 = 实测值 × 15 / (21 − O2)
-  // O2 > 19% 时分母过小、折算结果没意义 → 不折算（显示 “—”）；
-  // 其他测点（O2、湿度、流量、温度、压力、流速）不折算。
-  var ZS_MAP = { dust: true, so2: true, nox: true };
-  var ZS_LIMITS = { dust: 5, so2: 35, nox: 50 };   // mg/m3：颗粒物 / SO2 / NOx
-  var O2_FOR_ZS_MAX = 19;
-  var COLOR_OVER = '#f87171';
-
-  function isFiniteNum(v) {
-    return typeof v === 'number' && isFinite(v);
-  }
-
-  // 算折算值；不该折算 / 缺实测或缺 O2 / O2>19% / 分母≤0 时统一返回 null（界面显示 “—”）
-  function toConverted(key, measured, o2) {
-    if (!ZS_MAP[key] || !isFiniteNum(measured) || !isFiniteNum(o2)) { return null; }
-    if (o2 > O2_FOR_ZS_MAX) { return null; }
-    var denominator = 21 - o2;
-    if (denominator <= 0) { return null; }
-    return measured * 15 / denominator;
-  }
-
-  // 悬停里的数字统一保留最多 2 位小数；null / 非有限数显示 “—”
-  function fmtNum(v) {
-    if (!isFiniteNum(v)) { return '—'; }
-    return String(Math.round(v * 100) / 100);
-  }
-
-  if (typeof echarts === 'undefined') {
-    status.className = 'err';
-    status.textContent = '图表库加载失败（网络问题），请检查网络后刷新';
-    return;
-  }
-
   var myChart = echarts.init(chartEl);
   var mode = 'realtime';      // realtime | free
   var timer = null;           // 只记实时模式的下一轮定时器，切模式时要能取消
@@ -747,106 +718,40 @@ HTML_PAGE = """<!DOCTYPE html>
   // 轴的种类：category（实时，固定窗口）| time（自由区间，可能跨天）。它决定本帧能否走 merge：
   // merge 模式下上一种轴的 xAxis.data 会残留到另一种轴上，所以轴类型一变必须整帧重建。
   var lastAxisMode = null;
+  var lastFrame = null;      // 最近一帧的数据，勾选变化时按同一份数据重画（不重新查库）
   // 视图代次：切模式就 +1。在途请求回来时若代次对不上，说明它属于上一个模式，
   // 必须整帧丢弃 —— 否则上一轮实时请求回来会把自由区间的画面和状态栏盖回去（表现为"闪一下"）
   var viewToken = 0;
 
-  // 图例状态的唯一真源是**图表自己的** legend.selected：用户点图例会改它，
-  // 任何 dispatchAction 也会改它。只靠事件回调记账会漏（legendSelect /
-  // legendUnSelect 触发的是 legendselected / legendunselected 两个**不同**事件），
-  // 所以这里一律先读回图表状态，再决定要不要把成对的散点一起收起。
-  function readLegendSelected(ev) {
-    if (ev && ev.selected) { return ev.selected; }
-    try {
-      var o = myChart.getOption();
-      return (o && o.legend && o.legend[0] && o.legend[0].selected) || null;
-    } catch (e) { return null; }
-  }
-
-  function applyLegendSelected(sel) {
-    if (!sel) { return; }
+  // ---- 顶部自绘图例：一行 9 个测点名（选中=本色，未选=灰）+ 全选 / 反选 ----
+  // 不用 ECharts 自带图例：它的反选/全选要额外派发 action，而且灰显样式改不动。
+  // 勾选状态放 hiddenPoints，直接决定"这一帧画哪几条曲线"，轴也按可见条数切换。
+  function paintLegend() {
+    var box = document.getElementById('legend-items');
+    if (!box) { return; }
+    box.innerHTML = '';
     POINTS.forEach(function(p) {
-      if (Object.prototype.hasOwnProperty.call(sel, p.label)) {
-        hiddenPoints[p.label] = (sel[p.label] === false);
-      }
-    });
-  }
-
-  // 超标散点不是图例条目（不占图例行），要手工跟着主线一起显隐，
-  // 否则会出现"曲线被关掉了、红点还孤零零飘着"。
-  function syncOverMarks() {
-    POINTS.forEach(function(p) {
-      if (!ZS_MAP[p.key]) { return; }
-      myChart.setOption({
-        series: [{
-          id: 'over-' + p.key,
-          data: hiddenPoints[p.label] ? [] : (overMarks[p.key] || [])
-        }]
+      var span = document.createElement('span');
+      span.className = 'lg' + (hiddenPoints[p.label] ? ' off' : '');
+      span.innerHTML = '<i style="background:' + p.color + '"></i>' + p.label;
+      span.addEventListener('click', function() {
+        hiddenPoints[p.label] = !hiddenPoints[p.label];
+        paintLegend();
+        if (lastFrame) { render(lastFrame.d, lastFrame.useTimeAxis); }
       });
+      box.appendChild(span);
     });
   }
-
-  ['legendselectchanged', 'legendselected', 'legendunselected'].forEach(function(name) {
-    myChart.on(name, function(ev) {
-      applyLegendSelected(readLegendSelected(ev));
-      syncOverMarks();
-    });
-  });
-
-
-  // ---- 设备维度（V3 双设备）：入口就是这一排按钮，不再"只在库里、页面上看不见" ----
-  var deviceBox = document.getElementById('devices');
-  var scope = '';                      // '' = 用后端配置的默认设备
-  var defaultScope = '';
-  var labelMap = {};                   // scope -> 显示名（1号炉 / 2号炉）
-  function scopeLabel() {
-    return labelMap[scope] || labelMap[defaultScope] || scope || defaultScope || '(默认)';
+  function setAllLegend(on) {
+    POINTS.forEach(function(p) { hiddenPoints[p.label] = !on; });
+    paintLegend();
+    if (lastFrame) { render(lastFrame.d, lastFrame.useTimeAxis); }
   }
-  function scopeQuery() {
-    if (!scope) { return ''; }
-    var parts = scope.split('/');       // 'plant/device'
-    return 'plant=' + encodeURIComponent(parts[0]) + '&device=' + encodeURIComponent(parts[1]);
+  function invertLegend() {
+    POINTS.forEach(function(p) { hiddenPoints[p.label] = !hiddenPoints[p.label]; });
+    paintLegend();
+    if (lastFrame) { render(lastFrame.d, lastFrame.useTimeAxis); }
   }
-  function withScope(url) {
-    var q = scopeQuery();
-    if (!q) { return url; }
-    return url + (url.indexOf('?') >= 0 ? '&' : '?') + q;
-  }
-  function paintDevices() {
-    Array.prototype.forEach.call(deviceBox.querySelectorAll('.dev'), function(el) {
-      var on = (el.getAttribute('data-scope') === scope);
-      el.className = 'dev' + (on ? ' active' : '');
-    });
-  }
-  function loadDevices() {
-    fetch('/api/devices')
-      .then(function(res) { return res.json(); })
-      .then(function(body) {
-        defaultScope = body.default_scope || '';
-        var list = body.devices || [];
-        if (!list.length) { deviceBox.textContent = '设备：库里还没有数据'; return; }
-        list.forEach(function(item) {
-          var span = document.createElement('span');
-          span.className = 'dev';
-          span.setAttribute('data-scope', item.plant + '/' + item.device);
-          span.title = 'plant=' + item.plant + ' device=' + item.device;
-          span.textContent = item.label;
-          labelMap[item.plant + '/' + item.device] = item.label;
-          span.addEventListener('click', function() {
-            var next = item.plant + '/' + item.device;
-            if (next === defaultScope) { next = ''; }   // 默认设备用不带参数的 URL
-            if (next === scope) { return; }
-            scope = next;
-            paintDevices();
-            if (mode === 'realtime') { loadRealtime(); } else { loadFree(); }
-          });
-          deviceBox.appendChild(span);
-        });
-        paintDevices();
-      })
-      .catch(function() { deviceBox.textContent = '设备：取设备列表失败（接口 /api/devices）'; });
-  }
-
   function showError(msg) {
     status.className = 'err';
     status.textContent = msg;
@@ -898,96 +803,55 @@ HTML_PAGE = """<!DOCTYPE html>
 
   // 两个接口返回的都是列式结构，共用这一个渲染函数
   // useTimeAxis：自由区间的点可能跨天跨月，category 轴会把标签挤成一团，改用 time 轴
+  // 单图 + 轴自适应（与平台一致）：
+  //   可见 1 条 -> 线性轴，自动缩放到该序列真实范围（负数照常画）
+  //   可见 >=2 条 -> 对数轴，下限固定 0.001，<=0 的值压到 0.001 画成一条底线
+  // 因此"勾了几条"既决定画哪几条，也决定用哪种轴；任何一次勾选都要整帧重建。
   function render(d, useTimeAxis) {
-    var axisMode = useTimeAxis ? 'time' : 'category';
-    // 先把图表里当前的图例选中态读回来 —— 它是用户意图，绝不能被这一帧的新数据覆盖
-    applyLegendSelected(readLegendSelected(null));
-    // ★ 只有"轴类型变了"才整帧重建；同类型的两帧之间走 merge。
-    //   notMerge=true 会把用户的图例选中态、图例滚动位置、tooltip 当前指向一起丢掉，
-    //   并且每帧都重放一次入场动画 —— 这正是"实时刷新把交互重置掉"的根因。
-    var mustReset = (axisMode !== lastAxisMode);
-    lastAxisMode = axisMode;
+    lastFrame = { d: d, useTimeAxis: useTimeAxis };
+    var visible = POINTS.filter(function(p) { return !hiddenPoints[p.label]; });
+    var axisKind = (visible.length >= 2) ? 'log' : 'lin';
+    var key = (useTimeAxis ? 'time' : 'category') + ':' + axisKind + ':'
+      + visible.map(function(p) { return p.key; }).join(',');
+    var mustReset = (key !== lastAxisMode);
+    lastAxisMode = key;
 
-    // 每个面板一个 grid + 一组 x/y 轴，横轴联动（axisPointer.link），
-    // 于是"每个量纲自己的刻度"与"同一条时间线"两件事同时成立
-    var xAxis = PANELS.map(function(panel, index) {
-      var last = (index === PANELS.length - 1);
-      return {
-        gridIndex: index,
-        type: useTimeAxis ? 'time' : 'category',
-        data: useTimeAxis ? undefined : d.ts,
-        axisLabel: last ? AXIS_STYLE : { show: false },
-        axisTick: { show: last },
-        axisLine: { lineStyle: { color: '#334155' } }
-      };
-    });
-    var yAxis = PANELS.map(function(panel, index) {
-      return {
-        gridIndex: index,
-        type: 'value',
-        name: panel.title + ' (' + panel.unit + ')',
-        nameTextStyle: AXIS_STYLE,
-        axisLabel: AXIS_STYLE,
-        // ⚠️ scale:true = 不强制包含 0。压力这种 85~105 的量程如果从 0 起，曲线会被压平
-        //    （这正是改造前把流量/温度/压力塞进同一根轴的病根）。
-        scale: true,
-        splitNumber: 3,
-        splitLine: { lineStyle: { color: 'rgba(51,65,85,0.5)' } }
-      };
-    });
-    var o2Column = d.o2 || [];
-    var series = POINTS.map(function(p) {
+    var LOG_FLOOR = 0.001;
+    var xAxis = useTimeAxis
+      ? { type: 'time', axisLabel: Object.assign({}, AXIS_STYLE,
+          { formatter: '{yyyy}/{MM}/{dd} {HH}' }) }
+      : { type: 'category', data: d.ts, axisLabel: AXIS_STYLE };
+    var yAxis = axisKind === 'log'
+      ? { type: 'log', min: LOG_FLOOR, axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE,
+          splitLine: { lineStyle: { color: 'rgba(51,65,85,0.5)' } } }
+      : { type: 'value', scale: true, axisLabel: AXIS_STYLE, nameTextStyle: AXIS_STYLE,
+          splitLine: { lineStyle: { color: 'rgba(51,65,85,0.5)' } } };
+
+    var series = visible.map(function(p) {
       var values = d[p.key] || [];
       var data = useTimeAxis
         ? d.ts.map(function(ts, index) { return [ts.replace(' ', 'T'), values[index]]; })
-        : values;
+        : values.slice();
+      if (axisKind === 'log') {
+        data = data.map(function(item) {
+          if (item && item.length === 2) {
+            var v = item[1];
+            return [item[0], (v === null || v === undefined || v <= 0) ? LOG_FLOOR : v];
+          }
+          return (item === null || item === undefined || item <= 0) ? LOG_FLOOR : item;
+        });
+      }
       return {
-        // 稳定 id：merge 时按 id 认人，保证"这条线还是这条线"，不会张冠李戴
         id: 'pt-' + p.key,
         name: p.label,
         type: 'line',
-        xAxisIndex: p.axis,
-        yAxisIndex: p.axis,
         data: data,
         smooth: true,
         showSymbol: false,
-        connectNulls: false,     // 该窗口没数据就断开，不要拿相邻点连过去
+        connectNulls: false,
         itemStyle: { color: p.color }
       };
     });
-
-    // 超标点：折算值 > 限值（严格大于，**等于限值算达标**）才在曲线上标红；
-    // O2>19% 算不出折算值的点不判、不标。红点画在实测值位置（即曲线本身的那个点上）。
-    POINTS.forEach(function(p) {
-      if (!ZS_MAP[p.key]) { return; }
-      var values = d[p.key] || [];
-      var marks = [];
-      for (var i = 0; i < values.length; i++) {
-        var zs = toConverted(p.key, values[i], o2Column[i]);
-        if (zs !== null && zs > ZS_LIMITS[p.key]) {
-          var x = useTimeAxis ? d.ts[i].replace(' ', 'T') : d.ts[i];
-          marks.push([x, values[i]]);
-        }
-      }
-      overMarks[p.key] = marks;          // 记住最近一帧，图例切换时不用重算
-      series.push({
-        id: 'over-' + p.key,
-        name: p.label + '·超标点',
-        type: 'scatter',
-        xAxisIndex: p.axis,
-        yAxisIndex: p.axis,
-        // 对应的曲线被图例关掉时，它的超标点一起收起（否则只剩红点飘在空图上）
-        data: hiddenPoints[p.label] ? [] : marks,
-        symbolSize: 9,
-        z: 10,
-        silent: true,
-        tooltip: { show: false },    // tooltip 统一走下面的三行格式，散点不单独占行
-        itemStyle: { color: COLOR_OVER, borderColor: '#fecaca', borderWidth: 1 }
-      });
-    });
-
-    var legendSelected = {};
-    POINTS.forEach(function(p) { legendSelected[p.label] = !hiddenPoints[p.label]; });
 
     myChart.setOption({
       tooltip: {
@@ -995,63 +859,28 @@ HTML_PAGE = """<!DOCTYPE html>
         backgroundColor: '#1e293b',
         borderColor: '#334155',
         textStyle: { color: '#e2e8f0' },
-        // 三个浓度测点各显示 实测 / 折算 / 限值 三行；折算不可用（O2>19% 等）显示 “—”；
-        // 其余测点保持单行。折算值 > 限值时在折算行后用红字注 “（超标）”。
+        // 与平台一致：一行一个测点 "● 名称[单位]  数值"，只列当前可见的
         formatter: function(params) {
           if (!params || !params.length) { return ''; }
-          var dataIndex = params[0].dataIndex;
-          var html = '<div style="font-weight:600;margin-bottom:4px;">' + d.ts[dataIndex] + '</div>';
-          POINTS.forEach(function(p) {
+          var index = params[0].dataIndex;
+          var html = '<div style="font-weight:600;margin-bottom:4px;">' + d.ts[index] + '</div>';
+          visible.forEach(function(p) {
             var dot = '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;'
               + 'background:' + p.color + ';margin-right:6px;"></span>';
-            var indent = '<span style="display:inline-block;width:10px;margin-right:6px;"></span>';
-            var measured = (d[p.key] || [])[dataIndex];
-            if (ZS_MAP[p.key]) {
-              var zs = toConverted(p.key, measured, o2Column[dataIndex]);
-              var over = zs !== null && zs > ZS_LIMITS[p.key];
-              html += dot + p.label + '　实测：' + fmtNum(measured)
-                + (p.unit ? ' ' + p.unit : '') + '<br/>'
-                + indent + '折算：' + fmtNum(zs)
-                + (over ? '<span style="color:' + COLOR_OVER + ';font-weight:600;">（超标）</span>' : '')
-                + '<br/>'
-                + indent + '限值：' + ZS_LIMITS[p.key]
-                + (p.unit ? ' ' + p.unit : '') + '<br/>';
-            } else {
-              html += dot + p.label + '：' + fmtNum(measured)
-                + (p.unit ? ' ' + p.unit : '') + '<br/>';
-            }
+            html += dot + p.label + (p.unit ? '[' + p.unit + ']' : '') + '&emsp;&emsp;'
+              + fmtNum((d[p.key] || [])[index]) + '<br/>';
           });
           return html;
         }
       },
-      legend: {
-        data: POINTS.map(function(p) { return p.label; }),
-        // 显式把用户的选择带回来：本帧是 merge 时它本来就还在，
-        // 本帧是整帧重建（轴类型切换）时靠它把选择恢复回去。
-        selected: legendSelected,
-        textStyle: { color: '#cbd5e1' },
-        type: 'scroll'
-      },
-      // 面板纵向排布：顶部留给共享图例，底部留给时间轴 + 缩放条
-      grid: PANELS.map(function(panel, index) {
-        return {
-          left: 74, right: 24,
-          top: PANEL_TOP + index * (PANEL_H + PANEL_GAP),
-          height: PANEL_H, containLabel: false
-        };
-      }),
-      axisPointer: {
-        link: [{ xAxisIndex: 'all' }],       // 悬停联动：一条竖线贯穿所有面板
-        label: { backgroundColor: '#334155' }
-      },
-      // 横轴缩放：实时模式下也能拖选一段时间窗，且刷新不会把它重置
-      //（不写 start/end —— merge 时才留得住用户的缩放；整帧重建时自然回到全量）
+      legend: { show: false },     // 图例由页面顶部那条自绘（可灰显 + 全选/反选）
+      grid: { left: 96, right: 44, top: 26, bottom: 78 },
+      axisPointer: { label: { backgroundColor: '#334155' } },
       dataZoom: [
-        { type: 'inside', xAxisIndex: ALL_AXES, filterMode: 'none' },
-        { type: 'slider', xAxisIndex: ALL_AXES, filterMode: 'none',
-          bottom: 8, height: 18, borderColor: '#334155',
-          textStyle: { color: '#94a3b8' }, fillerColor: 'rgba(14,165,233,0.18)',
-          handleStyle: { color: '#0ea5e9' } }
+        { type: 'inside', filterMode: 'none' },
+        { type: 'slider', filterMode: 'none', bottom: 10, height: 18,
+          borderColor: '#334155', textStyle: { color: '#94a3b8' },
+          fillerColor: 'rgba(14,165,233,0.18)', handleStyle: { color: '#0ea5e9' } }
       ],
       animationDurationUpdate: 300,
       xAxis: xAxis,
@@ -1059,7 +888,6 @@ HTML_PAGE = """<!DOCTYPE html>
       series: series
     }, mustReset);
   }
-
   function latestText(d) {
     return POINTS.map(function(p) {
       var arr = d[p.key] || [];
@@ -1188,6 +1016,9 @@ HTML_PAGE = """<!DOCTYPE html>
   document.getElementById('free-query').addEventListener('click', loadFree);
   window.addEventListener('resize', function() { myChart.resize(); });
 
+  paintLegend();
+  document.getElementById('lg-all').addEventListener('click', function() { setAllLegend(true); });
+  document.getElementById('lg-invert').addEventListener('click', invertLegend);
   loadDevices();
   setMode('realtime');
 })();
