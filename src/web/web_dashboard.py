@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -244,6 +245,20 @@ def request_scope() -> str:
     return cache.scope_from_request(request.args.get("plant"), request.args.get("device"))
 
 
+def device_label(plant: str, device: str) -> str:
+    """页面上显示的设备名：仿真环境里 `plant1/device1` -> `1号炉`。
+
+    ★ 只改**显示**，不动 tag：库里/接口里仍是 plant1/device1。tag 是数据归属，
+      SQL 过滤、缓存键、告警表都按它走，动它牵一发动全身；页面上的名字是给人看的。
+    ★ 规则：device 末尾的数字 n -> `{n}号炉`；匹配不上就原样显示 `plant/device`，
+      绝不吞掉信息（将来接现场、设备名不带数字时也不会变空白）。
+    """
+    matched = re.search(r"(\d+)\s*$", device or "")
+    if matched:
+        return f"{int(matched.group(1))}号炉"
+    return f"{plant}/{device}"
+
+
 def query_devices() -> list[dict[str, str]]:
     """库里**有数据的**全部 (plant, device)，供页面上的设备选择器用。
 
@@ -266,7 +281,11 @@ def query_devices() -> list[dict[str, str]]:
                 conn.close()
             except Exception as exc:
                 LOGGER.debug("关闭 TDengine 连接时出错（忽略）: %s", exc)
-    devices = [{"plant": str(row[0]), "device": str(row[1])} for row in rows]
+    devices = [
+        {"plant": str(row[0]), "device": str(row[1]),
+         "label": device_label(str(row[0]), str(row[1]))}
+        for row in rows
+    ]
     # 本实例配置的那台排在最前，其余按名称稳定排序 —— 选择器顺序别每次刷新都跳
     # ⚠️ 设备维度的唯一真源在 cache（`TD_PLANT/TD_DEVICE` 是那边的配置项），这里不要另读环境变量
     default_plant, default_device = cache.DEVICE_SCOPE_PARTS
@@ -777,9 +796,9 @@ HTML_PAGE = """<!DOCTYPE html>
   var deviceBox = document.getElementById('devices');
   var scope = '';                      // '' = 用后端配置的默认设备
   var defaultScope = '';
+  var labelMap = {};                   // scope -> 显示名（1号炉 / 2号炉）
   function scopeLabel() {
-    if (!scope) { return defaultScope || '(默认)'; }
-    return scope;
+    return labelMap[scope] || labelMap[defaultScope] || scope || defaultScope || '(默认)';
   }
   function scopeQuery() {
     if (!scope) { return ''; }
@@ -809,7 +828,8 @@ HTML_PAGE = """<!DOCTYPE html>
           span.className = 'dev';
           span.setAttribute('data-scope', item.plant + '/' + item.device);
           span.title = 'plant=' + item.plant + ' device=' + item.device;
-          span.textContent = item.device + '（' + item.plant + '）';
+          span.textContent = item.label;
+          labelMap[item.plant + '/' + item.device] = item.label;
           span.addEventListener('click', function() {
             var next = item.plant + '/' + item.device;
             if (next === defaultScope) { next = ''; }   // 默认设备用不带参数的 URL
@@ -1267,6 +1287,7 @@ TABLE_PAGE = """<!DOCTYPE html>
   var unit = '1h';            // 1m | 1h | 1d
   var scope = '';             // plant/device，空 = 后端默认设备
   var defaultScope = '';
+  var labelMap = {};          // scope -> 页面显示名（1号炉 / 2号炉）
   var rows = [];              // 最近一次查询回来的窗口
   var filtered = [];
   var timer = null;
@@ -1410,7 +1431,7 @@ TABLE_PAGE = """<!DOCTYPE html>
       var covText = (cov.overall === undefined || cov.overall === null) ? ''
         : '　覆盖率 ' + Math.round(cov.overall * 1000) / 10 + '%（门限 ' + Math.round((cov.threshold || 0) * 100) + '%，不足 ' + (cov.insufficient_windows || 0) + ' 个窗口）';
       showStatus(rows.length + ' 个窗口　' + r.body.start + ' ~ ' + r.body.end + covText
-        + '　设备 ' + (scope || defaultScope), false);
+        + '　设备 ' + (labelMap[scope] || labelMap[defaultScope] || scope || defaultScope), false);
     }).catch(function() {
       showStatus('后端连不上（确认 web_dashboard.py 在跑）', true);
     }).finally(function() { el('query').disabled = false; });
@@ -1461,7 +1482,8 @@ TABLE_PAGE = """<!DOCTYPE html>
     list.forEach(function(item) {
       var opt = document.createElement('option');
       opt.value = item.plant + '/' + item.device;
-      opt.textContent = item.device + '（' + item.plant + '）';
+      opt.textContent = item.label;
+      labelMap[opt.value] = item.label;
       if (opt.value === defaultScope || (list.length === 1 && !defaultScope)) { opt.selected = true; }
       sel.appendChild(opt);
     });
