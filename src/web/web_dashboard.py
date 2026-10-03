@@ -685,7 +685,6 @@ HTML_PAGE = """<!DOCTYPE html>
     <label>止</label> <input type="datetime-local" id="free-end">
     <button id="free-query">查询</button>
   </div>
-  <div class="panelnote">以下每个面板是**各自独立的 Y 轴刻度**（按量纲分组，避免把量程相差几个数量级的曲线画在同一根轴上）；横轴共用，鼠标悬停会联动。</div>
   <div class="legendbar">
     <span id="legend-items"></span>
     <button class="lgbtn" id="lg-all">全选</button>
@@ -700,6 +699,21 @@ HTML_PAGE = """<!DOCTYPE html>
   var status = document.getElementById('status');
   var REFRESH_MS = __REFRESH_MS__;
   var REFRESH_SEC = __REFRESH_SEC__;
+  // 单次请求超时：fetch 默认不会超时，请求卡住时 finally 不执行、轮询会悄悄停掉
+  var FETCH_TIMEOUT_MS = 15000;
+  var AXIS_STYLE = { color: '#94a3b8' };
+  // ---- 折算值 / 超标判据（与 src/common/points.py 同源：基准氧 6%，21-6=15；限值 5/35/50）----
+  var ZS_MAP = { dust: true, so2: true, nox: true };
+  var ZS_LIMITS = { dust: 5, so2: 35, nox: 50 };
+  var O2_FOR_ZS_MAX = 19;
+  var COLOR_OVER = '#f87171';
+  function isFiniteNum(v) {
+    return typeof v === 'number' && isFinite(v);
+  }
+  function fmtNum(v) {
+    if (v === null || v === undefined || !isFinite(v)) { return '—'; }
+    return String(Math.round(v * 100) / 100);
+  }
 
   // 测点表与面板表由后端注入（真源是 src/common/points.py + CHART_PANELS / POINT_PRESENTATION）
   // p.axis 现在是**面板下标**：每个面板一格、一根自己的 Y 轴（见 CHART_PANELS 的注释）
@@ -724,6 +738,59 @@ HTML_PAGE = """<!DOCTYPE html>
   var viewToken = 0;
 
   // ---- 顶部自绘图例：一行 9 个测点名（选中=本色，未选=灰）+ 全选 / 反选 ----
+  // ---- 设备维度（双设备）：页面顶部那一排设备按钮 ----
+  var deviceBox = document.getElementById('devices');
+  var scope = '';                       // '' = 用后端配置的默认设备
+  var defaultScope = '';
+  var labelMap = {};                    // scope -> 显示名（1号炉 / 2号炉）
+  function scopeLabel() {
+    return labelMap[scope] || labelMap[defaultScope] || scope || defaultScope || '(默认)';
+  }
+  function scopeQuery() {
+    if (!scope) { return ''; }
+    var parts = scope.split('/');
+    return 'plant=' + encodeURIComponent(parts[0]) + '&device=' + encodeURIComponent(parts[1]);
+  }
+  function withScope(url) {
+    var q = scopeQuery();
+    if (!q) { return url; }
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + q;
+  }
+  function paintDevices() {
+    Array.prototype.forEach.call(deviceBox.querySelectorAll('.dev'), function(el) {
+      var on = (el.getAttribute('data-scope') === scope);
+      el.className = 'dev' + (on ? ' active' : '');
+    });
+  }
+  function loadDevices() {
+    fetch('/api/devices')
+      .then(function(res) { return res.json(); })
+      .then(function(body) {
+        defaultScope = body.default_scope || '';
+        var list = body.devices || [];
+        if (!list.length) { deviceBox.textContent = '设备：库里还没有数据'; return; }
+        list.forEach(function(item) {
+          var span = document.createElement('span');
+          span.className = 'dev';
+          span.setAttribute('data-scope', item.plant + '/' + item.device);
+          span.title = 'plant=' + item.plant + ' device=' + item.device;
+          span.textContent = item.label;
+          labelMap[item.plant + '/' + item.device] = item.label;
+          span.addEventListener('click', function() {
+            var next = item.plant + '/' + item.device;
+            if (next === defaultScope) { next = ''; }   // 默认设备用不带参数的 URL
+            if (next === scope) { return; }
+            scope = next;
+            paintDevices();
+            if (mode === 'realtime') { loadRealtime(); } else { loadFree(); }
+          });
+          deviceBox.appendChild(span);
+        });
+        paintDevices();
+      })
+      .catch(function() { deviceBox.textContent = '设备：取设备列表失败（接口 /api/devices）'; });
+  }
+
   // 不用 ECharts 自带图例：它的反选/全选要额外派发 action，而且灰显样式改不动。
   // 勾选状态放 hiddenPoints，直接决定"这一帧画哪几条曲线"，轴也按可见条数切换。
   function paintLegend() {
