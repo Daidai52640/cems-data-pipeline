@@ -542,15 +542,20 @@ def a7_self_healing() -> None:
             f"cache.jsonl：{cache_desc}",
         )
     # (3) 订阅端会话是否恢复（重启后 broker 把离线消息补投）
+    # ⚠️ 用 `--tail 200` 会**假失败**：TDengine 没就绪时每条报文打一行 WARNING，
+    #    几分钟就能把"MQTT 已连接（会话恢复=True）"那行挤出 200 行窗口（实测踩到）。
+    #    这里改成取**较大窗口**，并明确报告"是在多少行里找到的"。
     proc = subprocess.run(
-        ["docker", "logs", "cems-subscriber", "--tail", "200"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        ["docker", "logs", "cems-subscriber", "--tail", "20000"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
     )
-    resumes = re.findall(r"会话恢复=(\w+)", proc.stdout + proc.stderr)
+    logs = proc.stdout + proc.stderr
+    resumes = re.findall(r"会话恢复=(\w+)", logs)
     _check(
         "A7", bool(resumes),
         "接入层重启后 broker 能补投离线消息（持久会话生效）",
-        f"订阅端日志里最近一次会话恢复 = {resumes[-1] if resumes else '（日志里没有该字段）'}",
+        f"订阅端日志（{len(logs.splitlines())} 行）里最近一次会话恢复 = "
+        f"{resumes[-1] if resumes else '（没找到；可能是首次连接，会话还没建立过）'}",
     )
 
 

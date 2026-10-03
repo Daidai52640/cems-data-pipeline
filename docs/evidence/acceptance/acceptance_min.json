@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-03 18:07:14",
+  "generated_at": "2026-10-03 18:27:11",
   "database": "cems.cems_data",
   "web_url": "http://127.0.0.1:5001",
   "passed": 25,
@@ -9,14 +9,14 @@
     {
       "item": "A1",
       "pass": true,
-      "claim": "plant1/device1 最近 90 秒有 17 条新数据（正常区间 6~24）",
-      "evidence": "ts > NOW-90s 的 COUNT(*) = 17（plant1）"
+      "claim": "plant1/device1 最近 90 秒有 18 条新数据（正常区间 6~24）",
+      "evidence": "ts > NOW-90s 的 COUNT(*) = 18（plant1）"
     },
     {
       "item": "A1",
       "pass": true,
-      "claim": "plant2/device2 最近 90 秒有 17 条新数据（正常区间 6~24）",
-      "evidence": "ts > NOW-90s 的 COUNT(*) = 17（plant2）"
+      "claim": "plant2/device2 最近 90 秒有 18 条新数据（正常区间 6~24）",
+      "evidence": "ts > NOW-90s 的 COUNT(*) = 18（plant2）"
     },
     {
       "item": "A2",
@@ -39,7 +39,7 @@
     {
       "item": "A3",
       "pass": true,
-      "claim": "两台设备的逐分钟均值互不相同（31 个可比分钟，最小相对差 16.22%）",
+      "claim": "两台设备的逐分钟均值互不相同（31 个可比分钟，最小相对差 16.06%）",
       "evidence": "逐值完全相同的分钟数 = 0（镜像故障的特征是全同）"
     },
     {
@@ -70,7 +70,7 @@
       "item": "A4",
       "pass": true,
       "claim": "真实数据按同一公式复算，超标口径一致（本项只报数，不做阈值断言）",
-      "evidence": "最近 200 行里可复算 600 个，折算超标 41 个（限值 5/35/50 mg/m³）"
+      "evidence": "最近 200 行里可复算 600 个，折算超标 15 个（限值 5/35/50 mg/m³）"
     },
     {
       "item": "A5",
@@ -99,14 +99,14 @@
     {
       "item": "A6",
       "pass": true,
-      "claim": "库内已有 30570 行历史数据",
-      "evidence": "时间跨度 1790785691000 → 1791022031000"
+      "claim": "库内已有 31040 行历史数据",
+      "evidence": "时间跨度 1790785691000 → 1791023230000"
     },
     {
       "item": "A6",
       "pass": true,
       "claim": "数据挂在 Docker 命名卷上（`docker compose down` 不删数据，只有 -v 才删）",
-      "evidence": "命名卷：cems_tdengine-log, cems_tdengine-data, d89d08cf70efd001a0722b1a8ab2cf8377bc963f50397aeabc9b59de479058b8"
+      "evidence": "命名卷：cems_tdengine-data, cems_tdengine-log, d89d08cf70efd001a0722b1a8ab2cf8377bc963f50397aeabc9b59de479058b8"
     },
     {
       "item": "A6",
@@ -123,20 +123,20 @@
     {
       "item": "A7",
       "pass": true,
-      "claim": "cems-gateway 的断网缓存机制在位（数据目录里能找到缓存文件 4 个）",
-      "evidence": "cache.jsonl：/app/data/cache.jsonl 0"
+      "claim": "cems-gateway 的断网缓存机制在位（数据目录里能找到缓存文件 5 个）",
+      "evidence": "cache.jsonl：/app/data/cache.jsonl 0, /app/data/plant2/cache.jsonl 0"
     },
     {
       "item": "A7",
       "pass": true,
-      "claim": "cems-gateway-plant2 的断网缓存机制在位（数据目录里能找到缓存文件 2 个）",
-      "evidence": "cache.jsonl：（无 cache.jsonl）"
+      "claim": "cems-gateway-plant2 的断网缓存机制在位（数据目录里能找到缓存文件 3 个）",
+      "evidence": "cache.jsonl：/app/data-plant2/cache.jsonl 0"
     },
     {
       "item": "A7",
       "pass": true,
       "claim": "接入层重启后 broker 能补投离线消息（持久会话生效）",
-      "evidence": "订阅端日志里最近一次会话恢复 = True"
+      "evidence": "订阅端日志（269 行）里最近一次会话恢复 = True"
     },
     {
       "item": "A8",
@@ -147,8 +147,8 @@
     {
       "item": "A8",
       "pass": true,
-      "claim": "健康接口自报正常：数据新鲜度 4.363 秒，最近 1 分钟 11 条",
-      "evidence": "GET /api/health → HTTP 200，{\"data_age_seconds\":4.363,\"healthy\":true,\"ok\":true,\"reason\":\"fresh\",\"rows_last_1min\":11,\"stale_after_seconds\":15.0,\"td\":\"up\"}"
+      "claim": "健康接口自报正常：数据新鲜度 1.835 秒，最近 1 分钟 12 条",
+      "evidence": "GET /api/health → HTTP 200，{\"data_age_seconds\":1.835,\"healthy\":true,\"ok\":true,\"reason\":\"fresh\",\"rows_last_1min\":12,\"stale_after_seconds\":15.0,\"td\":\"up\"}"
     },
     {
       "item": "A8",

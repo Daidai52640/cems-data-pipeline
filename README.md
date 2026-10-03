@@ -81,11 +81,26 @@ docker compose down -v
 
 启动后访问 `http://localhost`（经 nginx 反代）。
 
-> **换机器 / 清空镜像后重建的前提**：四个基础设施镜像（EMQX / TDengine / Redis / nginx）在
-> `docker-compose.yml` 里**按 digest 钉死**（不用 `latest`，理由见 `.env.example` 末节台账），
-> 应用镜像 `cems-pipeline:latest` 则是 `pull_policy: never` 的本机构建产物。
-> 所以 `docker compose up -d --build` 需要**这些镜像已在本机**：应用镜像由 `build` 现做，
-> 另外四个得先带过来。本机到 Docker Hub 不通，compose 不会联网解析成功。
+### 换机器 / 断网部署（离线搬运）
+
+四个基础设施镜像（EMQX / TDengine / Redis / nginx）在 compose 里按**具体版本 tag** 固定
+（不用 `latest`；digest 台账见 `.env.example` 末节），应用镜像是本机构建产物。
+
+**⚠️ 为什么是 tag 而不是 digest**：`docker save <镜像@sha256:...>` 导出的 tar 里
+`RepoTags` 是 **null**（不带名字），`docker load` 回来之后 compose **无法解析该 digest 引用**，
+会转去联网拉 —— 断网机器上就是硬失败。**导出必须按 tag。**
+
+```powershell
+# 源机：打包（应用镜像 + 四个基础镜像 → 一个 tar + sha256）
+pwsh -NoProfile -File scripts\export_images.ps1
+
+# 目标机（干净、无外网）：导入 → 起链路
+pwsh -NoProfile -File scripts\import_images.ps1 -From <tar 所在目录>
+docker compose up -d --build          # 基础层已在本地，--build 不需要联网
+```
+
+两个脚本都内置"按 digest 导出的包一律拒绝"的校验，并会核对包内镜像是否覆盖 compose 所需。
+步骤与实测记录见 [`docs/runbooks/离线部署验证.md`](docs/runbooks/离线部署验证.md)。
 
 ### 访问入口
 

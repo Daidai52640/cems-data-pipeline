@@ -160,15 +160,18 @@ services:
 
   # ---------------- 基础设施：MQTT Broker ----------------
   emqx:
-    # ⚠️ 这里是 **digest 而不是 tag**，故意的：
-    #   `emqx/emqx:latest` 是**可变别名** —— 同一份 compose 在不同时间解析到不同构建。
-    #   而这条链上的持久会话、离线队列上限、配置键语义都跟大版本绑（EMQX 官方 5.x→6.0
-    #   不兼容清单里明确写了 durable sessions 的内部表示变更），跟着 latest 漂一次就是数据面问题。
-    #   digest = manifest 的 sha256，内容寻址、不可变：钉住它才叫"同一份配置"。
-    #   现值实测身份：EMQX Enterprise 6.3.0（OCI label org.opencontainers.image.version，
-    #   构建日 2026-09-03）。本机到 Docker Hub 不通，所以 tag→digest 的映射无法在线上核验；
-    #   这个 digest 直接取自本机镜像的 RepoDigests，是"当下真正在跑的那一份"。
-    image: emqx/emqx@sha256:3b6d9c0c419930074b7e0e6cba07baceea584b2094d22f16ff02f6c075c3d5b8
+    # ⚠️ 为什么用 **tag** 而不是 digest（2026-10-03 实测后从 digest 改回来）：
+    #   digest 更"不可变"，但它**和离线搬运互斥** ——
+    #   `docker save <镜像@sha256:...>` 导出的 tar 里 `RepoTags` 是 **null**（不带名字），
+    #   `docker load` 回来之后 `docker create <镜像@sha256:...>` 会认为本地没有这个镜像、
+    #   转而去联网拉（实测输出 "Unable to find image locally ... Pulling from ..."）。
+    #   而"换机/断网一条命令起全链路"是本项目的硬需求（第 3 段交付物③，也是②的前提），
+    #   所以这里 tag 优先。digest 不丢 —— 记在 .env.example 末尾的版本台账里。
+    # ⚠️ 但也**不要写 `latest`**：latest 是"发布者此刻标的那个"，重建时会漂到大版本；
+    #   EMQX 5.x→6.0 的不兼容清单里明确写了 durable sessions 的内部表示变更，
+    #   跟着漂一次就是数据面问题。所以写**具体版本**。
+    #   实测身份：EMQX Enterprise 6.3.0（digest 前 12 位 3b6d9c0c4199）
+    image: emqx/emqx:6.3.0
     container_name: emqx
     restart: unless-stopped
     environment:
@@ -206,10 +209,11 @@ services:
 
   # ---------------- 基础设施：时序数据库 ----------------
   tdengine:
-    # ⚠️ 同 emqx：用 digest 不用 `latest`。TDengine 的 STABLE / SQL 语义随版本变，
-    #   而库里的历史数据与 `KEEP 365d` 是长期资产，不能因为"重建时拿到了新版"而换行为。
-    #   现值实测身份：TDengine Community Edition 3.3.6.13（容器内 `taos -V`）。
-    image: tdengine/tdengine@sha256:79d32ce8a42f64c7dbfc33946a36b3e176ea23c0cd695a1bc9e8aa889ca03b88
+    # ⚠️ 同 emqx：用具体版本 tag，不用 digest（理由见 emqx 段：digest 与离线搬运互斥），
+    #   也不用 `latest`（TDengine 的 STABLE / SQL 语义随版本变，而库里历史数据是长期资产）。
+    #   实测身份：TDengine Community Edition 3.3.6.13（容器内 `taos -V`，
+    #   digest 前 12 位 79d32ce8a42f）
+    image: tdengine/tdengine:3.3.6.13
     container_name: tdengine
     restart: unless-stopped
     environment:
@@ -388,9 +392,9 @@ services:
   # 判据与正确性边界见 src/web/cache.py 顶部；它**不是**业务数据的真源，
   # 所以任何时刻把它整个删掉都不影响功能，只会让查询回到直连库。
   redis:
-    # 同 emqx/tdengine：digest 钉身份。`redis:7-alpine` 只锚大版本，7.x 内仍会静默漂。
-    # 现值实测身份：Redis 7.4.11（容器内 `redis-server --version`）。
-    image: redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    # ⚠️ 同 emqx/tdengine：具体版本 tag（不算 digest，也不用会漂的 `7-alpine`）。
+    # 实测身份：Redis 7.4.11（容器内 `redis-server --version`，digest 前 12 位 858f009f9709）
+    image: redis:7.4.11-alpine
     container_name: cems-redis
     restart: unless-stopped
     environment:
@@ -428,11 +432,11 @@ services:
   # ---------------- 基础设施：反向代理（对外唯一入口） ----------------
   # 为什么要这一层（并发模型 / 静态资源 / TLS 终结位置）见 deploy/nginx/nginx.conf 顶部。
   nginx:
-    # 同 emqx/tdengine：digest 钉身份。原来的 `nginx:alpine` 连大版本都没锚，浮动幅度最大。
-    # 现值实测身份：nginx 1.31.6（容器内 `nginx -v`）。
-    # ⚠️ 反向代理的语义（`proxy_pass` 尾斜杠、`X-Forwarded-*` 处理、默认超时）跨版本会变，
-    #    它前面就是对外入口，配置是按这份 nginx 调过的。
-    image: nginx@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2
+    # ⚠️ 同 emqx/tdengine：具体版本 tag（原来写 `nginx:alpine` 连大版本都没锚，浮动幅度最大）。
+    #   反代语义（`proxy_pass` 尾斜杠、`X-Forwarded-*`、默认超时）跨版本会变，
+    #   而它前面就是对外入口，配置是按这份 nginx 调过的。
+    # 实测身份：nginx 1.31.6（容器内 `nginx -v`，digest 前 12 位 df221db836e1）
+    image: nginx:1.31.6-alpine
     container_name: cems-nginx
     restart: unless-stopped
     environment:
