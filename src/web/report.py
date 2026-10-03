@@ -668,3 +668,39 @@ def custom_report(start_text: Optional[str], end_text: Optional[str], scope: str
         start, end, UNIT_HOUR, WINDOW_HOUR, label="自由报表", pad_grid=True,
         kind="custom", scope=scope,
     )
+
+#: 区间报表可选的粒度：分钟 / 小时 / 日。键同时是对外的 unit 取值。
+RANGE_UNITS: Final[dict[str, timedelta]] = {
+    UNIT_MINUTE: WINDOW_MINUTE, UNIT_HOUR: WINDOW_HOUR, UNIT_DAY: WINDOW_DAY,
+}
+
+
+def range_report(
+    start_text: Optional[str], end_text: Optional[str], unit: str = UNIT_HOUR, scope: str = "",
+) -> dict[str, Any]:
+    """区间报表：在给定区间上按指定粒度聚合（分钟 / 小时 / 日）。
+
+    为什么单开一个：页面上的粒度页签（分钟 / 小时 / 日）驱动的其实是**同一张表**，
+    只是窗口不同；原来的四个入口各自绑死了"默认区间"（分钟=最近 1 h、日=今天、月=当月），
+    页面上改了起止时间就没法跟着变。这里把「区间」与「粒度」解耦。
+
+    口径与其它报表完全共用 `aggregate_series`（对齐窗口边界、库侧 INTERVAL+AVG、缺窗口补网格），
+    不另写一套 SQL。
+    """
+    if unit not in RANGE_UNITS:
+        raise ReportParamError(
+            f"unit 应为 {'/'.join(RANGE_UNITS)} 之一，收到 {unit!r}"
+        )
+    now = datetime.now()
+    start = parse_time(start_text, "start", now - WINDOW_DAY)
+    end = clamp_to_now(parse_time(end_text, "end", now), now)
+    if start >= end:
+        raise ReportParamError("start 必须早于 end")
+    if end - start > timedelta(days=CUSTOM_MAX_DAYS):
+        raise ReportParamError(
+            f"区间最多查询 {CUSTOM_MAX_DAYS} 天，当前跨度 {(end - start).days} 天"
+        )
+    return aggregate_series(
+        start, end, unit, RANGE_UNITS[unit], label="区间报表", pad_grid=True,
+        kind="range", scope=scope,
+    )

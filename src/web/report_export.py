@@ -35,6 +35,7 @@ REPORT_TYPES: Final[dict[str, str]] = {
     "day": "日报表",
     "month": "月报表",
     "custom": "自由报表",
+    "range": "区间报表",
 }
 
 SHEET_DATA: Final[str] = "数据"
@@ -119,6 +120,9 @@ def run_report(report_type: str, query: Mapping[str, str], scope: str = "") -> d
         return report.minute_report(query.get("start"), query.get("end"), scope)
     if report_type == "day":
         return report.day_report(query.get("date"), scope)
+    if report_type == "range":
+        return report.range_report(query.get("start"), query.get("end"),
+                                   query.get("unit") or "1h", scope)
     if report_type == "month":
         return report.month_report(query.get("year"), query.get("month"), scope)
     return report.custom_report(query.get("start"), query.get("end"), scope)
