@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 3.0.1">
   <meta name="archify-reader-contract" content="declared-wide-v1">
-  <title>CEMS 数据采集全链路（双设备 v3.0）</title>
+  <title>CEMS 数据采集全链路</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4978,17 +4978,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
            data-preset-badge-blueprint="蓝图 / 修订 01"
            data-preset-badge-editorial="编辑风格 / 现场笔记">
         <div class="pulse-dot"></div>
-        <h1>CEMS 数据采集全链路（双设备 v3.0）</h1>
+        <h1>CEMS 数据采集全链路</h1>
       </div>
     </div>
 
-    <script id="archify-source-evidence-data" type="application/json">{"schemaVersion":1,"verified":true,"repository":{"url":"https://github.com/Daidai52640/mqtt_demo","revision":"7791e175d028c82804cc3d26c605c2b8e501a0de","shortRevision":"7791e17","label":"Daidai52640/mqtt_demo","linkMode":"local-only"},"referenceCount":34,"nodes":{"device":[{"path":"src/device/modbus_server.py","line":94,"label":"SLAVE_IDS 解析"},{"path":"src/device/modbus_server.py","line":272,"endLine":318,"label":"main / StartTcpServer"},{"path":"src/device/simulator.py","line":584,"label":"sample（正弦+日周期+噪声）"}],"gw1":[{"path":"src/gateway/gateway.py","line":670,"endLine":772,"label":"main（读→发→缓存）"},{"path":"src/gateway/gateway.py","line":374,"label":"publish（等 PUBACK）"},{"path":"src/gateway/gateway.py","line":537,"label":"resend_cache 补传"}],"cache1":[{"path":"src/gateway/gateway.py","line":106,"label":"CACHE_MAX_BYTES 64 MB"},{"path":"src/gateway/gateway.py","line":466,"label":"原子段文件交接"}],"gw2":[{"path":"docker-compose.yml","line":302,"endLine":332,"label":"gateway2 服务（profile）"},{"path":"src/gateway/gateway.py","line":571,"label":"ResendWorker（同代码）"}],"cache2":[{"path":"docker-compose.yml","line":316,"label":"GATEWAY_DATA_DIR 每实例一份"},{"path":"src/gateway/gateway.py","line":287,"label":"超限丢最旧"}],"emqx":[{"path":"docker-compose.yml","line":171,"endLine":180,"label":"离线队列 20000 / 会话 24 h / 落盘"}],"sub1":[{"path":"src/platform/subscriber_to_td.py","line":922,"label":"on_message（校验+入库+判告警）"},{"path":"src/platform/subscriber_to_td.py","line":979,"label":"main"},{"path":"src/common/alarm_judge.py","line":640,"label":"judge_hour 小时结算"}],"sub2":[{"path":"docker-compose.yml","line":350,"endLine":367,"label":"subscriber2 服务（profile）"},{"path":"src/platform/subscriber_to_td.py","line":155,"label":"enforce_topic_scope 主题↔标签自检"}],"td":[{"path":"src/platform/subscriber_to_td.py","line":348,"endLine":355,"label":"建库建超级表"},{"path":"src/common/alarm_judge.py","line":798,"endLine":813,"label":"3 张告警超级表"},{"path":"src/platform/subscriber_to_td.py","line":84,"label":"KEEP 365d"}],"backup":[{"path":"scripts/backup_tdengine.py","line":173,"label":"do_backup（taosdump）"},{"path":"scripts/backup_tdengine.py","line":281,"endLine":282,"label":"do_physical_copy 卷级 tar"}],"web":[{"path":"src/web/web_dashboard.py","line":194,"label":"/api/data 曲线"},{"path":"src/web/web_dashboard.py","line":246,"label":"/api/health 新鲜度 200/503"},{"path":"src/web/web_dashboard.py","line":425,"endLine":426,"label":"/api/report/export"}],"redis":[{"path":"src/web/cache.py","line":453,"label":"_closure 只缓存闭合窗口"},{"path":"docker-compose.yml","line":368,"endLine":405,"label":"allkeys-lru / 不持久化"}],"nginx":[{"path":"deploy/nginx/conf.d/cems.conf","line":84,"label":"/api/cache/* 403"},{"path":"deploy/nginx/conf.d/cems.conf","line":91,"label":"proxy_pass web:5000"},{"path":"docker-compose.yml","line":406,"endLine":439,"label":"nginx 服务"}],"northbound":[{"path":"src/protocol/adapter.py","line":265,"label":"Hj212Adapter"},{"path":"src/protocol/adapter.py","line":378,"label":"ModbusTcpAdapter"},{"path":"src/protocol/adapter.py","line":442,"label":"build_adapter 三出口"}]}}</script>
+    <script id="archify-source-evidence-data" type="application/json">{"schemaVersion":1,"verified":true,"repository":{"url":"https://github.com/Daidai52640/cems-data-pipeline","revision":"b55042a9a13c13a775ffdf9f07d99b75ae747c82","shortRevision":"b55042a","label":"Daidai52640/cems-data-pipeline","linkMode":"local-only"},"referenceCount":34,"nodes":{"device":[{"path":"src/device/modbus_server.py","line":94,"label":"SLAVE_IDS 解析"},{"path":"src/device/modbus_server.py","line":272,"endLine":318,"label":"main / StartTcpServer"},{"path":"src/device/simulator.py","line":584,"label":"sample（正弦+日周期+噪声）"}],"gw1":[{"path":"src/gateway/gateway.py","line":670,"endLine":772,"label":"main（读→发→缓存）"},{"path":"src/gateway/gateway.py","line":374,"label":"publish（等 PUBACK）"},{"path":"src/gateway/gateway.py","line":537,"label":"resend_cache 补传"}],"cache1":[{"path":"src/gateway/gateway.py","line":106,"label":"CACHE_MAX_BYTES 64 MB"},{"path":"src/gateway/gateway.py","line":466,"label":"原子段文件交接"}],"gw2":[{"path":"docker-compose.yml","line":302,"endLine":332,"label":"gateway2 服务（profile）"},{"path":"src/gateway/gateway.py","line":571,"label":"ResendWorker（同代码）"}],"cache2":[{"path":"docker-compose.yml","line":316,"label":"GATEWAY_DATA_DIR 每实例一份"},{"path":"src/gateway/gateway.py","line":287,"label":"超限丢最旧"}],"emqx":[{"path":"docker-compose.yml","line":171,"endLine":180,"label":"离线队列 20000 / 会话 24 h / 落盘"}],"sub1":[{"path":"src/platform/subscriber_to_td.py","line":922,"label":"on_message（校验+入库+判告警）"},{"path":"src/platform/subscriber_to_td.py","line":979,"label":"main"},{"path":"src/common/alarm_judge.py","line":640,"label":"judge_hour 小时结算"}],"sub2":[{"path":"docker-compose.yml","line":350,"endLine":367,"label":"subscriber2 服务（profile）"},{"path":"src/platform/subscriber_to_td.py","line":155,"label":"enforce_topic_scope 主题↔标签自检"}],"td":[{"path":"src/platform/subscriber_to_td.py","line":348,"endLine":355,"label":"建库建超级表"},{"path":"src/common/alarm_judge.py","line":798,"endLine":813,"label":"3 张告警超级表"},{"path":"src/platform/subscriber_to_td.py","line":84,"label":"KEEP 365d"}],"backup":[{"path":"scripts/backup_tdengine.py","line":173,"label":"do_backup（taosdump）"},{"path":"scripts/backup_tdengine.py","line":281,"endLine":282,"label":"do_physical_copy 卷级 tar"}],"web":[{"path":"src/web/web_dashboard.py","line":194,"label":"/api/data 曲线"},{"path":"src/web/web_dashboard.py","line":246,"label":"/api/health 新鲜度 200/503"},{"path":"src/web/web_dashboard.py","line":425,"endLine":426,"label":"/api/report/export"}],"redis":[{"path":"src/web/cache.py","line":453,"label":"_closure 只缓存闭合窗口"},{"path":"docker-compose.yml","line":368,"endLine":405,"label":"allkeys-lru / 不持久化"}],"nginx":[{"path":"deploy/nginx/conf.d/cems.conf","line":84,"label":"/api/cache/* 403"},{"path":"deploy/nginx/conf.d/cems.conf","line":91,"label":"proxy_pass web:5000"},{"path":"docker-compose.yml","line":406,"endLine":439,"label":"nginx 服务"}],"northbound":[{"path":"src/protocol/adapter.py","line":265,"label":"Hj212Adapter"},{"path":"src/protocol/adapter.py","line":378,"label":"ModbusTcpAdapter"},{"path":"src/protocol/adapter.py","line":442,"label":"build_adapter 三出口"}]}}</script>
     <script id="archify-i18n-data" type="application/json">{"locale":"zh-CN","messages":{"viewer.kind.frontend":"前端","viewer.kind.backend":"后端","viewer.kind.database":"数据库","viewer.kind.cloud":"云服务","viewer.kind.security":"安全","viewer.kind.messagebus":"消息总线","viewer.kind.external":"外部系统","viewer.kind.neutral":"中性","viewer.kind.node":"节点","viewer.kind.start":"开始","viewer.kind.active":"活动","viewer.kind.waiting":"等待","viewer.kind.decision":"决策","viewer.kind.success":"成功","viewer.kind.failure":"失败","viewer.toolbar.actions":"图表操作","viewer.theme.toggle.title":"切换主题（T）","viewer.theme.toggle":"切换颜色主题","viewer.theme.dark":"深色","viewer.theme.light":"浅色","viewer.preset.choose.title":"选择视觉风格（S 循环切换）","viewer.preset.choose":"选择视觉风格","viewer.preset.style":"风格","viewer.preset.menu":"视觉风格","viewer.preset.identity":"视觉表达","viewer.preset.cycles":"循环切换","viewer.preset.classic":"经典","viewer.preset.classic.short":"经典","viewer.preset.classic.hint":"稳定的技术默认风格","viewer.preset.flow":"信号流","viewer.preset.flow.short":"流动","viewer.preset.flow.hint":"突出动态流向","viewer.preset.blueprint":"蓝图","viewer.preset.blueprint.hint":"工程评审","viewer.preset.editorial":"编辑风格","viewer.preset.editorial.hint":"适合发布与上线说明","viewer.preset.badge.signalFlow":"信号流","viewer.preset.badge.blueprint":"蓝图 / 修订 01","viewer.preset.badge.editorial":"编辑风格 / 现场笔记","viewer.preset.badge.editorialPlate":"ARCHIFY / 图版 04","viewer.preset.current":"当前视觉风格：{style}。选择视觉风格","viewer.motion.live":"动态","viewer.motion.still":"静态","viewer.motion.pause":"暂停动效","viewer.motion.resume":"恢复动效","viewer.motion.reduced":"已根据减少动态效果偏好暂停动效","viewer.motion.hidden":"页面不可见时已暂停动效","viewer.motion.yielding":"暂停动效；当前让位于{owner}","viewer.motion.yielding.title":"动态预览已启用 · 正在让位于{owner}","viewer.owner.route":"路径探测","viewer.owner.lens":"语义透镜","viewer.owner.relationship":"关系预览","viewer.owner.intent":"意图追踪","viewer.owner.focus":"语义聚焦","viewer.owner.legend":"图例预览","viewer.owner.reader":"读者交互","viewer.present.enter":"进入演示模式","viewer.present.enter.title":"演示模式（F）","viewer.present.exit":"退出演示模式","viewer.present.exit.title":"退出演示模式（F 或 Escape）","viewer.present.present":"演示","viewer.present.exit.label":"退出","viewer.export.button":"导出","viewer.export.button.title":"导出图表（E）","viewer.export.diagram":"导出图表","viewer.export.menu":"导出","viewer.export.subtitle":"便携、整洁的输出","viewer.export.share":"分享","viewer.export.shareCard":"分享卡片","viewer.export.routeShareCard":"路径分享卡片","viewer.export.reachShareCard":"可达范围分享卡片","viewer.export.copyDiagram":"复制图表","viewer.export.clipboardPng":"复制 PNG 到剪贴板","viewer.export.raster":"位图","viewer.export.image":"图像","viewer.export.lossless":"无损图像","viewer.export.compact":"紧凑图像","viewer.export.modern":"现代图像格式","viewer.export.vectorMotion":"矢量与动效","viewer.export.vectorMotion.heading":"矢量与动效","viewer.export.editable":"可编辑矢量图","viewer.export.svg.auto":"SVG · 自动","viewer.export.svg.auto.hint":"匹配宿主主题","viewer.export.svg.light":"SVG · 浅色","viewer.export.svg.light.hint":"始终浅色","viewer.export.svg.dark":"SVG · 深色","viewer.export.svg.dark.hint":"始终深色","viewer.export.motion6s":"6 秒动效","viewer.export.unsupported":"当前浏览器不支持","viewer.export.clipboardUnsupported":"当前浏览器不支持写入图片剪贴板","viewer.export.clipboardUnsupported.short":"此浏览器不支持写入图片剪贴板。","viewer.export.motionUnavailable":"当前浏览器无法录制动效","viewer.export.webmUnavailable":"当前浏览器不支持 WebM","viewer.export.failed":"导出失败：{message}","viewer.export.unknownVariant":"未知的分享卡片类型：{variant}","viewer.export.routeRequired":"请先追踪路径，再导出路径分享卡片","viewer.export.reachRequired":"请先追踪编写可达范围，再导出可达范围分享卡片","viewer.export.unknown":"未知错误","viewer.export.routeFailed":"路径分享卡片导出失败：{message}","viewer.export.reachFailed":"可达范围分享卡片导出失败：{message}","viewer.export.copyFailed":"复制失败：{message}","viewer.export.copiedPng":"已将 PNG 复制到剪贴板","viewer.export.downloadedRoute":"已下载路径分享卡片","viewer.export.downloadedReach":"已下载可达范围分享卡片","viewer.export.downloadedWebm":"已下载 WebM","viewer.export.recording":"正在录制 6 秒动效…","viewer.export.card.routeSummary.one":"路径：{source} → {target} · {count} 步","viewer.export.card.routeSummary.other":"路径：{source} → {target} · {count} 步","viewer.export.card.reachSummary":"从{origin}开始的编写{direction} · {nodes} · {links} · 最深 {hops}","viewer.export.card.node.one":"{count} 个节点","viewer.export.card.node.other":"{count} 个节点","viewer.export.card.link.one":"{count} 条连接","viewer.export.card.link.other":"{count} 条连接","viewer.export.card.hop.one":"{count} 跳","viewer.export.card.hop.other":"{count} 跳","viewer.export.card.routeBadge":"ARCHIFY · 路径 · {hops}","viewer.export.card.reachBadge":"ARCHIFY · {direction}可达范围","viewer.export.direction.upstream":"上游","viewer.export.direction.downstream":"下游","viewer.export.error.canvasUnavailable":"无法为{label}使用画布","viewer.export.error.contextUnavailable":"无法为{label}创建二维画布上下文","viewer.export.error.toBlobUnavailable":"{label}无法使用 canvas.toBlob","viewer.export.error.toBlobNull":"{label}的 canvas.toBlob 未返回数据","viewer.export.error.variantsCombined":"无法同时组合多种分享卡片类型","viewer.export.error.viewerState":"分享卡片导出无法移除临时 Viewer 状态","viewer.export.error.routeState":"路径卡片导出无法安全保留已解析路径","viewer.export.error.reachState":"可达范围卡片导出无法安全保留编写的可达范围","viewer.export.error.webmRequirements":"WebM 动效导出需要追踪动画及浏览器 MediaRecorder 支持","viewer.export.error.mediaRecorder":"MediaRecorder 录制失败","viewer.export.error.emptyWebm":"MediaRecorder 生成了空的 WebM","viewer.export.error.webmBackground":"无法为 WebM 导出加载 SVG 背景","viewer.guide.title":"探索此系统","viewer.focus.selectedNodes":"已选择 {count} 个节点","viewer.guide.eyebrow":"图表指南","viewer.guide.close":"关闭图表指南","viewer.guide.inspecting":"正在检查已编译语义","viewer.guide.actions":"图表探索操作","viewer.guide.find":"查找任意节点","viewer.guide.find.hint":"搜索标签、职责、类型和稳定 ID。","viewer.guide.route":"追踪路径","viewer.guide.route.aria":"追踪有向路径","viewer.guide.route.hint":"查看两个语义节点如何按编写方向连接。","viewer.guide.map":"查看完整系统","viewer.guide.map.hint":"打开带实时视口和稳定节点的语义雷达。","viewer.guide.lens":"比较语义类型","viewer.guide.lens.hint":"统计角色、显示流量并比较直接编写的连接。","viewer.guide.present":"进入演示模式","viewer.guide.present.hint":"让实时图表占满视口，同时不改变导出。","viewer.guide.shortcuts":"其他键盘快捷键","viewer.guide.shortcut.export":"导出","viewer.guide.shortcut.theme":"主题","viewer.guide.shortcut.style":"风格","viewer.guide.shortcut.reset":"重置","viewer.guide.shortcut.zoomIn":"放大","viewer.guide.shortcut.zoomOut":"缩小","viewer.guide.shortcut.close":"关闭","viewer.guide.facts":"{nodes} · {relationships}","viewer.guide.fact.node.one":"{count} 个语义节点","viewer.guide.fact.node.other":"{count} 个语义节点","viewer.guide.fact.relationship.one":"{count} 条关系","viewer.guide.fact.relationship.other":"{count} 条关系","viewer.guide.open":"打开图表指南","viewer.finder.title":"查找节点","viewer.finder.close":"关闭节点查找器","viewer.finder.placeholder":"搜索标签或 ID","viewer.finder.search":"搜索图表节点","viewer.finder.results":"图表节点","viewer.finder.empty":"没有匹配的节点","viewer.finder.result.focus":"聚焦{label}","viewer.finder.result.routeStart":"选择{label}作为路径起点","viewer.finder.result.routeTarget":"选择{label}作为路径终点，{links}","viewer.finder.status.empty":"没有匹配的节点","viewer.finder.status.count.one":"{count} 个匹配节点","viewer.finder.status.count.other":"{count} 个匹配节点","viewer.finder.noun.nodes":"个节点","viewer.finder.link.one":"{count} 条连接","viewer.finder.link.other":"{count} 条连接","viewer.finder.result.focus.one":"聚焦{label}，{count} 条相关连接","viewer.finder.result.focus.other":"聚焦{label}，{count} 条相关连接","viewer.finder.status.filtered":"{visible}/{available} {noun}","viewer.finder.status.all":"{available} {noun}","viewer.passport.eyebrow":"语义护照","viewer.passport.metadata":"节点元数据","viewer.passport.evidence":"已验证的源代码证据","viewer.passport.verified":"已验证来源","viewer.passport.verificationScope":"已按固定修订版本验证本地 Git 证据，未检查远程访问权限。","viewer.passport.reach":"编写可达范围","viewer.passport.reach.trace":"追踪编写的可达性","viewer.passport.upstream":"上游","viewer.passport.downstream":"下游","viewer.passport.upstream.trace":"追踪上游编写可达性","viewer.passport.downstream.trace":"追踪下游编写可达性","viewer.passport.close":"关闭语义护照","viewer.passport.move":"移动语义护照。可拖动、使用方向键移动，或按 Home 恢复自动位置。","viewer.passport.copy":"复制链接","viewer.passport.copy.focus":"复制聚焦节点的链接","viewer.passport.relations":"关系","viewer.passport.relations.show":"显示关联关系","viewer.passport.relations.hide":"隐藏关联关系","viewer.passport.relations.list":"关联关系","viewer.passport.copyRelation":"复制关系","viewer.passport.copyNode":"复制节点","viewer.passport.copyPinned":"复制固定关系的链接","viewer.passport.copySource":"复制来源节点的链接","viewer.passport.copy.focused.success":"已复制聚焦节点链接","viewer.passport.copy.pinned.success":"已复制固定关系链接","viewer.passport.copy.focused.failed":"无法复制聚焦节点链接","viewer.passport.copy.pinned.failed":"无法复制固定关系链接","viewer.passport.relationship.none":"没有关联关系","viewer.passport.relationship.count.one":"{count} 条关系","viewer.passport.relationship.count.other":"{count} 条关系","viewer.passport.relationship.show.one":"显示 {count} 条关联关系","viewer.passport.relationship.show.other":"显示 {count} 条关联关系","viewer.passport.relationship.summary":"{out} 条出向 · {in} 条入向{loops}","viewer.passport.relationship.loops":" · {count} 条自环","viewer.passport.relationship.explorer":"直接关系浏览器","viewer.passport.relationship.help":"使用方向键浏览关系。按 Enter 或空格键固定详情；按 Escape 清除。","viewer.passport.relationship.loopsBack":"回环","viewer.passport.relationship.connectsTo":"连接到","viewer.passport.relationship.connectsFrom":"连接自","viewer.passport.relationship.pinned":"已固定关系 · {from} → {to} · {label}","viewer.passport.relationship.inspect":"检查第 {index}/{total} 条关系：{from} 到 {to}，{label}。按 Enter 查看详情。","viewer.passport.relationship.group.out":"出向","viewer.passport.relationship.group.in":"入向","viewer.passport.relationship.group.loop":"自环","viewer.passport.relationship.row":"{group}：{relationship}，{neighbor}","viewer.passport.relationship.direction.out":"出 →","viewer.passport.relationship.direction.in":"← 入","viewer.passport.relationship.direction.loop":"自环","viewer.passport.sourceCount.one":"{count} 个已验证来源引用","viewer.passport.sourceCount.other":"{count} 个已验证来源引用","viewer.passport.sourceMarker":"来源","viewer.passport.beacon.one":"{count} 个已验证来源；聚焦此节点以检查","viewer.passport.beacon.other":"{count} 个已验证来源；聚焦此节点以检查","viewer.passport.repository.open":"打开已验证的仓库修订版本 {revision}","viewer.passport.source.open":"打开修订版本 {revision} 中已验证的来源 {path}","viewer.passport.source.openLink":"打开 ↗","viewer.passport.reach.upstream.one":"追踪 {count} 个上游编写节点","viewer.passport.reach.upstream.other":"追踪 {count} 个上游编写节点","viewer.passport.reach.downstream.one":"追踪 {count} 个下游编写节点","viewer.passport.reach.downstream.other":"追踪 {count} 个下游编写节点","viewer.passport.reach.noUpstream":"没有上游编写节点","viewer.passport.reach.noDownstream":"没有下游编写节点","viewer.passport.reach.status":"{direction} · {nodes} 个节点 · {links} 条连接 · 最深 {hops} 跳","viewer.route.eyebrow":"路径","viewer.route.start":"点击路径的起点","viewer.route.start.find":"查找起点","viewer.route.start.find.aria":"查找路径起点","viewer.route.copy":"复制链接","viewer.route.copy.aria":"复制已追踪路径的链接","viewer.route.clear":"清除","viewer.route.clear.aria":"清除路径探测","viewer.route.traced":"路径","viewer.route.pickTwo":"在图上点两个节点","viewer.route.pickOne":"在图上点一个节点","viewer.route.controls":"路径旅程控制","viewer.route.previous":"上一个路径位置","viewer.route.play":"播放路径旅程","viewer.route.pause":"暂停路径旅程","viewer.route.replay":"重播路径旅程","viewer.route.next":"下一个路径位置","viewer.route.journey":"旅程","viewer.route.pause.label":"暂停","viewer.route.replay.label":"重播","viewer.route.overview":"总览","viewer.route.overview.aria":"显示完整路径总览","viewer.route.instructions":"先点起点，再点终点，沿箭头方向找路。","viewer.route.destination":"从{label}出发，走到哪里？","viewer.route.destination.find":"查找目标","viewer.route.destination.find.aria":"查找可达的路径目标","viewer.route.differentDestination":"选择其他目标","viewer.route.distinct":"请选两个不同的节点。","viewer.route.unreachable":"走不到{label}","viewer.route.unreachable.detail":"沿箭头方向，从{source}走不到{target}。请选一个高亮节点。","viewer.route.start.instructions":"接着选终点，能走到的节点会亮起。","viewer.route.copy.success":"已复制路径链接","viewer.route.copy.failed":"无法复制路径链接","viewer.route.position":"路径位置 {index}/{total}：{label}","viewer.route.step":"第 {index}/{total} 步 · {phase} · {label}","viewer.route.motionRequired":"自动旅程需要动态模式","viewer.route.trigger.clear":"清除已追踪路径","viewer.route.overview.status":"{nodes} · {hops} · 最短路径","viewer.route.overview.node.one":"{count} 个节点","viewer.route.overview.node.other":"{count} 个节点","viewer.route.overview.hop.one":"{count} 步","viewer.route.overview.hop.other":"{count} 步","viewer.route.phase.playing":"播放中","viewer.route.phase.complete":"已完成","viewer.route.phase.inspecting":"检查中","viewer.route.destination.count.one":"有 {count} 个能走到的节点已高亮，点一下。","viewer.route.destination.count.other":"有 {count} 个能走到的节点已高亮，点一个。","viewer.route.noOutgoing":"这个节点没有向外的箭头。清除后换一个起点。","viewer.route.result.title":"{source} 到 {target}","viewer.route.finder.source.title":"选择路径起点","viewer.route.finder.source.placeholder":"搜索路径来源","viewer.route.finder.source.empty":"没有匹配的路径来源","viewer.route.finder.source.results":"可作为路径起点的节点","viewer.route.finder.source.noun":"个路径来源","viewer.route.finder.source.badge":"起点","viewer.route.finder.target.title":"从{label}出发的目标","viewer.route.finder.target.placeholder":"搜索可达目标","viewer.route.finder.target.empty":"没有匹配的可达目标","viewer.route.finder.target.results":"可达路径目标","viewer.route.finder.target.noun":"个可达目标","viewer.route.hop.one":"{count} 跳","viewer.route.hop.other":"{count} 跳","viewer.lens.eyebrow":"语义透镜","viewer.lens.title":"比较系统角色","viewer.lens.close":"关闭语义透镜","viewer.lens.instruction":"最多选择两种语义类型。选择一种可显示其真实流量；选择两种只比较直接编写的关系。","viewer.lens.kinds":"语义类型","viewer.lens.choose":"选择一种类型以检查其节点和相连关系。","viewer.lens.copy":"复制语义透镜链接","viewer.lens.clear":"清除语义透镜","viewer.lens.open":"打开语义透镜","viewer.lens.openActive":"打开当前语义透镜","viewer.lens.legend":"语义图例","viewer.lens.legend.inspect.one":"检查{label}，{count} 个节点","viewer.lens.legend.inspect.other":"检查{label}，{count} 个节点","viewer.lens.kind.count.one":"{label}，{count} 个节点","viewer.lens.kind.count.other":"{label}，{count} 个节点","viewer.lens.compare.one":"{first} → {second}：{forward} · {second} → {first}：{reverse} · 共 {count} 条直接关系","viewer.lens.compare.other":"{first} → {second}：{forward} · {second} → {first}：{reverse} · 共 {count} 条直接关系","viewer.lens.single":"{nodes} · {relationships} · 已连接节点保持可见","viewer.lens.node.one":"{count} 个{label}节点","viewer.lens.node.other":"{count} 个{label}节点","viewer.lens.relationship.one":"{count} 条相连关系","viewer.lens.relationship.other":"{count} 条相连关系","viewer.radar.title":"语义雷达","viewer.radar.building":"正在构建总览","viewer.radar.openFull":"打开完整语义雷达","viewer.radar.open":"打开雷达","viewer.radar.close":"关闭语义雷达","viewer.radar.surface":"图表总览。点击节点进行聚焦，或使用方向键平移。","viewer.radar.click":"点击节点","viewer.radar.drag":"拖动平移","viewer.radar.space":"语义雷达需要更多地图可见空间。","viewer.radar.nodes":"语义图表雷达节点","viewer.radar.focus":"从语义雷达聚焦{label}","viewer.radar.status":"{count} 个节点 · {viewport}","viewer.radar.fullMap":"{count} 个节点 · 完整地图","viewer.radar.compacted":"已收紧雷达，避免遮挡语义护照或地图控件。","viewer.radar.cancelWaiting":"取消等待更多地图空间的语义雷达","viewer.radar.needsSpace":"语义雷达需要更多可见地图空间","viewer.radar.viewport.full":"完整地图","viewer.radar.viewport.width":"宽度 {percent}%","viewer.radar.viewport.scale":"视口 {percent}%","viewer.nav.controls":"图表视图控制","viewer.nav.route":"追踪有向路径","viewer.nav.route.title":"追踪路径（R）","viewer.nav.route.short":"路径","viewer.nav.radar":"打开语义雷达","viewer.nav.radar.title":"语义雷达（M）","viewer.nav.radar.short":"地图","viewer.nav.lens":"打开语义透镜","viewer.nav.lens.title":"语义透镜（L）","viewer.nav.lens.short":"透镜","viewer.nav.find":"查找节点","viewer.nav.find.title":"查找节点（/）","viewer.outline.title":"节点索引","viewer.rail.show":"要点与索引","viewer.rail.controls":"侧栏","viewer.rail.collapse":"收起侧栏","viewer.rail.bottom":"移到图下方","viewer.rail.right":"移到图右侧","viewer.nav.guide":"打开图表指南","viewer.nav.guide.title":"图表指南（?）","viewer.nav.zoomOut":"缩小","viewer.nav.zoomOut.title":"缩小（-）","viewer.nav.reset":"重置图表视图","viewer.nav.reset.title":"重置视图（0）","viewer.nav.read":"阅读","viewer.nav.zoomIn":"放大","viewer.nav.zoomIn.title":"放大（+）","viewer.nav.camera":"{hint}。重置图表视图","viewer.nav.camera.title":"{semantic}{hint} · 重置视图（0）","viewer.nav.camera.semantic":"语义相机已启用 · ","viewer.nav.level.map":"概览","viewer.nav.level.read":"阅读","viewer.nav.level.full":"完整","viewer.nav.level.auto":"自动","viewer.nav.detail.map":"放大以显示关系标签和节点上下文","viewer.nav.detail.read":"再次放大以显示标签和注释","viewer.nav.detail.full":"完整图表详情","viewer.intent.summary":"{label}。{out} 条出向，{in} 条入向{loops}。共 {total} 条连接。按 Enter 查看详情。","viewer.intent.loops":"，{count} 条自环","viewer.common.copied":"已复制","viewer.common.copyFailed":"复制失败","viewer.common.copyLink":"复制链接","viewer.common.clear":"清除","viewer.common.close":"关闭"}}</script>
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
-      <svg viewBox="0 0 1555 853" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
-        <title id="archify-diagram-title">CEMS 数据采集全链路（双设备 v3.0）</title>
+      <svg viewBox="0 0 1772 853" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
+        <title id="archify-diagram-title">CEMS 数据采集全链路</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
         <defs>
@@ -5013,9 +5013,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" x="20" y="19" width="1355" height="606" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" x="20" y="18" width="1572" height="607" rx="12" class="c-region" stroke-width="1"/>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="北向出口：已实现、已独立验证，但未接入主链路（仅演示脚本调用）" x="169.39998140000006" y="634" width="391.2000371999999" height="151" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="北向出口：三条出口已实现并逐条独立验证，按项目需要接入主链路" x="150.21933683870967" y="633" width="429.56132632258067" height="152" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
         <g data-graph-role="automatic-crossover" style="--step:0">
@@ -5051,59 +5051,67 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <path data-edge-from="emqx" data-edge-to="sub2" data-edge-label="订阅投递" data-edge-key="7" data-composition-points="655,314.5;677.5,314.5;677.5,465;700,465" data-composition-crossover="halo" data-composition-independent="true" d="M 655 314.5 L 669.5 314.5 Q 677.5 314.5 677.5 322.5 L 677.5 457 Q 677.5 465 685.5 465 L 700 465" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:8">
-          <path data-graph-role="automatic-crossover-underlay" d="M 800 240 L 800 256 Q 800 264 808 264 L 918 264 Q 926 264 926 272 L 926 282.9 Q 926 290.9 934 290.9 L 950 290.9" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="sub1" data-edge-to="td" data-edge-label="写 cems_data" data-edge-key="8" data-composition-points="800,240;800,264;926,264;926,290.9;950,290.9" data-composition-crossover="halo" data-composition-independent="true" d="M 800 240 L 800 256 Q 800 264 808 264 L 918 264 Q 926 264 926 272 L 926 282.9 Q 926 290.9 934 290.9 L 950 290.9" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1362 300 L 1369.5 300 Q 1377 300 1377 292.5 L 1377 205 Q 1377 197.5 1384.5 197.5 L 1392 197.5" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="td" data-edge-to="web" data-edge-label="查询 / 报表 / 导出" data-edge-key="8" data-composition-points="1362,300;1377,300;1377,197.5;1392,197.5" data-composition-crossover="halo" data-composition-independent="true" d="M 1362 300 L 1369.5 300 Q 1377 300 1377 292.5 L 1377 205 Q 1377 197.5 1384.5 197.5 L 1392 197.5" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:9">
-          <path data-graph-role="automatic-crossover-underlay" d="M 900 465 L 917 465 Q 925 465 925 457 L 925 315 Q 925 307 933 307 L 950 307" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="sub2" data-edge-to="td" data-edge-label="写 cems_data" data-edge-key="9" data-composition-points="900,465;925,465;925,307;950,307" data-composition-crossover="halo" data-composition-independent="true" d="M 900 465 L 917 465 Q 925 465 925 457 L 925 315 Q 925 307 933 307 L 950 307" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1482 150 L 1482 125" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="web" data-edge-to="redis" data-edge-label="缓存已闭合窗口 · TTL 300 s" data-edge-key="9" data-composition-points="1482,150;1482,125" data-composition-crossover="halo" data-composition-independent="true" d="M 1482 150 L 1482 125" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:10">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1145 300 L 1152.5 300 Q 1160 300 1160 292.5 L 1160 205 Q 1160 197.5 1167.5 197.5 L 1175 197.5" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="td" data-edge-to="web" data-edge-label="查询 / 报表 / 导出" data-edge-key="10" data-composition-points="1145,300;1160,300;1160,197.5;1175,197.5" data-composition-crossover="halo" data-composition-independent="true" d="M 1145 300 L 1152.5 300 Q 1160 300 1160 292.5 L 1160 205 Q 1160 197.5 1167.5 197.5 L 1175 197.5" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1482 410 L 1482 245" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="nginx" data-edge-to="web" data-edge-label="反代 proxy_pass" data-edge-key="10" data-composition-points="1482,410;1482,245" data-composition-crossover="halo" data-composition-independent="true" d="M 1482 410 L 1482 245" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:11">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1265 150 L 1265 125" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="web" data-edge-to="redis" data-edge-label="缓存已闭合窗口 · TTL 300 s" data-edge-key="11" data-composition-points="1265,150;1265,125" data-composition-crossover="halo" data-composition-independent="true" d="M 1265 150 L 1265 125" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1617 457.5 L 1572 457.5" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="browser" data-edge-to="nginx" data-edge-label="HTTP :80" data-edge-key="11" data-composition-points="1617,457.5;1572,457.5" data-composition-crossover="halo" data-composition-independent="true" d="M 1617 457.5 L 1572 457.5" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:12">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1265 410 L 1265 245" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="nginx" data-edge-to="web" data-edge-label="反代 proxy_pass" data-edge-key="12" data-composition-points="1265,410;1265,245" data-composition-crossover="halo" data-composition-independent="true" d="M 1265 410 L 1265 245" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1264.5 230 L 1264.5 150" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="td" data-edge-to="backup" data-edge-label="taosdump 逻辑 + 物理卷" data-edge-key="12" data-composition-points="1264.5,230;1264.5,150" data-composition-crossover="halo" data-composition-independent="true" d="M 1264.5 230 L 1264.5 150" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:13">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1400 457.5 L 1355 457.5" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="browser" data-edge-to="nginx" data-edge-label="HTTP :80" data-edge-key="13" data-composition-points="1400,457.5;1355,457.5" data-composition-crossover="halo" data-composition-independent="true" d="M 1400 457.5 L 1355 457.5" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 900 195 L 923 195 Q 931 195 931 203 L 931 277 Q 931 285 939 285 L 962 285" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="sub1" data-edge-to="spool1" data-edge-key="13" data-composition-points="900,195;931,195;931,285;962,285" data-composition-crossover="halo" data-composition-independent="true" d="M 900 195 L 923 195 Q 931 195 931 203 L 931 277 Q 931 285 939 285 L 962 285" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:14">
-          <path data-graph-role="automatic-crossover-underlay" d="M 1047.5 230 L 1047.5 150" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="td" data-edge-to="backup" data-edge-label="taosdump 逻辑 + 物理卷" data-edge-key="14" data-composition-points="1047.5,230;1047.5,150" data-composition-crossover="halo" data-composition-independent="true" d="M 1047.5 230 L 1047.5 150" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-graph-role="automatic-crossover-underlay" d="M 1122 290.9 L 1167 290.9" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="spool1" data-edge-to="td" data-edge-key="14" data-composition-points="1122,290.9;1167,290.9" data-composition-crossover="halo" data-composition-independent="true" d="M 1122 290.9 L 1167 290.9" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:15">
+          <path data-graph-role="automatic-crossover-underlay" d="M 900 465 L 923 465 Q 931 465 931 457 L 931 413 Q 931 405 939 405 L 962 405" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="sub2" data-edge-to="spool2" data-edge-key="15" data-composition-points="900,465;931,465;931,405;962,405" data-composition-crossover="halo" data-composition-independent="true" d="M 900 465 L 923 465 Q 931 465 931 457 L 931 413 Q 931 405 939 405 L 962 405" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        </g>
+        <g data-graph-role="automatic-crossover" style="--step:16">
+          <path data-graph-role="automatic-crossover-underlay" d="M 1122 405 L 1136.5 405 Q 1144.5 405 1144.5 397 L 1144.5 315 Q 1144.5 307 1152.5 307 L 1167 307" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
+          <path data-edge-from="spool2" data-edge-to="td" data-edge-key="16" data-composition-points="1122,405;1144.5,405;1144.5,307;1167,307" data-composition-crossover="halo" data-composition-independent="true" d="M 1122 405 L 1136.5 405 Q 1144.5 405 1144.5 397 L 1144.5 315 Q 1144.5 307 1152.5 307 L 1167 307" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
 
         <!-- Components -->
-        <g id="node-device" data-node-id="device" data-node-label="Modbus 仿真设备" tabindex="0" role="button" aria-label="聚焦Modbus 仿真设备，:5020 · 从站1/2 · 9 寄存器, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="backend" data-node-sublabel=":5020 · 从站1/2 · 9 寄存器" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>Modbus 仿真设备 · :5020 · 从站1/2 · 9 寄存器 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
+        <g id="node-device" data-node-id="device" data-node-label="Modbus 仿真设备" tabindex="0" role="button" aria-label="聚焦Modbus 仿真设备，9 个测点 · 5 秒一个数, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="9 个测点 · 5 秒一个数" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>Modbus 仿真设备 · 9 个测点 · 5 秒一个数 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
           <rect x="40" y="270" width="175" height="105" rx="6" class="c-mask"/>
           <rect x="40" y="270" width="175" height="105" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(46 276) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="127.5" y="320.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Modbus 仿真设备</text>
-        <text data-detail="context" x="127.5" y="336.5" class="t-muted" font-size="9" text-anchor="middle">:5020 · 从站1/2 · 9 寄存器</text>
+        <text data-detail="context" x="127.5" y="336.5" class="t-muted" font-size="9" text-anchor="middle">9 个测点 · 5 秒一个数</text>
         </g>
 
-        <g id="node-gw1" data-node-id="gw1" data-node-label="网关 1 · plant1" tabindex="0" role="button" aria-label="聚焦网关 1 · plant1，5 s 从站1 · cems/plant1/data, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="5 s 从站1 · cems/plant1/data" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>网关 1 · plant1 · 5 s 从站1 · cems/plant1/data · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
+        <g id="node-gw1" data-node-id="gw1" data-node-label="网关 1 · plant1" tabindex="0" role="button" aria-label="聚焦网关 1 · plant1，轮询取数 · 换算 + 打时间戳, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="轮询取数 · 换算 + 打时间戳" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>网关 1 · plant1 · 轮询取数 · 换算 + 打时间戳 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
           <rect x="250" y="150" width="200" height="85" rx="6" class="c-mask"/>
           <rect x="250" y="150" width="200" height="85" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(256 156) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="350" y="190.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">网关 1 · plant1</text>
-        <text data-detail="context" x="350" y="206.5" class="t-muted" font-size="9" text-anchor="middle">5 s 从站1 · cems/plant1/data</text>
+        <text data-detail="context" x="350" y="206.5" class="t-muted" font-size="9" text-anchor="middle">轮询取数 · 换算 + 打时间戳</text>
         </g>
 
-        <g id="node-cache1" data-node-id="cache1" data-node-label="断网缓存 1" tabindex="0" role="button" aria-label="聚焦断网缓存 1，data/cache.jsonl · ≤64 MB, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="database" data-node-sublabel="data/cache.jsonl · ≤64 MB" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>断网缓存 1 · data/cache.jsonl · ≤64 MB · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
+        <g id="node-cache1" data-node-id="cache1" data-node-label="断网缓存 1" tabindex="0" role="button" aria-label="聚焦断网缓存 1，发不到 broker 就先存本地, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="database" data-node-sublabel="发不到 broker 就先存本地" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>断网缓存 1 · 发不到 broker 就先存本地 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
           <rect x="250" y="50" width="200" height="70" rx="6" class="c-mask"/>
           <rect x="250" y="50" width="200" height="70" rx="6" class="c-database" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(256 56) scale(0.6875)">
@@ -5111,22 +5119,22 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="350" y="83" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">断网缓存 1</text>
-        <text data-detail="context" x="350" y="99" class="t-muted" font-size="9" text-anchor="middle">data/cache.jsonl · ≤64 MB</text>
+        <text data-detail="context" x="350" y="99" class="t-muted" font-size="9" text-anchor="middle">发不到 broker 就先存本地</text>
         </g>
 
-        <g id="node-gw2" data-node-id="gw2" data-node-label="网关 2 · plant2" tabindex="0" role="button" aria-label="聚焦网关 2 · plant2，5 s 从站2 · cems/plant2/data, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="5 s 从站2 · cems/plant2/data" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>网关 2 · plant2 · 5 s 从站2 · cems/plant2/data · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
+        <g id="node-gw2" data-node-id="gw2" data-node-label="网关 2 · plant2" tabindex="0" role="button" aria-label="聚焦网关 2 · plant2，轮询从站2 · 同代码另一实例, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="轮询从站2 · 同代码另一实例" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>网关 2 · plant2 · 轮询从站2 · 同代码另一实例 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
           <rect x="250" y="420" width="200" height="85" rx="6" class="c-mask"/>
           <rect x="250" y="420" width="200" height="85" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(256 426) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="350" y="460.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">网关 2 · plant2</text>
-        <text data-detail="context" x="350" y="476.5" class="t-muted" font-size="9" text-anchor="middle">5 s 从站2 · cems/plant2/data</text>
+        <text data-detail="context" x="350" y="476.5" class="t-muted" font-size="9" text-anchor="middle">轮询从站2 · 同代码另一实例</text>
         </g>
 
-        <g id="node-cache2" data-node-id="cache2" data-node-label="断网缓存 2" tabindex="0" role="button" aria-label="聚焦断网缓存 2，data/plant2/cache.jsonl, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="database" data-node-sublabel="data/plant2/cache.jsonl" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>断网缓存 2 · data/plant2/cache.jsonl · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
+        <g id="node-cache2" data-node-id="cache2" data-node-label="断网缓存 2" tabindex="0" role="button" aria-label="聚焦断网缓存 2，每实例一份，互不干扰, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="database" data-node-sublabel="每实例一份，互不干扰" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>断网缓存 2 · 每实例一份，互不干扰 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
           <rect x="250" y="535" width="200" height="70" rx="6" class="c-mask"/>
           <rect x="250" y="535" width="200" height="70" rx="6" class="c-database" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(256 541) scale(0.6875)">
@@ -5134,11 +5142,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="350" y="568" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">断网缓存 2</text>
-        <text data-detail="context" x="350" y="584" class="t-muted" font-size="9" text-anchor="middle">data/plant2/cache.jsonl</text>
+        <text data-detail="context" x="350" y="584" class="t-muted" font-size="9" text-anchor="middle">每实例一份，互不干扰</text>
         </g>
 
-        <g id="node-emqx" data-node-id="emqx" data-node-label="EMQX" tabindex="0" role="button" aria-label="聚焦EMQX，:1883 MQTT · 持久会话, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel=":1883 MQTT · 持久会话" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>EMQX · :1883 MQTT · 持久会话 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
+        <g id="node-emqx" data-node-id="emqx" data-node-label="EMQX" tabindex="0" role="button" aria-label="聚焦EMQX，按订阅关系分发 · 离线替订阅方存着, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="按订阅关系分发 · 离线替订阅方存着" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>EMQX · 按订阅关系分发 · 离线替订阅方存着 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
           <rect x="490" y="250" width="165" height="115" rx="6" class="c-mask"/>
           <rect x="490" y="250" width="165" height="115" rx="6" class="c-messagebus" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(496 256) scale(0.6875)">
@@ -5148,112 +5156,136 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="572.5" y="305.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">EMQX</text>
-        <text data-detail="context" x="572.5" y="321.5" class="t-muted" font-size="9" text-anchor="middle">:1883 MQTT · 持久会话</text>
+        <text data-detail="context" x="572.5" y="321.5" class="t-muted" font-size="7.9" text-anchor="middle">按订阅关系分发 · 离线替订阅方存着</text>
         </g>
 
-        <g id="node-sub1" data-node-id="sub1" data-node-label="接入 1 · plant1" tabindex="0" role="button" aria-label="聚焦接入 1 · plant1，plant1/device1 · 入库+告警, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="plant1/device1 · 入库+告警" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>接入 1 · plant1 · plant1/device1 · 入库+告警 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
+        <g id="node-sub1" data-node-id="sub1" data-node-label="接入 1 · plant1" tabindex="0" role="button" aria-label="聚焦接入 1 · plant1，校验 → 入库 → 判告警；写库失败先落盘, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="校验 → 入库 → 判告警；写库失败先落盘" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>接入 1 · plant1 · 校验 → 入库 → 判告警；写库失败先落盘 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
           <rect x="700" y="150" width="200" height="90" rx="6" class="c-mask"/>
           <rect x="700" y="150" width="200" height="90" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(706 156) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="800" y="193" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">接入 1 · plant1</text>
-        <text data-detail="context" x="800" y="209" class="t-muted" font-size="9" text-anchor="middle">plant1/device1 · 入库+告警</text>
+        <text data-detail="context" x="800" y="209" class="t-muted" font-size="8.8" text-anchor="middle">校验 → 入库 → 判告警；写库失败先落盘</text>
         </g>
 
-        <g id="node-sub2" data-node-id="sub2" data-node-label="接入 2 · plant2" tabindex="0" role="button" aria-label="聚焦接入 2 · plant2，plant2/device2 · 入库+告警, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="plant2/device2 · 入库+告警" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>接入 2 · plant2 · plant2/device2 · 入库+告警 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
+        <g id="node-sub2" data-node-id="sub2" data-node-label="接入 2 · plant2" tabindex="0" role="button" aria-label="聚焦接入 2 · plant2，同上，处理 2 号炉, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="同上，处理 2 号炉" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>接入 2 · plant2 · 同上，处理 2 号炉 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
           <rect x="700" y="420" width="200" height="90" rx="6" class="c-mask"/>
           <rect x="700" y="420" width="200" height="90" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(706 426) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="800" y="463" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">接入 2 · plant2</text>
-        <text data-detail="context" x="800" y="479" class="t-muted" font-size="9" text-anchor="middle">plant2/device2 · 入库+告警</text>
+        <text data-detail="context" x="800" y="479" class="t-muted" font-size="9" text-anchor="middle">同上，处理 2 号炉</text>
         </g>
 
-        <g id="node-td" data-node-id="td" data-node-label="TDengine" tabindex="0" role="button" aria-label="聚焦TDengine，cems_data + 3 告警表(含推送), 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="database" data-node-sublabel="cems_data + 3 告警表(含推送)" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>TDengine · cems_data + 3 告警表(含推送) · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
-          <rect x="950" y="230" width="195" height="140" rx="6" class="c-mask"/>
-          <rect x="950" y="230" width="195" height="140" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(956 236) scale(0.6875)">
+        <g id="node-td" data-node-id="td" data-node-label="TDengine" tabindex="0" role="button" aria-label="聚焦TDengine，时序数据落库 · 保留 365 天, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="database" data-node-sublabel="时序数据落库 · 保留 365 天" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>TDengine · 时序数据落库 · 保留 365 天 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
+          <rect x="1167" y="230" width="195" height="140" rx="6" class="c-mask"/>
+          <rect x="1167" y="230" width="195" height="140" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1173 236) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1047.5" y="298" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">TDengine</text>
-        <text data-detail="context" x="1047.5" y="314" class="t-muted" font-size="9" text-anchor="middle">cems_data + 3 告警表(含推送)</text>
+          <text data-node-label="" data-detail-anchor="" x="1264.5" y="298" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">TDengine</text>
+        <text data-detail="context" x="1264.5" y="314" class="t-muted" font-size="9" text-anchor="middle">时序数据落库 · 保留 365 天</text>
         </g>
 
-        <g id="node-backup" data-node-id="backup" data-node-label="备份产物" tabindex="0" role="button" aria-label="聚焦备份产物，F:\cems-backup · 逻辑+物理卷, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="database" data-node-sublabel="F:\cems-backup · 逻辑+物理卷" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>备份产物 · F:\cems-backup · 逻辑+物理卷 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
-          <rect x="950" y="65" width="195" height="85" rx="6" class="c-mask"/>
-          <rect x="950" y="65" width="195" height="85" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(956 71) scale(0.6875)">
+        <g id="node-backup" data-node-id="backup" data-node-label="备份产物" tabindex="0" role="button" aria-label="聚焦备份产物，定期导出存档 · 放在非系统盘, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="database" data-node-sublabel="定期导出存档 · 放在非系统盘" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>备份产物 · 定期导出存档 · 放在非系统盘 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
+          <rect x="1167" y="65" width="195" height="85" rx="6" class="c-mask"/>
+          <rect x="1167" y="65" width="195" height="85" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1173 71) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1047.5" y="105.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">备份产物</text>
-        <text data-detail="context" x="1047.5" y="121.5" class="t-muted" font-size="9" text-anchor="middle">F:\cems-backup · 逻辑+物理卷</text>
+          <text data-node-label="" data-detail-anchor="" x="1264.5" y="105.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">备份产物</text>
+        <text data-detail="context" x="1264.5" y="121.5" class="t-muted" font-size="9" text-anchor="middle">定期导出存档 · 放在非系统盘</text>
         </g>
 
-        <g id="node-web" data-node-id="web" data-node-label="Web 大屏 / 报表" tabindex="0" role="button" aria-label="聚焦Web 大屏 / 报表，大屏 / 报表 / 导出 · :5000, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="大屏 / 报表 / 导出 · :5000" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>Web 大屏 / 报表 · 大屏 / 报表 / 导出 · :5000 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
-          <rect x="1175" y="150" width="180" height="95" rx="6" class="c-mask"/>
-          <rect x="1175" y="150" width="180" height="95" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1181 156) scale(0.6875)">
+        <g id="node-web" data-node-id="web" data-node-label="Web 大屏 / 报表" tabindex="0" role="button" aria-label="聚焦Web 大屏 / 报表，打开就能看的大屏与报表, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="打开就能看的大屏与报表" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>Web 大屏 / 报表 · 打开就能看的大屏与报表 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
+          <rect x="1392" y="150" width="180" height="95" rx="6" class="c-mask"/>
+          <rect x="1392" y="150" width="180" height="95" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1398 156) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1265" y="195.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Web 大屏 / 报表</text>
-        <text data-detail="context" x="1265" y="211.5" class="t-muted" font-size="9" text-anchor="middle">大屏 / 报表 / 导出 · :5000</text>
+          <text data-node-label="" data-detail-anchor="" x="1482" y="195.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Web 大屏 / 报表</text>
+        <text data-detail="context" x="1482" y="211.5" class="t-muted" font-size="9" text-anchor="middle">打开就能看的大屏与报表</text>
         </g>
 
-        <g id="node-redis" data-node-id="redis" data-node-label="Redis 查询缓存" tabindex="0" role="button" aria-label="聚焦Redis 查询缓存，只缓存已闭合窗口 · TTL 300 s, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="database" data-node-sublabel="只缓存已闭合窗口 · TTL 300 s" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>Redis 查询缓存 · 只缓存已闭合窗口 · TTL 300 s · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
-          <rect x="1175" y="45" width="180" height="80" rx="6" class="c-mask"/>
-          <rect x="1175" y="45" width="180" height="80" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1181 51) scale(0.6875)">
+        <g id="node-redis" data-node-id="redis" data-node-label="Redis 查询缓存" tabindex="0" role="button" aria-label="聚焦Redis 查询缓存，只缓存不会再变的历史窗口, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="database" data-node-sublabel="只缓存不会再变的历史窗口" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>Redis 查询缓存 · 只缓存不会再变的历史窗口 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
+          <rect x="1392" y="45" width="180" height="80" rx="6" class="c-mask"/>
+          <rect x="1392" y="45" width="180" height="80" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1398 51) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1265" y="83" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Redis 查询缓存</text>
-        <text data-detail="context" x="1265" y="99" class="t-muted" font-size="9" text-anchor="middle">只缓存已闭合窗口 · TTL 300 s</text>
+          <text data-node-label="" data-detail-anchor="" x="1482" y="83" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Redis 查询缓存</text>
+        <text data-detail="context" x="1482" y="99" class="t-muted" font-size="9" text-anchor="middle">只缓存不会再变的历史窗口</text>
         </g>
 
-        <g id="node-nginx" data-node-id="nginx" data-node-label="nginx 反向代理" tabindex="0" role="button" aria-label="聚焦nginx 反向代理，唯一对外入口 :80 · 反代 web, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）" aria-pressed="false" data-node-kind="security" data-node-sublabel="唯一对外入口 :80 · 反代 web" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <title>nginx 反向代理 · 唯一对外入口 :80 · 反代 web · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</title>
-          <rect x="1175" y="410" width="180" height="95" rx="6" class="c-mask"/>
-          <rect x="1175" y="410" width="180" height="95" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(1181 416) scale(0.6875)">
+        <g id="node-nginx" data-node-id="nginx" data-node-label="nginx 反向代理" tabindex="0" role="button" aria-label="聚焦nginx 反向代理，大屏的正式入口, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="security" data-node-sublabel="大屏的正式入口" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>nginx 反向代理 · 大屏的正式入口 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
+          <rect x="1392" y="410" width="180" height="95" rx="6" class="c-mask"/>
+          <rect x="1392" y="410" width="180" height="95" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(1398 416) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1265" y="455.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nginx 反向代理</text>
-        <text data-detail="context" x="1265" y="471.5" class="t-muted" font-size="9" text-anchor="middle">唯一对外入口 :80 · 反代 web</text>
+          <text data-node-label="" data-detail-anchor="" x="1482" y="455.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">nginx 反向代理</text>
+        <text data-detail="context" x="1482" y="471.5" class="t-muted" font-size="9" text-anchor="middle">大屏的正式入口</text>
         </g>
 
-        <g id="node-browser" data-node-id="browser" data-node-label="浏览器 / 运维" tabindex="0" role="button" aria-label="聚焦浏览器 / 运维，实时大屏 / 报表, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="实时大屏 / 报表" data-node-context="架构组件">
-          <title>浏览器 / 运维 · 实时大屏 / 报表 · 架构组件</title>
-          <rect x="1400" y="410" width="115" height="95" rx="6" class="c-mask"/>
-          <rect x="1400" y="410" width="115" height="95" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1406 416) scale(0.6875)">
+        <g id="node-browser" data-node-id="browser" data-node-label="浏览器 / 运维" tabindex="0" role="button" aria-label="聚焦浏览器 / 运维，用户在这看, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="用户在这看" data-node-context="架构组件">
+          <title>浏览器 / 运维 · 用户在这看 · 架构组件</title>
+          <rect x="1617" y="410" width="115" height="95" rx="6" class="c-mask"/>
+          <rect x="1617" y="410" width="115" height="95" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1623 416) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1457.5" y="455.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">浏览器 / 运维</text>
-        <text data-detail="context" x="1457.5" y="471.5" class="t-muted" font-size="9" text-anchor="middle">实时大屏 / 报表</text>
+          <text data-node-label="" data-detail-anchor="" x="1674.5" y="455.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">浏览器 / 运维</text>
+        <text data-detail="context" x="1674.5" y="471.5" class="t-muted" font-size="9" text-anchor="middle">用户在这看</text>
         </g>
 
-        <g id="node-northbound" data-node-id="northbound" data-node-label="北向出口 · 未接线" tabindex="0" role="button" aria-label="聚焦北向出口 · 未接线，HJ212(SM4) / JSON-HTTP / Modbus-TCP, 北向出口：已实现、已独立验证，但未接入主链路（仅演示脚本调用）" aria-pressed="false" data-node-kind="external" data-node-sublabel="HJ212(SM4) / JSON-HTTP / Modbus-TCP" data-node-context="北向出口：已实现、已独立验证，但未接入主链路（仅演示脚本调用）">
-          <title>北向出口 · 未接线 · HJ212(SM4) / JSON-HTTP / Modbus-TCP · 北向出口：已实现、已独立验证，但未接入主链路（仅演示脚本调用）</title>
+        <g id="node-northbound" data-node-id="northbound" data-node-label="北向出口" tabindex="0" role="button" aria-label="聚焦北向出口，对环保平台的三条标准出口（按需接线）, 北向出口：三条出口已实现并逐条独立验证，按项目需要接入主链路" aria-pressed="false" data-node-kind="external" data-node-sublabel="对环保平台的三条标准出口（按需接线）" data-node-context="北向出口：三条出口已实现并逐条独立验证，按项目需要接入主链路">
+          <title>北向出口 · 对环保平台的三条标准出口（按需接线） · 北向出口：三条出口已实现并逐条独立验证，按项目需要接入主链路</title>
           <rect x="250" y="660" width="230" height="105" rx="6" class="c-mask"/>
           <rect x="250" y="660" width="230" height="105" rx="6" class="c-external" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(256 666) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="365" y="710.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">北向出口 · 未接线</text>
-        <text data-detail="context" x="365" y="726.5" class="t-muted" font-size="9" text-anchor="middle">HJ212(SM4) / JSON-HTTP / Modbus-TCP</text>
+          <text data-node-label="" data-detail-anchor="" x="365" y="710.5" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">北向出口</text>
+        <text data-detail="context" x="365" y="726.5" class="t-muted" font-size="9" text-anchor="middle">对环保平台的三条标准出口（按需接线）</text>
+        </g>
+
+        <g id="node-spool1" data-node-id="spool1" data-node-label="落盘队列 1" tabindex="0" role="button" aria-label="聚焦落盘队列 1，写库失败先落盘 · 入库成功才删, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="database" data-node-sublabel="写库失败先落盘 · 入库成功才删" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>落盘队列 1 · 写库失败先落盘 · 入库成功才删 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
+          <rect x="962" y="255" width="160" height="60" rx="6" class="c-mask"/>
+          <rect x="962" y="255" width="160" height="60" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(968 261) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1042" y="283" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">落盘队列 1</text>
+        <text data-detail="context" x="1042" y="299" class="t-muted" font-size="8.7" text-anchor="middle">写库失败先落盘 · 入库成功才删</text>
+        </g>
+
+        <g id="node-spool2" data-node-id="spool2" data-node-label="落盘队列 2" tabindex="0" role="button" aria-label="聚焦落盘队列 2，每实例一份 · 补传幂等, 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）" aria-pressed="false" data-node-kind="database" data-node-sublabel="每实例一份 · 补传幂等" data-node-context="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <title>落盘队列 2 · 每实例一份 · 补传幂等 · 单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</title>
+          <rect x="962" y="375" width="160" height="60" rx="6" class="c-mask"/>
+          <rect x="962" y="375" width="160" height="60" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(968 381) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1042" y="403" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">落盘队列 2</text>
+        <text data-detail="context" x="1042" y="419" class="t-muted" font-size="9" text-anchor="middle">每实例一份 · 补传幂等</text>
         </g>
 
         <!-- Connection labels -->
@@ -5289,44 +5321,40 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <rect x="653.3" y="369.75" width="48.4" height="14" rx="3" class="c-mask"/>
           <text x="677.5" y="379.75" class="t-edge-emphasis" font-size="8" text-anchor="middle">订阅投递</text>
         </g>
-        <g data-detail="context" data-edge-from="sub1" data-edge-to="td" data-edge-label="写 cems_data" data-edge-key="8">
-          <rect x="829.2" y="244" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="863" y="254" class="t-edge-emphasis" font-size="8" text-anchor="middle">写 cems_data</text>
+        <g data-detail="context" data-edge-from="td" data-edge-to="web" data-edge-label="查询 / 报表 / 导出" data-edge-key="8">
+          <rect x="1381.5" y="262" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="1429.7" y="272" class="t-edge-emphasis" font-size="8" text-anchor="middle">查询 / 报表 / 导出</text>
         </g>
-        <g data-detail="context" data-edge-from="sub2" data-edge-to="td" data-edge-label="写 cems_data" data-edge-key="9">
-          <rect x="851.4000000000001" y="379" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="885.2" y="389" class="t-edge-emphasis" font-size="8" text-anchor="middle">写 cems_data</text>
+        <g data-detail="context" data-edge-from="web" data-edge-to="redis" data-edge-label="缓存已闭合窗口 · TTL 300 s" data-edge-key="9">
+          <rect x="1414.6" y="130" width="134.8" height="14" rx="3" class="c-mask"/>
+          <text x="1482" y="140" class="t-edge-dashed" font-size="8" text-anchor="middle">缓存已闭合窗口 · TTL 300 s</text>
         </g>
-        <g data-detail="context" data-edge-from="td" data-edge-to="web" data-edge-label="查询 / 报表 / 导出" data-edge-key="10">
-          <rect x="1164.5" y="262" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="1212.7" y="272" class="t-edge-emphasis" font-size="8" text-anchor="middle">查询 / 报表 / 导出</text>
+        <g data-detail="context" data-edge-from="nginx" data-edge-to="web" data-edge-label="反代 proxy_pass" data-edge-key="10">
+          <rect x="1441" y="390" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="1482" y="400" class="t-edge-default" font-size="8" text-anchor="middle">反代 proxy_pass</text>
         </g>
-        <g data-detail="context" data-edge-from="web" data-edge-to="redis" data-edge-label="缓存已闭合窗口 · TTL 300 s" data-edge-key="11">
-          <rect x="1197.6" y="130" width="134.8" height="14" rx="3" class="c-mask"/>
-          <text x="1265" y="140" class="t-edge-dashed" font-size="8" text-anchor="middle">缓存已闭合窗口 · TTL 300 s</text>
+        <g data-detail="context" data-edge-from="browser" data-edge-to="nginx" data-edge-label="HTTP :80" data-edge-key="11">
+          <rect x="1570.3" y="437.5" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="1594.5" y="447.5" class="t-edge-emphasis" font-size="8" text-anchor="middle">HTTP :80</text>
         </g>
-        <g data-detail="context" data-edge-from="nginx" data-edge-to="web" data-edge-label="反代 proxy_pass" data-edge-key="12">
-          <rect x="1224" y="390" width="82" height="14" rx="3" class="c-mask"/>
-          <text x="1265" y="400" class="t-edge-default" font-size="8" text-anchor="middle">反代 proxy_pass</text>
+        <g data-detail="context" data-edge-from="td" data-edge-to="backup" data-edge-label="taosdump 逻辑 + 物理卷" data-edge-key="12">
+          <rect x="1206.7" y="210" width="115.6" height="14" rx="3" class="c-mask"/>
+          <text x="1264.5" y="220" class="t-edge-dashed" font-size="8" text-anchor="middle">taosdump 逻辑 + 物理卷</text>
         </g>
-        <g data-detail="context" data-edge-from="browser" data-edge-to="nginx" data-edge-label="HTTP :80" data-edge-key="13">
-          <rect x="1353.3" y="437.5" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="1377.5" y="447.5" class="t-edge-emphasis" font-size="8" text-anchor="middle">HTTP :80</text>
-        </g>
-        <g data-detail="context" data-edge-from="td" data-edge-to="backup" data-edge-label="taosdump 逻辑 + 物理卷" data-edge-key="14">
-          <rect x="989.7" y="210" width="115.6" height="14" rx="3" class="c-mask"/>
-          <text x="1047.5" y="220" class="t-edge-dashed" font-size="8" text-anchor="middle">taosdump 逻辑 + 物理卷</text>
-        </g>
+
+
+
+
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）">
-          <rect data-graph-role="structural-frame-label-mask" x="24" y="23" width="557.7613449225805" height="18" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="28" y="37.032259064516126" class="t-cloud" font-size="10.032259064516127" font-weight="600">单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）">
+          <rect data-graph-role="structural-frame-label-mask" x="24" y="22" width="545.0297242193549" height="19" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="28" y="37.43225906451613" class="t-cloud" font-size="11.43225906451613" font-weight="600">单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）</text>
         </g>
 
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="北向出口：已实现、已独立验证，但未接入主链路（仅演示脚本调用）">
-          <rect data-graph-role="structural-frame-label-mask" x="173.39998140000006" y="638" width="383.2000371999999" height="18" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="177.39998140000006" y="652.0322590645161" class="t-cloud" font-size="10.032259064516127" font-weight="600">北向出口：已实现、已独立验证，但未接入主链路（仅演示脚本调用）</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="北向出口：三条出口已实现并逐条独立验证，按项目需要接入主链路">
+          <rect data-graph-role="structural-frame-label-mask" x="154.21933683870967" y="637" width="421.56132632258067" height="19" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="158.21933683870967" y="652.4322590645161" class="t-cloud" font-size="11.43225906451613" font-weight="600">北向出口：三条出口已实现并逐条独立验证，按项目需要接入主链路</text>
         </g>
 
         <!-- Legend -->
@@ -5532,20 +5560,44 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       <div class="card">
         <div class="card-header">
           <div class="card-dot cyan"></div>
-          <h3>四层结构与采集口径</h3>
+          <h3>图上每一块在干什么（按数据流向）</h3>
         </div>
         <ul>
-          <li>设备层（仿真 9 测点）→ 网关层（Modbus 5 s 轮询）→ EMQX → 接入层（订阅/入库/告警）→ 展示层（大屏/报表）</li>
-          <li>9 测点：Flow/Dust/SO2/NOx/O2/Velocity/Temp/Humidity/Pressure；寄存器值 = 真值 ×10</li>
-          <li>单设备 12 条/分钟（名义 720 条/小时）；网关单实例节拍硬上限 ≈1.05 条/秒，扩容靠加实例</li>
-          <li>接入层对格式/量程不合法的报文整条拒收并计数，不静默入库</li>
+          <li>① Modbus 仿真设备 —— 代替现场仪表：9 个测点，每 5 秒变一个数（值 ×10 存进寄存器）</li>
+          <li>② 网关 —— 每 5 秒去设备取一次数，换算成工程量 + 打时间戳，发到消息总线</li>
+          <li>③ 断网缓存（网关本地文件）—— 发不出去就先落盘，恢复后自动补传；这是网关侧的兜底</li>
+          <li>④ EMQX（消息总线）—— 按订阅关系统一分发；订阅方离线时替它存着，重连后补投</li>
+          <li>⑤ 接入层 —— 订阅报文 → 校验（量程/字段）→ 写库 → 逐条判超标告警</li>
+          <li>⑥ 接入层落盘队列 —— 写库失败先把原始报文落盘，后台补传，入库成功才删（接入侧兜底）</li>
+          <li>⑦ TDengine（时序库）—— 数据落库、保留 365 天；4 张超级表（1 数据 + 3 告警）</li>
+          <li>⑧ 备份产物 —— 定期把库导出成存档，放在非系统盘、放在仓库外（库坏了它还在）</li>
+          <li>⑨ Redis 查询缓存 —— 只缓存不会再变的时间窗，报表不必每次都压库</li>
+          <li>⑩ Web 大屏 / 报表 —— 打开就能看：实时曲线、报表、Excel 导出、健康检查</li>
+          <li>⑪ nginx 反向代理 —— 大屏的正式入口（:80），静态与缓存接口在这里收口</li>
+          <li>⑫ 浏览器 —— 用户实际看的地方</li>
+          <li>⑬ 北向出口 —— 需要向上级环保平台报送时走的通道，三条协议出口已就绪</li>
+          <li>— 说明：②③ 属网关侧、⑤⑥ 属接入侧、⑨ 属展示侧；三处都是&quot;缓存/存档&quot;，但顶的不是同一个位置</li>
+          <li>— 多设备：一台炉子一套「网关 + 接入」实例，加设备就是加实例（同一份代码、各写各的库表与缓存）</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot orange"></div>
+          <h3>链路与故障兜底（三个位置分别顶什么）</h3>
+        </div>
+        <ul>
+          <li>链路四层：设备（Modbus 5 s）→ 网关（取数/换算/缓存）→ 总线（EMQX）→ 接入（校验/入库/告警）→ 展示（大屏/报表）</li>
+          <li>⚠️ 三个兜底位置**顶的不是同一段**，别混：网关缓存在「网关→总线」；总线持久会话在「订阅方离线期间」；接入层落盘队列在「写库失败那一瞬间」</li>
+          <li>所以「数据不丢」要分开说：网关→总线这段由本地缓存保单，接入层那段由落盘队列保单（实测 7 条写库失败全部补回、逐值对上）</li>
+          <li>采集口径：9 测点、单设备 12 条/分钟（名义 720 条/小时）；扩容靠加实例，不压单实例</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot amber"></div>
-          <h3>断网不丢数（网关 + broker 双层）</h3>
+          <h3>断网不丢数（网关缓存 + 总线持久会话）</h3>
         </div>
         <ul>
           <li>网关发不出去先写 cache.jsonl（上限 64 MB，超限丢最旧）；恢复后 30 s 一轮 FIFO 补传，只删已确认的</li>
@@ -5557,7 +5609,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       <div class="card">
         <div class="card-header">
           <div class="card-dot rose"></div>
-          <h3>告警与折算口径</h3>
+          <h3>告警与折算口径（判定全部走代码）</h3>
         </div>
         <ul>
           <li>折算值 = 实测 × 15 / (21 − O2)；O2 ≥ 21% 或分母 &lt; 2 判无效，绝不拿哨兵值 9999.99 去比限值</li>
@@ -5595,12 +5647,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       <div class="card">
         <div class="card-header">
           <div class="card-dot slate"></div>
-          <h3>北向出口与已知边界</h3>
+          <h3>北向出口与部署形态</h3>
         </div>
         <ul>
-          <li>src/protocol/adapter.py 一套接口三出口：HJ212/TCP（含 SM4）、HTTP-JSON、Modbus-TCP，连接管理含心跳/超时重连</li>
-          <li>三出口均已本地回环独立验证（northbound_demo / hj212_loopback_demo），但网关代码无出口引用，未接入主链路</li>
-          <li>其他边界：单机部署未验证多机/集群/HA；loadgen 压测直发 EMQX 绕过网关；未接真实仪表与环保平台</li>
+          <li>北向出口：一套接口三条出口（HJ212/TCP 含 SM4、HTTP-JSON、Modbus-TCP），含心跳与超时重连</li>
+          <li>三条出口均已本地回环 + 官方向量独立验证；是否接进主链路按项目需要决定（当前为演示脚本调用）</li>
+          <li>部署形态：单机 Docker Compose 一键起（10 个容器），端口默认只绑 127.0.0.1</li>
+          <li>扩展方式：多设备 = 多实例（每台炉子一套网关 + 接入，各自库表与缓存目录），已按两实例验证</li>
+          <li>镜像是具体版本号，不用 latest：同一份编排在任何时候重建都得到同一套软件</li>
         </ul>
       </div>
     </div>
