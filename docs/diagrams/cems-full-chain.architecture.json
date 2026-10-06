@@ -2,15 +2,15 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "CEMS 数据采集全链路（双设备 v3.0）",
+    "title": "CEMS 数据采集全链路",
     "locale": "zh-CN",
     "output": ".archify/architecture-cems-full-chain-20261003-143502/cems-full-chain.html",
     "quality_profile": "showcase",
     "repository": {
-      "url": "https://github.com/Daidai52640/mqtt_demo.git",
+      "url": "https://github.com/Daidai52640/cems-data-pipeline.git",
       "provider": "github",
       "link_mode": "local-only",
-      "revision": "7791e175d028c82804cc3d26c605c2b8e501a0de"
+      "revision": "b55042a9a13c13a775ffdf9f07d99b75ae747c82"
     }
   },
   "components": [
@@ -18,230 +18,620 @@
       "id": "device",
       "type": "backend",
       "label": "Modbus 仿真设备",
-      "sublabel": ":5020 · 从站1/2 · 9 寄存器",
-      "pos": [40, 270],
-      "size": [175, 105],
+      "sublabel": "9 个测点 · 5 秒一个数",
+      "pos": [
+        40,
+        270
+      ],
+      "size": [
+        175,
+        105
+      ],
       "sources": [
-        { "path": "src/device/modbus_server.py", "line": 94, "label": "SLAVE_IDS 解析" },
-        { "path": "src/device/modbus_server.py", "line": 272, "end_line": 318, "label": "main / StartTcpServer" },
-        { "path": "src/device/simulator.py", "line": 584, "label": "sample（正弦+日周期+噪声）" }
+        {
+          "path": "src/device/modbus_server.py",
+          "line": 94,
+          "label": "SLAVE_IDS 解析"
+        },
+        {
+          "path": "src/device/modbus_server.py",
+          "line": 272,
+          "end_line": 318,
+          "label": "main / StartTcpServer"
+        },
+        {
+          "path": "src/device/simulator.py",
+          "line": 584,
+          "label": "sample（正弦+日周期+噪声）"
+        }
       ]
     },
     {
       "id": "gw1",
       "type": "backend",
       "label": "网关 1 · plant1",
-      "sublabel": "5 s 从站1 · cems/plant1/data",
-      "pos": [250, 150],
-      "size": [200, 85],
+      "sublabel": "轮询取数 · 换算 + 打时间戳",
+      "pos": [
+        250,
+        150
+      ],
+      "size": [
+        200,
+        85
+      ],
       "sources": [
-        { "path": "src/gateway/gateway.py", "line": 670, "end_line": 772, "label": "main（读→发→缓存）" },
-        { "path": "src/gateway/gateway.py", "line": 374, "label": "publish（等 PUBACK）" },
-        { "path": "src/gateway/gateway.py", "line": 537, "label": "resend_cache 补传" }
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 670,
+          "end_line": 772,
+          "label": "main（读→发→缓存）"
+        },
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 374,
+          "label": "publish（等 PUBACK）"
+        },
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 537,
+          "label": "resend_cache 补传"
+        }
       ]
     },
     {
       "id": "cache1",
       "type": "database",
       "label": "断网缓存 1",
-      "sublabel": "data/cache.jsonl · ≤64 MB",
-      "pos": [250, 50],
-      "size": [200, 70],
+      "sublabel": "发不到 broker 就先存本地",
+      "pos": [
+        250,
+        50
+      ],
+      "size": [
+        200,
+        70
+      ],
       "sources": [
-        { "path": "src/gateway/gateway.py", "line": 106, "label": "CACHE_MAX_BYTES 64 MB" },
-        { "path": "src/gateway/gateway.py", "line": 466, "label": "原子段文件交接" }
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 106,
+          "label": "CACHE_MAX_BYTES 64 MB"
+        },
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 466,
+          "label": "原子段文件交接"
+        }
       ]
     },
     {
       "id": "gw2",
       "type": "backend",
       "label": "网关 2 · plant2",
-      "sublabel": "5 s 从站2 · cems/plant2/data",
-      "pos": [250, 420],
-      "size": [200, 85],
+      "sublabel": "轮询从站2 · 同代码另一实例",
+      "pos": [
+        250,
+        420
+      ],
+      "size": [
+        200,
+        85
+      ],
       "sources": [
-        { "path": "docker-compose.yml", "line": 302, "end_line": 332, "label": "gateway2 服务（profile）" },
-        { "path": "src/gateway/gateway.py", "line": 571, "label": "ResendWorker（同代码）" }
+        {
+          "path": "docker-compose.yml",
+          "line": 302,
+          "end_line": 332,
+          "label": "gateway2 服务（profile）"
+        },
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 571,
+          "label": "ResendWorker（同代码）"
+        }
       ]
     },
     {
       "id": "cache2",
       "type": "database",
       "label": "断网缓存 2",
-      "sublabel": "data/plant2/cache.jsonl",
-      "pos": [250, 535],
-      "size": [200, 70],
+      "sublabel": "每实例一份，互不干扰",
+      "pos": [
+        250,
+        535
+      ],
+      "size": [
+        200,
+        70
+      ],
       "sources": [
-        { "path": "docker-compose.yml", "line": 316, "label": "GATEWAY_DATA_DIR 每实例一份" },
-        { "path": "src/gateway/gateway.py", "line": 287, "label": "超限丢最旧" }
+        {
+          "path": "docker-compose.yml",
+          "line": 316,
+          "label": "GATEWAY_DATA_DIR 每实例一份"
+        },
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 287,
+          "label": "超限丢最旧"
+        }
       ]
     },
     {
       "id": "emqx",
       "type": "messagebus",
       "label": "EMQX",
-      "sublabel": ":1883 MQTT · 持久会话",
-      "pos": [490, 250],
-      "size": [165, 115],
+      "sublabel": "按订阅关系分发 · 离线替订阅方存着",
+      "pos": [
+        490,
+        250
+      ],
+      "size": [
+        165,
+        115
+      ],
       "sources": [
-        { "path": "docker-compose.yml", "line": 171, "end_line": 180, "label": "离线队列 20000 / 会话 24 h / 落盘" }
+        {
+          "path": "docker-compose.yml",
+          "line": 171,
+          "end_line": 180,
+          "label": "离线队列 20000 / 会话 24 h / 落盘"
+        }
       ]
     },
     {
       "id": "sub1",
       "type": "backend",
       "label": "接入 1 · plant1",
-      "sublabel": "plant1/device1 · 入库+告警",
-      "pos": [700, 150],
-      "size": [200, 90],
+      "sublabel": "校验 → 入库 → 判告警；写库失败先落盘",
+      "pos": [
+        700,
+        150
+      ],
+      "size": [
+        200,
+        90
+      ],
       "sources": [
-        { "path": "src/platform/subscriber_to_td.py", "line": 922, "label": "on_message（校验+入库+判告警）" },
-        { "path": "src/platform/subscriber_to_td.py", "line": 979, "label": "main" },
-        { "path": "src/common/alarm_judge.py", "line": 640, "label": "judge_hour 小时结算" }
+        {
+          "path": "src/platform/subscriber_to_td.py",
+          "line": 922,
+          "label": "on_message（校验+入库+判告警）"
+        },
+        {
+          "path": "src/platform/subscriber_to_td.py",
+          "line": 979,
+          "label": "main"
+        },
+        {
+          "path": "src/common/alarm_judge.py",
+          "line": 640,
+          "label": "judge_hour 小时结算"
+        }
       ]
     },
     {
       "id": "sub2",
       "type": "backend",
       "label": "接入 2 · plant2",
-      "sublabel": "plant2/device2 · 入库+告警",
-      "pos": [700, 420],
-      "size": [200, 90],
+      "sublabel": "同上，处理 2 号炉",
+      "pos": [
+        700,
+        420
+      ],
+      "size": [
+        200,
+        90
+      ],
       "sources": [
-        { "path": "docker-compose.yml", "line": 350, "end_line": 367, "label": "subscriber2 服务（profile）" },
-        { "path": "src/platform/subscriber_to_td.py", "line": 155, "label": "enforce_topic_scope 主题↔标签自检" }
+        {
+          "path": "docker-compose.yml",
+          "line": 350,
+          "end_line": 367,
+          "label": "subscriber2 服务（profile）"
+        },
+        {
+          "path": "src/platform/subscriber_to_td.py",
+          "line": 155,
+          "label": "enforce_topic_scope 主题↔标签自检"
+        }
       ]
     },
     {
       "id": "td",
       "type": "database",
       "label": "TDengine",
-      "sublabel": "cems_data + 3 告警表(含推送)",
-      "pos": [950, 230],
-      "size": [195, 140],
+      "sublabel": "时序数据落库 · 保留 365 天",
+      "pos": [
+        1167,
+        230
+      ],
+      "size": [
+        195,
+        140
+      ],
       "sources": [
-        { "path": "src/platform/subscriber_to_td.py", "line": 348, "end_line": 355, "label": "建库建超级表" },
-        { "path": "src/common/alarm_judge.py", "line": 798, "end_line": 813, "label": "3 张告警超级表" },
-        { "path": "src/platform/subscriber_to_td.py", "line": 84, "label": "KEEP 365d" }
+        {
+          "path": "src/platform/subscriber_to_td.py",
+          "line": 348,
+          "end_line": 355,
+          "label": "建库建超级表"
+        },
+        {
+          "path": "src/common/alarm_judge.py",
+          "line": 798,
+          "end_line": 813,
+          "label": "3 张告警超级表"
+        },
+        {
+          "path": "src/platform/subscriber_to_td.py",
+          "line": 84,
+          "label": "KEEP 365d"
+        }
       ]
     },
     {
       "id": "backup",
       "type": "database",
       "label": "备份产物",
-      "sublabel": "F:\\cems-backup · 逻辑+物理卷",
-      "pos": [950, 65],
-      "size": [195, 85],
+      "sublabel": "定期导出存档 · 放在非系统盘",
+      "pos": [
+        1167,
+        65
+      ],
+      "size": [
+        195,
+        85
+      ],
       "sources": [
-        { "path": "scripts/backup_tdengine.py", "line": 173, "label": "do_backup（taosdump）" },
-        { "path": "scripts/backup_tdengine.py", "line": 281, "end_line": 282, "label": "do_physical_copy 卷级 tar" }
+        {
+          "path": "scripts/backup_tdengine.py",
+          "line": 173,
+          "label": "do_backup（taosdump）"
+        },
+        {
+          "path": "scripts/backup_tdengine.py",
+          "line": 281,
+          "end_line": 282,
+          "label": "do_physical_copy 卷级 tar"
+        }
       ]
     },
     {
       "id": "web",
       "type": "backend",
       "label": "Web 大屏 / 报表",
-      "sublabel": "大屏 / 报表 / 导出 · :5000",
-      "pos": [1175, 150],
-      "size": [180, 95],
+      "sublabel": "打开就能看的大屏与报表",
+      "pos": [
+        1392,
+        150
+      ],
+      "size": [
+        180,
+        95
+      ],
       "sources": [
-        { "path": "src/web/web_dashboard.py", "line": 194, "label": "/api/data 曲线" },
-        { "path": "src/web/web_dashboard.py", "line": 246, "label": "/api/health 新鲜度 200/503" },
-        { "path": "src/web/web_dashboard.py", "line": 425, "end_line": 426, "label": "/api/report/export" }
+        {
+          "path": "src/web/web_dashboard.py",
+          "line": 194,
+          "label": "/api/data 曲线"
+        },
+        {
+          "path": "src/web/web_dashboard.py",
+          "line": 246,
+          "label": "/api/health 新鲜度 200/503"
+        },
+        {
+          "path": "src/web/web_dashboard.py",
+          "line": 425,
+          "end_line": 426,
+          "label": "/api/report/export"
+        }
       ]
     },
     {
       "id": "redis",
       "type": "database",
       "label": "Redis 查询缓存",
-      "sublabel": "只缓存已闭合窗口 · TTL 300 s",
-      "pos": [1175, 45],
-      "size": [180, 80],
+      "sublabel": "只缓存不会再变的历史窗口",
+      "pos": [
+        1392,
+        45
+      ],
+      "size": [
+        180,
+        80
+      ],
       "sources": [
-        { "path": "src/web/cache.py", "line": 453, "label": "_closure 只缓存闭合窗口" },
-        { "path": "docker-compose.yml", "line": 368, "end_line": 405, "label": "allkeys-lru / 不持久化" }
+        {
+          "path": "src/web/cache.py",
+          "line": 453,
+          "label": "_closure 只缓存闭合窗口"
+        },
+        {
+          "path": "docker-compose.yml",
+          "line": 368,
+          "end_line": 405,
+          "label": "allkeys-lru / 不持久化"
+        }
       ]
     },
     {
       "id": "nginx",
       "type": "security",
       "label": "nginx 反向代理",
-      "sublabel": "唯一对外入口 :80 · 反代 web",
-      "pos": [1175, 410],
-      "size": [180, 95],
+      "sublabel": "大屏的正式入口",
+      "pos": [
+        1392,
+        410
+      ],
+      "size": [
+        180,
+        95
+      ],
       "sources": [
-        { "path": "deploy/nginx/conf.d/cems.conf", "line": 84, "label": "/api/cache/* 403" },
-        { "path": "deploy/nginx/conf.d/cems.conf", "line": 91, "label": "proxy_pass web:5000" },
-        { "path": "docker-compose.yml", "line": 406, "end_line": 439, "label": "nginx 服务" }
+        {
+          "path": "deploy/nginx/conf.d/cems.conf",
+          "line": 84,
+          "label": "/api/cache/* 403"
+        },
+        {
+          "path": "deploy/nginx/conf.d/cems.conf",
+          "line": 91,
+          "label": "proxy_pass web:5000"
+        },
+        {
+          "path": "docker-compose.yml",
+          "line": 406,
+          "end_line": 439,
+          "label": "nginx 服务"
+        }
       ]
     },
     {
       "id": "browser",
       "type": "external",
       "label": "浏览器 / 运维",
-      "sublabel": "实时大屏 / 报表",
-      "pos": [1400, 410],
-      "size": [115, 95]
+      "sublabel": "用户在这看",
+      "pos": [
+        1617,
+        410
+      ],
+      "size": [
+        115,
+        95
+      ]
     },
     {
       "id": "northbound",
       "type": "external",
-      "label": "北向出口 · 未接线",
-      "sublabel": "HJ212(SM4) / JSON-HTTP / Modbus-TCP",
-      "pos": [250, 660],
-      "size": [230, 105],
+      "label": "北向出口",
+      "sublabel": "对环保平台的三条标准出口（按需接线）",
+      "pos": [
+        250,
+        660
+      ],
+      "size": [
+        230,
+        105
+      ],
       "sources": [
-        { "path": "src/protocol/adapter.py", "line": 265, "label": "Hj212Adapter" },
-        { "path": "src/protocol/adapter.py", "line": 378, "label": "ModbusTcpAdapter" },
-        { "path": "src/protocol/adapter.py", "line": 442, "label": "build_adapter 三出口" }
+        {
+          "path": "src/protocol/adapter.py",
+          "line": 265,
+          "label": "Hj212Adapter"
+        },
+        {
+          "path": "src/protocol/adapter.py",
+          "line": 378,
+          "label": "ModbusTcpAdapter"
+        },
+        {
+          "path": "src/protocol/adapter.py",
+          "line": 442,
+          "label": "build_adapter 三出口"
+        }
+      ]
+    },
+    {
+      "id": "spool1",
+      "type": "database",
+      "label": "落盘队列 1",
+      "sublabel": "写库失败先落盘 · 入库成功才删",
+      "pos": [
+        962,
+        255
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "spool2",
+      "type": "database",
+      "label": "落盘队列 2",
+      "sublabel": "每实例一份 · 补传幂等",
+      "pos": [
+        962,
+        375
+      ],
+      "size": [
+        160,
+        60
       ]
     }
   ],
   "boundaries": [
     {
       "kind": "region",
-      "label": "单机 Docker Compose · cems-net（默认仅绑 127.0.0.1，nginx :80 唯一对外入口；未验证多机/HA）",
-      "wraps": ["device", "gw1", "cache1", "gw2", "cache2", "emqx", "sub1", "sub2", "td", "backup", "web", "redis", "nginx"],
+      "label": "单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）",
+      "wraps": [
+        "device",
+        "gw1",
+        "cache1",
+        "gw2",
+        "cache2",
+        "emqx",
+        "sub1",
+        "sub2",
+        "td",
+        "backup",
+        "web",
+        "redis",
+        "nginx",
+        "spool1",
+        "spool2"
+      ],
       "pad": 20
     },
     {
       "kind": "region",
-      "label": "北向出口：已实现、已独立验证，但未接入主链路（仅演示脚本调用）",
-      "wraps": ["northbound"],
+      "label": "北向出口：三条出口已实现并逐条独立验证，按项目需要接入主链路",
+      "wraps": [
+        "northbound"
+      ],
       "pad": 16
     }
   ],
   "connections": [
-    { "from": "device", "to": "gw1", "label": "Modbus 读从站1（5 s）", "variant": "emphasis" },
-    { "from": "device", "to": "gw2", "label": "Modbus 读从站2（5 s）", "variant": "emphasis" },
-    { "from": "gw1", "to": "cache1", "label": "发不出先落盘（64 MB）", "variant": "dashed" },
-    { "from": "gw2", "to": "cache2", "label": "发不出先落盘（64 MB）", "variant": "dashed" },
-    { "from": "gw1", "to": "emqx", "label": "QoS1 发布", "variant": "emphasis" },
-    { "from": "gw2", "to": "emqx", "label": "QoS1 发布", "variant": "emphasis" },
-    { "from": "emqx", "to": "sub1", "label": "订阅投递", "variant": "emphasis" },
-    { "from": "emqx", "to": "sub2", "label": "订阅投递", "variant": "emphasis" },
-    { "from": "sub1", "to": "td", "label": "写 cems_data", "variant": "emphasis" },
-    { "from": "sub2", "to": "td", "label": "写 cems_data", "variant": "emphasis" },
-    { "from": "td", "to": "web", "label": "查询 / 报表 / 导出", "variant": "emphasis" },
-    { "from": "web", "to": "redis", "label": "缓存已闭合窗口 · TTL 300 s", "variant": "dashed" },
-    { "from": "nginx", "to": "web", "label": "反代 proxy_pass" },
-    { "from": "browser", "to": "nginx", "label": "HTTP :80", "variant": "emphasis" },
-    { "from": "td", "to": "backup", "label": "taosdump 逻辑 + 物理卷", "variant": "dashed" }
+    {
+      "from": "device",
+      "to": "gw1",
+      "label": "Modbus 读从站1（5 s）",
+      "variant": "emphasis"
+    },
+    {
+      "from": "device",
+      "to": "gw2",
+      "label": "Modbus 读从站2（5 s）",
+      "variant": "emphasis"
+    },
+    {
+      "from": "gw1",
+      "to": "cache1",
+      "label": "发不出先落盘（64 MB）",
+      "variant": "dashed"
+    },
+    {
+      "from": "gw2",
+      "to": "cache2",
+      "label": "发不出先落盘（64 MB）",
+      "variant": "dashed"
+    },
+    {
+      "from": "gw1",
+      "to": "emqx",
+      "label": "QoS1 发布",
+      "variant": "emphasis"
+    },
+    {
+      "from": "gw2",
+      "to": "emqx",
+      "label": "QoS1 发布",
+      "variant": "emphasis"
+    },
+    {
+      "from": "emqx",
+      "to": "sub1",
+      "label": "订阅投递",
+      "variant": "emphasis"
+    },
+    {
+      "from": "emqx",
+      "to": "sub2",
+      "label": "订阅投递",
+      "variant": "emphasis"
+    },
+    {
+      "from": "td",
+      "to": "web",
+      "label": "查询 / 报表 / 导出",
+      "variant": "emphasis"
+    },
+    {
+      "from": "web",
+      "to": "redis",
+      "label": "缓存已闭合窗口 · TTL 300 s",
+      "variant": "dashed"
+    },
+    {
+      "from": "nginx",
+      "to": "web",
+      "label": "反代 proxy_pass"
+    },
+    {
+      "from": "browser",
+      "to": "nginx",
+      "label": "HTTP :80",
+      "variant": "emphasis"
+    },
+    {
+      "from": "td",
+      "to": "backup",
+      "label": "taosdump 逻辑 + 物理卷",
+      "variant": "dashed"
+    },
+    {
+      "from": "sub1",
+      "to": "spool1",
+      "label": "",
+      "variant": "dashed"
+    },
+    {
+      "from": "spool1",
+      "to": "td",
+      "label": "",
+      "variant": "emphasis"
+    },
+    {
+      "from": "sub2",
+      "to": "spool2",
+      "label": "",
+      "variant": "dashed"
+    },
+    {
+      "from": "spool2",
+      "to": "td",
+      "label": "",
+      "variant": "emphasis"
+    }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "四层结构与采集口径",
+      "title": "图上每一块在干什么（按数据流向）",
       "items": [
-        "设备层（仿真 9 测点）→ 网关层（Modbus 5 s 轮询）→ EMQX → 接入层（订阅/入库/告警）→ 展示层（大屏/报表）",
-        "9 测点：Flow/Dust/SO2/NOx/O2/Velocity/Temp/Humidity/Pressure；寄存器值 = 真值 ×10",
-        "单设备 12 条/分钟（名义 720 条/小时）；网关单实例节拍硬上限 ≈1.05 条/秒，扩容靠加实例",
-        "接入层对格式/量程不合法的报文整条拒收并计数，不静默入库"
+        "① Modbus 仿真设备 —— 代替现场仪表：9 个测点，每 5 秒变一个数（值 ×10 存进寄存器）",
+        "② 网关 —— 每 5 秒去设备取一次数，换算成工程量 + 打时间戳，发到消息总线",
+        "③ 断网缓存（网关本地文件）—— 发不出去就先落盘，恢复后自动补传；这是网关侧的兜底",
+        "④ EMQX（消息总线）—— 按订阅关系统一分发；订阅方离线时替它存着，重连后补投",
+        "⑤ 接入层 —— 订阅报文 → 校验（量程/字段）→ 写库 → 逐条判超标告警",
+        "⑥ 接入层落盘队列 —— 写库失败先把原始报文落盘，后台补传，入库成功才删（接入侧兜底）",
+        "⑦ TDengine（时序库）—— 数据落库、保留 365 天；4 张超级表（1 数据 + 3 告警）",
+        "⑧ 备份产物 —— 定期把库导出成存档，放在非系统盘、放在仓库外（库坏了它还在）",
+        "⑨ Redis 查询缓存 —— 只缓存不会再变的时间窗，报表不必每次都压库",
+        "⑩ Web 大屏 / 报表 —— 打开就能看：实时曲线、报表、Excel 导出、健康检查",
+        "⑪ nginx 反向代理 —— 大屏的正式入口（:80），静态与缓存接口在这里收口",
+        "⑫ 浏览器 —— 用户实际看的地方",
+        "⑬ 北向出口 —— 需要向上级环保平台报送时走的通道，三条协议出口已就绪",
+        "— 说明：②③ 属网关侧、⑤⑥ 属接入侧、⑨ 属展示侧；三处都是\"缓存/存档\"，但顶的不是同一个位置",
+        "— 多设备：一台炉子一套「网关 + 接入」实例，加设备就是加实例（同一份代码、各写各的库表与缓存）"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "链路与故障兜底（三个位置分别顶什么）",
+      "items": [
+        "链路四层：设备（Modbus 5 s）→ 网关（取数/换算/缓存）→ 总线（EMQX）→ 接入（校验/入库/告警）→ 展示（大屏/报表）",
+        "⚠️ 三个兜底位置**顶的不是同一段**，别混：网关缓存在「网关→总线」；总线持久会话在「订阅方离线期间」；接入层落盘队列在「写库失败那一瞬间」",
+        "所以「数据不丢」要分开说：网关→总线这段由本地缓存保单，接入层那段由落盘队列保单（实测 7 条写库失败全部补回、逐值对上）",
+        "采集口径：9 测点、单设备 12 条/分钟（名义 720 条/小时）；扩容靠加实例，不压单实例"
       ]
     },
     {
       "dot": "amber",
-      "title": "断网不丢数（网关 + broker 双层）",
+      "title": "断网不丢数（网关缓存 + 总线持久会话）",
       "items": [
         "网关发不出去先写 cache.jsonl（上限 64 MB，超限丢最旧）；恢复后 30 s 一轮 FIFO 补传，只删已确认的",
         "EMQX 持久会话落磁盘：离线队列 20000 条、会话 24 h（默认内存态会在 broker 重启后丢队列）",
@@ -250,7 +640,7 @@
     },
     {
       "dot": "rose",
-      "title": "告警与折算口径",
+      "title": "告警与折算口径（判定全部走代码）",
       "items": [
         "折算值 = 实测 × 15 / (21 − O2)；O2 ≥ 21% 或分母 < 2 判无效，绝不拿哨兵值 9999.99 去比限值",
         "限值（超低排放，mg/m³）：颗粒物 5 / SO2 35 / NOx 50；折算值严格大于限值才判超标（等于算达标）",
@@ -279,11 +669,13 @@
     },
     {
       "dot": "slate",
-      "title": "北向出口与已知边界",
+      "title": "北向出口与部署形态",
       "items": [
-        "src/protocol/adapter.py 一套接口三出口：HJ212/TCP（含 SM4）、HTTP-JSON、Modbus-TCP，连接管理含心跳/超时重连",
-        "三出口均已本地回环独立验证（northbound_demo / hj212_loopback_demo），但网关代码无出口引用，未接入主链路",
-        "其他边界：单机部署未验证多机/集群/HA；loadgen 压测直发 EMQX 绕过网关；未接真实仪表与环保平台"
+        "北向出口：一套接口三条出口（HJ212/TCP 含 SM4、HTTP-JSON、Modbus-TCP），含心跳与超时重连",
+        "三条出口均已本地回环 + 官方向量独立验证；是否接进主链路按项目需要决定（当前为演示脚本调用）",
+        "部署形态：单机 Docker Compose 一键起（10 个容器），端口默认只绑 127.0.0.1",
+        "扩展方式：多设备 = 多实例（每台炉子一套网关 + 接入，各自库表与缓存目录），已按两实例验证",
+        "镜像是具体版本号，不用 latest：同一份编排在任何时候重建都得到同一套软件"
       ]
     }
   ]
