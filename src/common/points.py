@@ -69,6 +69,8 @@
   1. 烟气**静压**国标单位是 Pa 且常为负值（引风机后负压）；但 Modbus 保持寄存器是
      16 位无符号，负值编不进去。故本仿真采用 **kPa 表压（85~105）**。
      真实项目若必须传 Pa 负值，需要改用有符号寄存器约定或加偏置。
+     ★ 2026-10-07 起契约**已能表达**有符号寄存器（`dtype="int16"` 等，见下方"线格式"一节），
+       但**本仿真仍用 kPa 表压不变**——改它要动全链路既有数据与限值口径，不在本次范围。
   2. 温度单位写作 **degC**（ASCII），展示层渲染为 ℃；理由是脚本/编码安全。
 
 ★ scale 是**每个测点自带**的寄存器换算系数（不是全局一个值）：
@@ -86,12 +88,45 @@
         颗粒物 5、二氧化硫 35、氮氧化物 50（mg/m3，标干、6% 基准氧）
     **限值比量程小一两个数量级是正常的**——超量程=表坏了要拒收，
     超限值=排超标要告警，两件事不能混。换行业/换地区必须改这张表。
+
+★★ 线格式（2026-10-07 新增）：`dtype` / `endian` / `addr_notation`
+  —— 契约要能表达"寄存器里的字节**怎么变成数**"，不只是"数是什么"。
+
+  起因（真机实测）：RS485 温湿度变送器手册原文 **"16bits 数据高字节在前"**。
+  在此之前 Point 只有"地址 + 量程 + scale"，**字节序与符号性无处安放**：
+  全项目读寄存器只有 `int(raw)` 一种写法（`struct` 仅出现在 scripts/measure_clock_consistency.py，
+  且那是 NTP 时钟，与寄存器无关）。真机一旦不是"无符号大端"，契约**描述不了**，
+  只能靠现场口头约定 —— 这就是本次要补的洞。
+
+  - `dtype`：`uint16` / `int16` / `int32` / `uint32` / `float32`，默认 `uint16`
+      ⚠️ 符号性**必须显式**：湿度 0~100% 用 uint16 够；**温度可以是负的**（int16）。
+         ⚠️ 16 位有符号是 **-32768~32767**，不是 0~65535（见 REG_INT_RANGES 与导入期自检）。
+  - `endian`：16 位 `AB` / `BA`；32 位 `ABCD` / `CDAB` / `BADC` / `DCBA`，默认 `AB`
+      ⚠️ 四个字母就是**线上字节的先后顺序**：ABCD=大端、DCBA=小端、CDAB=字交换（低字在前）、
+         BADC=字内字节交换。**默认 AB 是 16 位的默认**：32 位 dtype 必须显式选 4 字母形式，
+         选了 AB 属契约错误，**导入期自检即炸**，不留给运行期猜。
+  - `addr_notation`：`"0-based"` / `"40001-style"` / `"1-based"`，默认 `"0-based"`
+      它只说明**字段 address 是按哪种记法写的**，不改 address 的值：
+          `线上 0 基地址 = point.address - ADDR_NOTATION_BASE[point.addr_notation]`
+      ⚠️ 与 `REG_BASE` 的关系（**两者不是一回事，别合并**）：
+          - `REG_BASE=0` 是**本项目仿真/网关读写保持寄存器块的起始地址**
+            （`modbus_server` / `gateway` 用它拼 `read_holding_registers(REG_BASE, REG_COUNT)`），
+            全局、只对本项目自己的 Modbus 服务端有意义；
+          - `addr_notation` 是**测点契约字段**，描述"面对真机时 address 怎么读"
+            （手册若给 40001，减 40001 才是线上 PDU 地址）。
+          两者当前**取值一致**（0 基、基址 0），故 9 个测点行为零变化；
+          将来多设备混用（0 基/1 基/40001 混在一起）时才需要分别对待，
+          见 docs/架构与可维护性说明.md 的"地址基准"条目。
+  ⚠️ **本次只加字段，不改任何读数路径**：9 个测点仍是 uint16 + AB + "0-based"，
+     网关/仿真仍走 `int(raw)`；`decode_register()` / `encode_register()` 是**新增纯函数**，
+     **当前无调用方**——真机接入时由接入层显式调用，不许顺手改网关既有行为。
 ============================================================================
 """
 
 from __future__ import annotations
 
 import math
+import struct
 from typing import Final, NamedTuple
 
 
@@ -108,6 +143,13 @@ class Point(NamedTuple):
     code: str      # 环保平台参数编码：HJ 212-2025 附录 B.2（气监测参数编码表）
                    # 权威表 + 原文名称/单位/数据类型/原编码列 + 页码，见 src/protocol/hj212/factors.py
     scale: int = 10  # ⭐ 本测点专属的寄存器换算系数（默认 10）
+
+    # ---- 线格式（2026-10-07 新增）----
+    # 三个字段**全部带默认值**，取值就是现有 9 个测点的实际形态（uint16 + AB + 0-based），
+    # 所以既有行为零变化；真机接入时按手册改这几个字段即可，不必另建一份映射表。
+    dtype: str = "uint16"           # 寄存器数据类型（符号性与宽度）：uint16/int16/int32/uint32/float32
+    endian: str = "AB"              # 线上字节序：16 位 AB/BA；32 位 ABCD/CDAB/BADC/DCBA
+    addr_notation: str = "0-based"  # address 的记法：0-based / 40001-style / 1-based
 
 
 # ---- 全链路唯一真源：加/改测点只改这里 ----
@@ -142,6 +184,12 @@ O2_REFERENCE: Final[float] = 6.0
 
 # ---- 设备/网关共用的寄存器约定 ----
 SCALE: Final[int] = 10        # 寄存器里存的是真实值 ×10 的整数（35.2 → 352）
+# ⚠️ REG_BASE 是**本项目仿真/网关读写寄存器块的起始地址**（modbus_server/gateway 用它拼
+#    read_holding_registers(REG_BASE, REG_COUNT)），**不是**"测点地址的记法"。
+#    测点地址按哪种记法书写由 Point.addr_notation 表达，两者关系：
+#        线上 0 基地址 = point.address - ADDR_NOTATION_BASE[point.addr_notation]
+#    当前 REG_BASE=0 且 9 个测点 addr_notation 均为 "0-based"，两者取值一致、互相印证。
+#    用法与取值**均未改动**（本次只新增字段与注释）。
 REG_BASE: Final[int] = 0      # 寄存器起始地址
 
 # ---- 各层按需取用的只读视图，避免各自再推导一遍 ----
@@ -157,20 +205,235 @@ UNITS: Final[dict[str, str]] = {point.name: point.unit for point in POINTS}
 LIMITS: Final[dict[str, float]] = {point.name: point.limit for point in POINTS}
 CODES: Final[dict[str, str]] = {point.name: point.code for point in POINTS}
 SCALES: Final[dict[str, int]] = {point.name: point.scale for point in POINTS}
+DTYPES: Final[dict[str, str]] = {point.name: point.dtype for point in POINTS}
+ENDIANS: Final[dict[str, str]] = {point.name: point.endian for point in POINTS}
+ADDR_NOTATIONS: Final[dict[str, str]] = {
+    point.name: point.addr_notation for point in POINTS
+}
 REG_COUNT: Final[int] = max(point.address for point in POINTS) + 1
 
 # 寄存器能表达的整数上限（16 位无符号留一点余量），供烟测/自检用
+# ⚠️ 它是**16 位无符号**的上限，只对 dtype="uint16" 成立；
+#    别拿它去校验 int16（会在 32768~65535 这一段**漏检**），见 REG_INT_RANGES。
 REG_INT_MAX: Final[int] = 65535
 
-# 契约自检：任何测点的量程 × scale 超上限，导入时就应该炸，而不是等到运行期
-_OVERFLOW: Final[tuple[str, ...]] = tuple(
-    point.name for point in POINTS if point.high * point.scale > REG_INT_MAX
+# ---- 线格式：合法取值、表示范围、字节序映射（2026-10-07 新增）----
+
+#: 支持的寄存器数据类型（**符号性与宽度都由它表达**）
+DTYPE_CHOICES: Final[tuple[str, ...]] = (
+    "uint16", "int16", "int32", "uint32", "float32",
 )
-if _OVERFLOW:
+
+#: dtype → 字节宽度
+_DTYPE_WIDTH: Final[dict[str, int]] = {
+    "uint16": 2, "int16": 2, "int32": 4, "uint32": 4, "float32": 4,
+}
+
+#: dtype → struct 格式字符。**只写值类型、不写字节序**：字节序统一由 WIRE_BYTE_ORDER
+#: 重排成规范大端序后再用 ">" 解析。这样"字节序"只有一处定义，
+#: 不会出现"格式串里的 >/</@ 和 endian 字段各说一套"的分裂。
+_DTYPE_STRUCT_CODE: Final[dict[str, str]] = {
+    "uint16": "H", "int16": "h", "int32": "i", "uint32": "I", "float32": "f",
+}
+
+#: dtype → 能表达的整数区间（**导入期自检**与 encode_register 的范围校验共用）。
+#: ⚠️ 16 位**有符号是 -32768~32767**，不是 0~65535：拿 REG_INT_MAX 校验 int16 测点会漏检
+#:    （32768~65535 这段根本编不进 int16，却是"看起来合法"的数）。这就是自检要分 signed/unsigned。
+REG_INT_RANGES: Final[dict[str, tuple[int, int]]] = {
+    "uint16": (0, 65535),
+    "int16": (-32768, 32767),
+    "int32": (-2147483648, 2147483647),
+    "uint32": (0, 4294967295),
+}
+REG_INT_MIN_16_SIGNED: Final[int] = REG_INT_RANGES["int16"][0]   # -32768
+REG_INT_MAX_16_SIGNED: Final[int] = REG_INT_RANGES["int16"][1]   #  32767
+
+#: float32 能**精确**表示的整数上限：IEEE-754 单精度尾数 24 位 → 2**24 以内的整数无舍入。
+#: float32 没有整数溢出、只有精度丢失，故自检拿它当上限比拿 REG_INT_MAX 贴切。
+FLOAT32_EXACT_INT_MAX: Final[int] = 1 << 24     # 16777216
+
+#: endian → **线上字节顺序**：元组第 i 项 = "线上第 i 个字节"在规范大端序里的位置。
+#:   16 位：AB（高字节在前，真机手册原文"16bits 数据高字节在前"）/ BA（低字节在前）
+#:   32 位：ABCD（大端）/ CDAB（字交换，低字在前）/ BADC（字内字节交换，字序不变）/ DCBA（小端）
+#: ⚠️ 这四个排列都是自逆的，所以同一张表既能"线上→规范"也能"规范→线上"，编解码不会走偏。
+WIRE_BYTE_ORDER: Final[dict[str, tuple[int, ...]]] = {
+    "AB": (0, 1),
+    "BA": (1, 0),
+    "ABCD": (0, 1, 2, 3),
+    "CDAB": (2, 3, 0, 1),
+    "BADC": (1, 0, 3, 2),
+    "DCBA": (3, 2, 1, 0),
+}
+
+#: addr_notation → **地址基准**：`线上 0 基地址 = point.address - ADDR_NOTATION_BASE[记法]`
+#: ⚠️ 与 REG_BASE 不是一回事（REG_BASE 是仿真/网关读写寄存器块的起始地址，见上方注释）。
+ADDR_NOTATION_BASE: Final[dict[str, int]] = {
+    "0-based": 0,          # address 就是线上 PDU 地址（本项目现状）
+    "40001-style": 40001,  # 手册传统记法：40001 = 第 1 个保持寄存器
+    "1-based": 1,          # 1 = 第 1 个保持寄存器
+}
+
+
+def _register_value_bounds(dtype: str) -> tuple[int, int]:
+    """按 dtype 返回寄存器能表达的整数区间（导入期自检与 encode_register 共用）。"""
+    if dtype == "float32":
+        return (-FLOAT32_EXACT_INT_MAX, FLOAT32_EXACT_INT_MAX)
+    return REG_INT_RANGES[dtype]
+
+
+def _wire_layout(dtype: str, endian: str) -> tuple[str, tuple[int, ...]]:
+    """校验 (dtype, endian) 组合，返回 (struct 格式字符, 线上字节重排表)。
+
+    ⚠️ 非法组合**当场抛 ValueError**，不静默兜底：字节序猜错**不会报错**，
+       只会读成另一个完全合法的数（比崩溃危险得多）。
+    """
+    if dtype not in _DTYPE_WIDTH:
+        raise ValueError(f"未知 dtype {dtype!r}，只支持 {DTYPE_CHOICES}")
+    if endian not in WIRE_BYTE_ORDER:
+        raise ValueError(
+            f"未知 endian {endian!r}：16 位用 AB/BA，32 位用 ABCD/CDAB/BADC/DCBA"
+        )
+    order = WIRE_BYTE_ORDER[endian]
+    if len(order) != _DTYPE_WIDTH[dtype]:
+        raise ValueError(
+            f"dtype={dtype}（{_DTYPE_WIDTH[dtype]} 字节）与 endian={endian}"
+            f"（{len(order)} 字节）不匹配：16 位 dtype 用 AB/BA，32 位 dtype 用 ABCD/CDAB/BADC/DCBA"
+        )
+    return _DTYPE_STRUCT_CODE[dtype], order
+
+
+# 契约自检：任何测点的量程 × scale 越界，导入时就应该炸，而不是等到运行期。
+# ★ 2026-10-07 扩展：上限**按 dtype 取**（signed / unsigned / float 各不相同），
+#   且**下界一起查**——有符号 dtype 的意义就是能表达负值（如 Pa 负压），
+#   "负值放不放得下"必须一并校验，否则加了 int16 也只算加了一半。
+def _check_point_register_bounds(point: Point) -> str | None:
+    """该测点的量程 × scale 越界则返回说明文字，合法返回 None。"""
+    low_bound, high_bound = _register_value_bounds(point.dtype)
+    if point.high * point.scale > high_bound:
+        return (
+            f"{point.name}: 量程上限 {point.high} × scale {point.scale} "
+            f"超过 {point.dtype} 上限 {high_bound}"
+        )
+    if point.low * point.scale < low_bound:
+        return (
+            f"{point.name}: 量程下限 {point.low} × scale {point.scale} "
+            f"低于 {point.dtype} 下限 {low_bound}"
+        )
+    return None
+
+
+# 自检 1：线格式字段本身必须合法（dtype 认得出、endian 与该 dtype 的宽度匹配）
+_BAD_WIRE_FORMAT: Final[tuple[str, ...]] = tuple(
+    point.name
+    for point in POINTS
+    if point.dtype not in _DTYPE_WIDTH
+    or point.endian not in WIRE_BYTE_ORDER
+    or len(WIRE_BYTE_ORDER[point.endian]) != _DTYPE_WIDTH[point.dtype]
+)
+if _BAD_WIRE_FORMAT:
     raise ValueError(
-        f"测点 {_OVERFLOW} 的量程 × scale 超过寄存器上限 {REG_INT_MAX}，"
-        "请调小量程或 scale（见 points.py 顶部说明）"
+        f"测点 {_BAD_WIRE_FORMAT} 的 (dtype, endian) 组合非法："
+        f"dtype 只支持 {DTYPE_CHOICES}；16 位 endian 用 AB/BA，"
+        "32 位 endian 用 ABCD/CDAB/BADC/DCBA（见 points.py 顶部的线格式说明）"
     )
+
+# 自检 2：地址记法必须认识（不认识的记法会让 address 被按错误基准解释）
+_BAD_ADDR_NOTATION: Final[tuple[str, ...]] = tuple(
+    point.name for point in POINTS if point.addr_notation not in ADDR_NOTATION_BASE
+)
+if _BAD_ADDR_NOTATION:
+    raise ValueError(
+        f"测点 {_BAD_ADDR_NOTATION} 的 addr_notation 非法：只支持 {tuple(ADDR_NOTATION_BASE)}"
+    )
+
+# 自检 3：量程 × scale 必须装得进该 dtype（signed/unsigned 各按各自范围判）
+_OUT_OF_RANGE: Final[tuple[str, ...]] = tuple(
+    msg for msg in (_check_point_register_bounds(point) for point in POINTS) if msg
+)
+if _OUT_OF_RANGE:
+    raise ValueError(
+        f"测点量程 × scale 超出寄存器表示范围：{_OUT_OF_RANGE}。"
+        f"请调小量程或 scale，或改用装得下的 dtype"
+        f"（uint16 上限 {REG_INT_MAX}；int16 {REG_INT_MIN_16_SIGNED}~{REG_INT_MAX_16_SIGNED}；"
+        f"float32 精确整数上限 {FLOAT32_EXACT_INT_MAX}）。见 points.py 顶部说明"
+    )
+
+
+# ---- 线格式编解码：寄存器字节流 ↔ 数值（**纯函数，不做 scale 换算**）----
+
+def decode_register(raw: bytes, dtype: str = "uint16", endian: str = "AB") -> float:
+    """字节流 → 数值：按 dtype 定符号与宽度、按 endian 定字节序。
+
+    ★ 依据：真机手册（RS485 温湿度变送器）**"16bits 数据高字节在前"** → `endian="AB"`；
+      各字段语义与"为什么必须能表达"见本文件顶部"线格式"一节。
+
+    真机两个例子（均为手册取值，本函数的输入/输出原样对应）：
+        b"\\x01\\xe6" + uint16 + AB → 486 → ÷10 = 48.6    （湿度，地址 0）
+        b"\\xff\\x9f" + int16  + AB → -97 → ÷10 = -9.7    （温度，地址 1，**负值**）
+
+    ⚠️ 三条边界，故意不模糊：
+      1. **不做 scale 换算**：寄存器存的是 `真实值 × scale` 的整数，÷scale 是**调用方**的事
+         （scale 由 Point 自带，见 SCALES）。分开是为了让"字节序错"和"忘除 scale"
+         两种故障各自可见，而不是糊进一个函数里。
+      2. `raw` 必须是**恰好**该 dtype 宽度的字节（16 位 2、32 位 4）；长度不符**抛 ValueError**，
+         不做自动截断/补零——补出来的数看不出错。
+      3. 整数 dtype 也返回 **float**（uint32 上限 4294967295 < 2**53，转换不丢精度），
+         好处是四种 dtype 的返回类型一致，调用方不必分支。
+
+    ⚠️ 32 位量跨两个寄存器，**字序由 endian 显式指定**（CDAB 在实际设备里很常见）；
+      本函数只认 "线上字节顺序"，不猜设备型号。
+    """
+    code, order = _wire_layout(dtype, endian)
+    data = bytes(raw)
+    if len(data) != len(order):
+        raise ValueError(
+            f"decode_register: dtype={dtype} 需要 {len(order)} 字节，收到 {len(data)} 字节"
+        )
+    canonical = bytes(data[index] for index in order)   # 重排成规范大端序
+    return float(struct.unpack(">" + code, canonical)[0])
+
+
+def encode_register(value: float, dtype: str = "uint16", endian: str = "AB") -> bytes:
+    """数值 → 字节流：`decode_register` 的严格反向（同一 (dtype, endian) 下往返一致）。
+
+    ⚠️ 三条纪律，都是"宁可抛错，不要静默出错数"：
+      1. **整数 dtype 不接受小数**：`486.5` 抛 ValueError。寄存器存的是 `真实值 × scale`
+         后的整数，取整是**调用方**的语义（本函数不替它决定舍还是入）。
+      2. **超范围抛错，绝不回绕**：uint16 编 `-1`、int16 编 `40000` 都抛 ValueError。
+         回绕出来的数看起来完全合法，是最难查的一类故障（正是 REG_INT_RANGES 要拦的）。
+      3. float32 溢出（超出 ±3.4e38）同样抛 ValueError，不让 struct 的 OverflowError 漏出去。
+
+    ⚠️ float32 的 `nan` / `inf` **原样编码**（IEEE-754 位模式确定，往返一致）；
+      它们在本项目里**不用于**表达"数据不可用"——那是协议层的事，
+      见 ZS_UNAVAILABLE_SENTINEL 及其说明。
+    """
+    code, order = _wire_layout(dtype, endian)
+    if dtype == "float32":
+        try:
+            canonical = struct.pack(">" + code, float(value))
+        except (OverflowError, struct.error) as exc:
+            raise ValueError(
+                f"encode_register: {value!r} 超出 float32 表示范围"
+            ) from exc
+    else:
+        low_bound, high_bound = _register_value_bounds(dtype)
+        as_float = float(value)
+        if not as_float.is_integer():
+            raise ValueError(
+                f"encode_register: {value!r} 不是整数，{dtype} 不接受小数"
+                "（寄存器存的是 真实值 × scale 的整数，先乘 scale 再编码）"
+            )
+        as_int = int(as_float)
+        if not low_bound <= as_int <= high_bound:
+            raise ValueError(
+                f"encode_register: {as_int} 超出 {dtype} 表示范围 "
+                f"{low_bound}~{high_bound}（**不回绕**）"
+            )
+        canonical = struct.pack(">" + code, as_int)
+    wire = bytearray(len(order))
+    for wire_pos, canonical_pos in enumerate(order):
+        wire[wire_pos] = canonical[canonical_pos]
+    return bytes(wire)
 
 
 # ---- 折算：标干浓度 → 折算浓度（氧含量修正）----
