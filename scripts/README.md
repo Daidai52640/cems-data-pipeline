@@ -25,8 +25,11 @@
    `ModuleNotFoundError`；
 2. `docs/adr/0002`、`0003`、`0004`、`0007` 等**定稿不改写**的 ADR 大量按 `scripts/xxx.py` 逐字引用路径。
 
-> 旁证：ADR 里还引用了 `scripts/loopback_hj212_server.py` 与 `scripts/verify_hj212_outlet.py`
-> 两个**已不存在**的脚本 —— ADR 不会跟着代码改名而回改，路径引用只会这样静静烂掉。
+> 旁证：ADR-0007（状态＝**方案（待评审）**）里还引用了 `scripts/loopback_hj212_server.py` 与
+> `scripts/verify_hj212_outlet.py` —— 这两个是它 **P3 阶段计划新增、至今未落地**的工装
+> （`git log --all` 全历史 **0 提交**），**不是"曾经存在又消失"**。
+> ⚠️ **ADR 不会跟着代码改名而回改**；而"计划文件"与"现行文件"的区别**只能靠读者自己核实**
+> —— 本仓库就发生过把它误读成"已失效路径"的事，故此处写明状态。
 > 所以**新增脚本请直接放在 `scripts/` 根下**，不要新建子目录。
 
 ---
