@@ -19,6 +19,7 @@ PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.common.logging import setup_logging                # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
@@ -115,23 +116,14 @@ RESEND_WINDOW: Final[int] = int(os.getenv("RESEND_WINDOW", "100"))
 RESEND_RETRY_INTERVAL: Final[float] = float(os.getenv("RESEND_RETRY_INTERVAL", "30.0"))
 
 # ---- 日志 ----
-LOG_LEVEL: Final[int] = logging.INFO
-LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
-
+# 级别/格式/时间格式统一在 src/common/logging.py（唯一真源）；
+# 这里只留本进程的 LOGGER —— 4 个进程的日志靠 getLogger 的名字区分来源。
 LOGGER: Final[logging.Logger] = logging.getLogger("gateway")
 
 
 # ==================== 2. 日志 ====================
-
-def setup_logging() -> None:
-    """初始化日志：控制台输出，级别由 LOG_LEVEL 统一控制。"""
-    logging.basicConfig(
-        level=LOG_LEVEL,
-        format=LOG_FORMAT,
-        datefmt=LOG_DATEFMT,
-        force=True,
-    )
+# setup_logging() 已提取到 src/common/logging.py，4 个入口共用同一份实现。
+# 注意本文件仍然保留调用点（main 里调用 setup_logging()），签名与行为不变。
 
 
 # ==================== 3. 设备读取 ====================

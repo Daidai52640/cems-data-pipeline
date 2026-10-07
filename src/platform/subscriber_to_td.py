@@ -39,6 +39,7 @@ from src.common.alarm_judge import (   # noqa: E402
     hour_start_of,
     normalize_ts,
 )
+from src.common.logging import setup_logging   # noqa: E402
 from src.common.points import (   # noqa: E402
     COLUMNS,
     NAMES,
@@ -240,10 +241,8 @@ ALARM_SETTLE_DELAY_SECONDS: Final[float] = float(
 )
 
 # ---- 日志 ----
-LOG_LEVEL: Final[int] = logging.INFO
-LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
-
+# 级别/格式/时间格式统一在 src/common/logging.py（唯一真源）；
+# 这里只留本进程的 LOGGER —— 4 个进程的日志靠 getLogger 的名字区分来源。
 LOGGER: Final[logging.Logger] = logging.getLogger("platform.subscriber_to_td")
 
 # ---- 接入层落盘队列（写库失败时的本地副本）----
@@ -293,15 +292,7 @@ SPOOL_STOP: Final[threading.Event] = threading.Event()
 
 
 # ==================== 2. 日志 ====================
-
-def setup_logging() -> None:
-    """初始化日志：控制台输出，级别由 LOG_LEVEL 统一控制。"""
-    logging.basicConfig(
-        level=LOG_LEVEL,
-        format=LOG_FORMAT,
-        datefmt=LOG_DATEFMT,
-        force=True,
-    )
+# setup_logging() 已提取到 src/common/logging.py，4 个入口共用同一份实现。
 
 
 # ==================== 3. 报文解析 ====================
