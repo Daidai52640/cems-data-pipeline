@@ -1,27 +1,27 @@
 {
-  "input_rows": 159,
+  "input_rows": 162,
   "first_ts": "2026-10-11T18:28:01+08:00",
-  "last_ts": "2026-10-11T18:55:24+08:00",
+  "last_ts": "2026-10-11T18:55:56+08:00",
   "runs": [
     "20261011T182801-3070e4",
     "20261011T182915-b325ab"
   ],
-  "ceiling_ratio": 0.4,
+  "ceiling_ratio": 0.9,
   "cpu_ceiling_percent": 100.0,
   "containers": {
     "cems-device": {
-      "samples": 53,
+      "samples": 54,
       "missing_samples": 0,
       "mem_limit_bytes": 536870912.0,
       "mem_limit_human": "512.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.853,
+        "avg": 0.964,
         "max": 7.08
       },
       "mem_bytes": {
         "min": 23582474.0,
-        "avg": 24866286.925,
+        "avg": 24882902.204,
         "max": 26350714.0
       },
       "mem_human": {
@@ -39,28 +39,28 @@
       "mem_max_ratio_of_limit": 0.0491
     },
     "cems-gateway": {
-      "samples": 53,
+      "samples": 54,
       "missing_samples": 0,
       "mem_limit_bytes": 536870912.0,
       "mem_limit_human": "512.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.313,
+        "avg": 0.307,
         "max": 7.9
       },
       "mem_bytes": {
         "min": 0.0,
-        "avg": 16314655.151,
+        "avg": 16493517.593,
         "max": 27808235.0
       },
       "mem_human": {
         "min": "0.0B",
-        "avg": "15.6MiB",
+        "avg": "15.7MiB",
         "max": "26.5MiB"
       },
       "pids": {
         "min": 0.0,
-        "avg": 1.245,
+        "avg": 1.259,
         "max": 2.0
       },
       "cpu_ceiling_hits": 0,
@@ -68,18 +68,18 @@
       "mem_max_ratio_of_limit": 0.0518
     },
     "cems-gateway-plant2": {
-      "samples": 53,
+      "samples": 54,
       "missing_samples": 0,
       "mem_limit_bytes": 536870912.0,
       "mem_limit_human": "512.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.487,
+        "avg": 0.624,
         "max": 7.97
       },
       "mem_bytes": {
         "min": 25417482.0,
-        "avg": 26265047.679,
+        "avg": 26260420.315,
         "max": 27242004.0
       },
       "mem_human": {
@@ -97,6 +97,6 @@
       "mem_max_ratio_of_limit": 0.0507
     }
   },
-  "span_hours": 0.456,
+  "span_hours": 0.465,
   "csv": "F:\\Project1\\cems-data-pipeline\\docs\\evidence\\edge\\resource-24h.csv"
 }
