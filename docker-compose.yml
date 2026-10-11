@@ -158,14 +158,18 @@ x-subscriber-env: &subscriber-env
   #       始终落在 0.5% 带内的慢漂移段（ADR §2 自己观测的"Temp 在 26.0~26.2 稳了 40 分钟"就是它）。
   #    ⭐ 零误报要**同时**收紧容差（≈寄存器分辨率，1e-4×量程）**并**拉长 N（≥360 ≈ 30 分钟 @5s）——
   #       语义随之变成"读数 30 分钟没动过"，比 ADR §5 的"1 分钟没动过"保守得多。
-  #    ⚠️ 本文件与代码的默认值**仍是 ADR-0010 §5 的 12 / 0.005**（不擅自改 ADR）。要切标定值（不必改这里）：
-  #         QUALITY_FREEZE_SAMPLES=360 QUALITY_FREEZE_TOLERANCE_RATIO=0.0001 docker compose ... up -d
-  #    ⚠️ W4 的口径注意：N=360（30 分钟）比"10 分钟窗口"长 ⇒ 那个零新增带**构造性**；
-  #       真正的证据是 3.2 小时连续重放 0 条 + 13.7 分钟在线 0 条。
+  #  ⭐⭐ 最终裁决（2026-10-11，负责人）：**默认值改为下面的 `1200` / `1e-4`**。
+  #    依据：**10 天全量 25093 个样本**复算**最长自然平台期** ——
+  #      `dust` = **404 样本（33.7 分钟，2026-10-02 22:07:15 ~ 22:41:00）**，其余测点 ≤ 186。
+  #      ⇒ **1200 = 404 × 3 倍裕量**。
+  #    ⚠️ 为什么不采用 N=360：10-02 那个 `dust` 平台期实测 **404 > 360**，会误报。
+  #    ⚠️ 代价与局限：检测延迟变成约 **100 分钟**；"自然平台期"的长尾未知，跨季节未验证。
+  #       做"卡死"演示时可在部署层临时调小（接受误报）：
+  #         QUALITY_FREEZE_SAMPLES=120 QUALITY_FREEZE_TOLERANCE_RATIO=1e-4 docker compose ... up -d
   QUALITY_CHECK_ENABLE: ${QUALITY_CHECK_ENABLE:-1}
   QUALITY_JUMP_RATIO: ${QUALITY_JUMP_RATIO:-0.25}                   # 跳变阈值 = 量程宽度 × 该比例
-  QUALITY_FREEZE_SAMPLES: ${QUALITY_FREEZE_SAMPLES:-12}             # 连续 N 个样本落在容差带内 = 冻结
-  QUALITY_FREEZE_TOLERANCE_RATIO: ${QUALITY_FREEZE_TOLERANCE_RATIO:-0.005}   # 容差 = 量程宽度 × 该比例
+  QUALITY_FREEZE_SAMPLES: ${QUALITY_FREEZE_SAMPLES:-1200}           # 连续 N 个样本在容差带内 = 冻结（≈100 分钟 @5s）
+  QUALITY_FREEZE_TOLERANCE_RATIO: ${QUALITY_FREEZE_TOLERANCE_RATIO:-0.0001}   # 容差 = 量程宽度 × 该比例
 
 # ---- 两个接入实例共用的健康检查与启动依赖 ----
 # 订阅端是事件驱动的、没有自己的端口，这里探"能否连上 broker"：

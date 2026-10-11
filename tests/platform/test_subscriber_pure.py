@@ -1188,12 +1188,19 @@ def test_kind_values_fit_nchar10_column():
 
 
 def test_quality_config_defaults_match_adr_0010():
-    """⚠️ 默认值 = ADR-0010 §5 那一组（**"拍的"、未标定**，标定手段是 §8 的 W4）。"""
+    """⭐ 默认值 = **2026-10-11 标定后**的那一组（ADR-0010 §5 已按实测更新）。
+
+    ⚠️ **本用例的数值变过一次**（`12 / 0.005` → `1200 / 1e-4`），原因是实测：
+    旧默认值在真机数据上**误报**（在线 10.4 分钟 **39 条** `frozen`）——
+    0.5% 的容差会把"跨十几分钟的慢漂移段"**整段**吃进同一条游程。
+    标定依据：**10 天全量 25093 个样本**复算最长**自然**平台期 = `dust`
+    **404 样本（33.7 分钟，2026-10-02 22:07:15~22:41:00）** ⇒ `1200 = 404 × 3`。详见 ADR-0010 §5。
+    """
     config = sub.QualityConfig()
-    assert config.enable is True          # §7：默认开（只留痕不丢数，开着代价小）
+    assert config.enable is True                   # §7：默认开（只留痕不丢数，开着代价小）
     assert config.jump_ratio == 0.25
-    assert config.freeze_samples == 12
-    assert config.freeze_tolerance_ratio == 0.005
+    assert config.freeze_samples == 1200           # ≈100 分钟 @5s；3× 裕量
+    assert config.freeze_tolerance_ratio == 0.0001  # ≈寄存器分辨率量级
     assert config.resolve_ranges() is RANGES      # 量程唯一真源是契约 points.RANGES
 
 
@@ -1315,11 +1322,35 @@ def test_frozen_tolerance_band_keeps_the_run_alive():
 
     `Temp` 量程宽 300 ⇒ 容差 1.5；26.0/26.1/26.2 这种**稳态抖动**都在带内，
     所以它们**算同一个游程**（这正是"用相等会误报"的那条设计取舍的落点）。
+
+    ⚠️ **本用例显式传 `freeze_tolerance_ratio=0.005`**（ADR 最初那一版默认值）——
+    它验的是**"带"这个机制本身**，与默认值取多少无关。
+    ⭐ **默认值已改为 `1e-4`**（2026-10-11 标定）：在该默认下 `Temp` 容差只有 **0.03 degC**，
+    `26.0 → 26.1` 就跨出带外。**新语义见下一条用例。**
     """
-    checker = sub.QualityChecker(quality_config(freeze_samples=3))
+    checker = sub.QualityChecker(quality_config(freeze_samples=3, freeze_tolerance_ratio=0.005))
     assert checker.check({"Temp": 26.0}) == []
     assert checker.check({"Temp": 26.1}) == []
     suspects = checker.check({"Temp": 26.2})
+    assert [item.kind for item in suspects] == [PointInvalidKind.FROZEN]
+
+
+def test_calibrated_default_tolerance_does_not_absorb_steady_jitter():
+    """⭐ 标定后的默认容差（`1e-4 × 量程`）**不再**把稳态抖动吃进同一条游程。
+
+    ⚠️ 这是 2026-10-11 标定带来的**语义变化**，必须钉住：
+    ADR-0010 §2 最初的理由是"用容差吸收稳态抖动，否则会误报"；
+    但实测表明 ⭐ **真正防误报的是"长 N"，不是"宽容差"** ——
+    宽容差（0.5%）反而把**跨十几分钟的慢漂移段**整段算成"冻结"，造成 39 条误报。
+
+    ⭐ 所以容差缩到"寄存器分辨率量级"（只吸收浮点/量化噪声）：
+    `Temp` 量程 300 ⇒ 容差 **0.03**，于是 `26.0 → 26.1`（差 0.1）就跨出带外、游程重起算。
+    """
+    checker = sub.QualityChecker(quality_config(freeze_samples=3))
+    assert checker.check({"Temp": 26.0}) == []
+    assert checker.check({"Temp": 26.1}) == []      # 0.1 > 0.03 ⇒ 重起算（游程=1）
+    assert checker.check({"Temp": 26.1}) == []      # 游程=2
+    suspects = checker.check({"Temp": 26.1})        # 游程=3 ⇒ 报
     assert [item.kind for item in suspects] == [PointInvalidKind.FROZEN]
 
 

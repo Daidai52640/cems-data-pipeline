@@ -50,7 +50,7 @@ import re
 import sys
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, fields as dataclass_fields
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Final, Iterable, Mapping, Optional, Sequence
@@ -552,16 +552,24 @@ def supports_reference(values: Mapping[str, float]) -> bool:
 class QualityConfig:
     """数据合理性判据参数（全部来自 `QUALITY_*` 环境变量；默认值即 ADR-0010 §5 那一组）。
 
-    ⚠️ **默认值是"拍的"，没有标定** —— 标定手段就是 ADR-0010 §8 的 **W4**（真机稳态跑 ≥10 分钟零新增）。
-    ⚠️⚠️ **W4 已实测（2026-10-11）：这组默认值在真机数据上误报** —— 在线 10.4 分钟 39 条 frozen；
-    3.2 小时连续重放：`(0.005, 12)` 238 条 / `(0.005, 180)` 12 条 / `(1e-4, 360)` 0 条。
-    ⚠️ 这里**仍按 ADR 保留默认值**，标定值请在部署层覆盖（见 compose 里同名的注释与一行命令）。
+    ⚠️ **默认值已经过标定（2026-10-11）** —— 标定方法就是 ADR-0010 §8 的 **W4**。
+    ⚠️⚠️ **标定证据（实测，不是估计）**：
+      · 真机数据在线 `(容差 0.005, N=12)` → **10.4 分钟误报 39 条 `frozen`**；
+      · 3.2 小时连续重放：`(0.005,12)` 238 条 / `(0.005,180)` 12 条 / `(0.005,360)` 7 条；
+      · ⭐ **10 天全量 25093 个样本**复算最长**自然**平台期：`dust` = **404 样本（33.7 分钟，
+        2026-10-02 22:07:15~22:41:00）**，其余测点 ≤186。
+    ⭐ **所以 N 取 1200 = 404 × 3 倍裕量**；容差取 `1e-4`（寄存器分辨率量级）。
+    ⚠️ **实测结论：0.5% 的容差下"加大 N 也到不了零误报"**（真机数据本就含跨十几分钟、
+    始终落在 0.5% 带内的近恒值段）—— 必须**同时**收紧容差并拉长 N。
+    ⚠️ 全部参数都可在部署层覆盖（compose 里同名 env）。
     """
 
     enable: bool = True                          # QUALITY_CHECK_ENABLE（默认开，见 ADR-0010 §7）
     jump_ratio: float = 0.25                     # QUALITY_JUMP_RATIO（量程宽度的 25%）
-    freeze_samples: int = 12                     # QUALITY_FREEZE_SAMPLES（≈ 1 分钟 @5s；⚠️ W4 标定值 180）
-    freeze_tolerance_ratio: float = 0.005        # QUALITY_FREEZE_TOLERANCE_RATIO（量程的 0.5%）
+    #: ⭐ 1200 ≈ 100 分钟 @5s。**由 10 天实测标定**（最长自然平台期 `dust`=404，取 3 倍裕量）
+    freeze_samples: int = 1200                   # QUALITY_FREEZE_SAMPLES
+    #: ⭐ 1e-4 × 量程 ≈ 寄存器分辨率量级。⚠️ 实测：0.5% 的容差**无论 N 多大都到不了零误报**
+    freeze_tolerance_ratio: float = 0.0001       # QUALITY_FREEZE_TOLERANCE_RATIO
     #: 用哪个门限算"跳变/容差"：默认取**契约** `points.RANGES`（唯一真源，不重复抄量程）
     ranges: Mapping[str, tuple[float, float]] = None      # type: ignore[assignment]
 
@@ -583,17 +591,29 @@ class QualityConfig:
 
     @classmethod
     def from_env(cls) -> "QualityConfig":
-        """从 `QUALITY_*` 环境变量构造（未设置时取 ADR-0010 §5 的默认值）。"""
+        """从 `QUALITY_*` 环境变量构造（未设置时取**本类字段的默认值**）。
+
+        ⚠️⚠️ **默认值不在这里重打一遍** —— 这里曾经把默认值**抄了第二份**（`"12"` / `"0.005"`），
+        与 dataclass 字段各存一份。2026-10-11 改标定值时**只改了一份**，
+        于是 `from_env()` 与 `QualityConfig()` **悄悄不一致**（`freeze_samples` 12 vs 1200）——
+        被 `test_quality_config_from_env_matches_the_dataclass_defaults` 抓到。
+        ⭐ 现在统一从 `dataclasses.fields()` 取**唯一真源**：改默认值只需改字段那一处。
+
+        ⚠️ 保留一条铁律：**新增 `QUALITY_*` 参数时必须同时加进下面的 `cls(...)` 显式列表** ——
+        `from_env` 是"显式列出"而不是"遍历字段"，所以漏加不会自动生效（会被 `validate()` 或
+        该一致性测试暴露，而不是静默用默认值）。
+        """
+        defaults = {f.name: f.default for f in dataclass_fields(cls)}
 
         def flag(key: str, default: str) -> bool:
             return os.getenv(key, default).strip().lower() not in ("0", "false", "no", "off", "")
 
         return cls(
-            enable=flag("QUALITY_CHECK_ENABLE", "1"),
-            jump_ratio=float(os.getenv("QUALITY_JUMP_RATIO", "0.25")),
-            freeze_samples=int(os.getenv("QUALITY_FREEZE_SAMPLES", "12")),
+            enable=flag("QUALITY_CHECK_ENABLE", str(defaults["enable"])),
+            jump_ratio=float(os.getenv("QUALITY_JUMP_RATIO", str(defaults["jump_ratio"]))),
+            freeze_samples=int(os.getenv("QUALITY_FREEZE_SAMPLES", str(defaults["freeze_samples"]))),
             freeze_tolerance_ratio=float(
-                os.getenv("QUALITY_FREEZE_TOLERANCE_RATIO", "0.005")
+                os.getenv("QUALITY_FREEZE_TOLERANCE_RATIO", str(defaults["freeze_tolerance_ratio"]))
             ),
         )
 
