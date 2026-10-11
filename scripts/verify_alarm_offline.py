@@ -123,8 +123,15 @@ def payload_text(ts: str, dust: float, so2: float, nox: float, o2: float) -> str
 
 
 def parse(text: str) -> tuple[str, dict[str, float], dict[str, float]]:
-    """报文 → (ts, 标干值, 数学层折算值)，与接入层同一条路径。"""
-    ts, values = SUB.parse_payload(text)
+    """报文 → (ts, 标干值, 数学层折算值)，与接入层同一条路径。
+
+    ⚠️ 逐点化（ADR-0009）后 `parse_payload` 返回**三元组**：第三个是"无效测点"。
+    本脚本造的报文一定是 9 点全合法（它验的是告警判据），所以这里断言无效集为空 ——
+    不静默忽略，万一报文造错会当场炸出来。
+    """
+    ts, values, invalid = SUB.parse_payload(text)
+    if invalid:
+        raise SystemExit(f"报文里有无效测点（本脚本只造全合法报文）: {sorted(invalid)}")
     return ts, values, SUB.reference_values(values)
 
 

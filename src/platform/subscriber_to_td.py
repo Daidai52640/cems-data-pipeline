@@ -1,10 +1,27 @@
 # -*- coding: utf-8 -*-
 """平台接入：订阅 MQTT 上送报文，解析 9 个烟气测点后写入 TDengine 时序库 cems.cems_data 超级表。
 
+★ 逐点质量位（2026-10-11 接入，依据 docs/adr/0009-接入层逐点质量位.md）：
+  把"**任一测点不合格 → 整条报文拒收**"改成"**逐点处理**"，两种"坏"分开走：
+
+    | 坏法 | 判定 | 处理 |
+    |---|---|---|
+    | **语法坏** | 时间戳不可解析 / 报文长度不足 / **一个测点都没有** / **同一个测点出现两次** / 测点值不是数 | `PayloadFormatError` → **整条拒收** |
+    | **语义坏** | 单点 `NaN`/`inf`/超量程、**报文里没给这个点** | `PointInvalid`（值对象，**不抛**）→ **只丢该点**，其余照常入库 |
+
+  ⚠️ 逐点丢之后那一列在库里是 `NULL` —— 与"这一分钟没采到"**不可区分**，
+    所以必须同时写"**证据层**"：无效点事件表 `cems_point_invalid`（表名 env 可覆盖，
+    见 `POINT_INVALID_STABLE`；列 `ts/point/kind/reason/raw`，`TAGS(plant, device)`）。
+    它是本方案能成立的前提，不是可选增强（ADR-0009 §4/§6.2）。
+  ⚠️ 计数也跟着拆（§10.3）：`rejected_messages`（语法坏丢的**报文条数**）
+    + `invalid_points`（语义坏丢的**测点个数**）—— 一个指标看不出"整条不通"还是"偶尔一个点坏"。
+
 ★ 排放超标告警（2026-10-02 接入，依据 docs/adr/0002-告警判据选型.md 方案乙）：
   入库成功 → 算折算值（全链路唯一一处）→ **接入层逐条判折算值超限** → 落告警事件表/推送记录。
   判定不改拒收逻辑、不改契约、不加服务、不加依赖；
   折算值仍然不给 cems_data 建列，事件表里存的是**判定快照**（判定证据，不是数据冗余列）。
+  ⚠️ 折算与判定都要求 O2 + 三个污染物**同帧齐全**；逐点化后某一帧可能不齐（见
+  `supports_reference`），那种帧**跳过折算与判定但仍照常入库**。
 """
 
 from __future__ import annotations
@@ -16,9 +33,10 @@ import re
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Final, Iterable, Optional, Sequence
+from typing import Any, Final, Iterable, Mapping, Optional, Sequence
 
 import paho.mqtt.client as mqtt
 import taosrest
@@ -38,6 +56,18 @@ from src.common.alarm_judge import (   # noqa: E402
     PUSH_STATUS_SENT,
     hour_start_of,
     normalize_ts,
+    # SQL 字面量拼装（含"非有限值必须写 NULL"的口径）：唯一真源在 alarm_judge，
+    # 无效点事件表的 DML 直接复用，免得"nan 拼进 SQL"这类坑在这里再踩一次
+    sql_float,
+    sql_text,
+    sql_timestamp,
+)
+# 异常分类（唯一真源 src/common/errors.py）：
+#   语法坏 → PayloadFormatError（整条拒收）；语义坏 → PointInvalid（值对象，**不抛**）
+from src.common.errors import (   # noqa: E402
+    PayloadFormatError,
+    PointInvalid,
+    PointInvalidKind,
 )
 from src.common.logging import setup_logging   # noqa: E402
 from src.common.points import (   # noqa: E402
@@ -184,8 +214,10 @@ def enforce_topic_scope(topic: str, plant: str, device: str = "") -> bool:
 # 测点定义（MQTT 字段名 / TDengine 列名 / 量程）统一来自 src/common/points.py：
 #   NAMES   报文里应该出现的字段名集合
 #   COLUMNS 入库列名，顺序即入库列顺序
-#   RANGES  量程白名单：超出量程、负数、NaN、inf 一律拒收
-#           （NaN/inf 会让 TDengine 报 syntax error，整行连其余正常测点一起被拒）
+#   RANGES  量程白名单：超出量程、负数一律判该点无效（ADR-0009 §3"语义坏"）
+#           ⚠️ 逐点化之前这里是"整条拒收"；现在是"只丢该点"，见 parse_payload 说明。
+#           NaN/inf 会让 TDengine 报 syntax error，所以它**也不进主表**，
+#           但在归类上同样是"该点无效"（不是整条拒收）。
 TD_COLUMNS: Final[tuple[str, ...]] = COLUMNS
 POINT_RANGES: Final[dict[str, tuple[float, float]]] = RANGES
 TS_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
@@ -203,10 +235,16 @@ O2_FIELD_NAME: Final[str] = COLUMN_TO_NAME[O2_COLUMN]
 REFERENCE_LOG_EVERY: Final[int] = 20       # 折算值抽样日志周期（条），避免每条都刷屏
 
 # ---- 收发/拒收/落盘计数（把上游数据质量与"落盘队列"状态量化出来）----
+# ★ 逐点化（ADR-0009 §10.3）后"拒收"有**两个粒度**，必须拆成两个指标：
+#   只有一个按"条"计的指标时，**看不出一台设备是"整条不通"还是"偶尔一个点坏"**——
+#   又是一种静默（1 个坏点算 1 条拒收，9 个坏点也算 1 条）。
 STATS: Final[dict[str, int]] = {
     "received": 0,
+    # 语法坏丢掉的**报文条数**（时间戳坏/长度不足/一个测点都没有/重复测点/值不是数）
+    "rejected_messages": 0,
+    # 语义坏丢掉的**测点个数**（超量程/NaN/inf → invalid；报文没给 → missing）
+    "invalid_points": 0,
     "accepted": 0,
-    "rejected": 0,       # 报文不合格（格式/非有限值/超量程），有意拒收
     "spooled": 0,        # 写库失败 → 已落本地队列（有持久副本，等补传）
     "spool_lost": 0,     # 写库失败且落盘也失败 → 真丢（伴随 CRITICAL 日志）
     "drained": 0,        # 由落盘队列补传成功入库的条数
@@ -231,6 +269,14 @@ ALARM_TABLES: Final[AlarmTables] = AlarmTables(
     data_stable=TD_STABLE,
 )
 ALARM_RESTORE_LIMIT: Final[int] = 400            # 启动时折叠最近多少条事件行来恢复状态
+# ---- 无效点事件表（ADR-0009 §4.1：逐点化之后"证据层"不是可选增强，是本方案成立的前提）----
+# ★ 为什么必须有它：逐点丢之后，那一列在库里是 NULL —— 而"这一分钟没采到"也是 NULL。
+#   若到此为止，就是把**整条静默**换成了**单点静默**（分不清"断线/设备死/被判无效"，
+#   甚至会把"超标数据因超量程被丢掉"看成"缺数"）。所以必须**逐点留痕**。
+# ⚠️ 表名照 ALARM_EVENT_STABLE 的既有写法：env 覆盖，默认 cems_point_invalid。
+# ⚠️ 它**不参与达标判定**、**不加列到主表**，只是证据层（主表列布局保持不动）。
+#    DDL/DML 文本与写入器在下面的 §4d，实例化也在那里。
+POINT_INVALID_STABLE: Final[str] = os.getenv("POINT_INVALID_STABLE", "cems_point_invalid")
 # 判据统计日志周期（条）：打印 已判/重投跳过/事件/无效样本 计数，
 # 让人一眼看出"判据是活的"（ADR-0002 §2.2 2) 可观测性）。
 ALARM_STATS_LOG_SAMPLES: Final[int] = int(os.getenv("ALARM_STATS_LOG_SAMPLES", "60"))
@@ -316,13 +362,18 @@ def validate_config() -> None:
         ("ALARM_EVENT_STABLE", ALARM_TABLES.event_stable),
         ("ALARM_VERDICT_STABLE", ALARM_TABLES.verdict_stable),
         ("ALARM_PUSH_STABLE", ALARM_TABLES.push_stable),
+        ("POINT_INVALID_STABLE", POINT_INVALID_STABLE),
     ):
         if not SQL_NAME_RE.match(value):
             raise ValueError(f"{label} {SQL_NAME_RULE}: {value!r}")
 
 
 def parse_timestamp(text: str) -> str:
-    """校验时间戳格式（顺带挡掉拼进 SQL 的非法字符串），返回原字符串。"""
+    """校验时间戳格式（顺带挡掉拼进 SQL 的非法字符串），返回原字符串。
+
+    ⚠️ 本函数仍按**自己的**契约抛 `ValueError`；把它升级成"整条报文语法坏"（`PayloadFormatError`）
+    是 `parse_payload` 的职责 —— 这样单独用它的调用方行为不变。
+    """
     try:
         datetime.strptime(text, TS_FORMAT)
     except (ValueError, TypeError) as exc:
@@ -330,43 +381,103 @@ def parse_timestamp(text: str) -> str:
     return text
 
 
-def parse_payload(payload: str) -> tuple[str, dict[str, float]]:
-    """把 MQTT 报文解析成 (时间戳, {MQTT字段名: 数值})；格式不符抛 ValueError。
+def parse_payload(
+    payload: str,
+) -> tuple[str, dict[str, float], dict[str, PointInvalid]]:
+    """把 MQTT 报文解析成 `(时间戳, 有效测点, 无效测点)`。
 
     报文格式: "2026-09-10 12:00:00 SO2=35.2 NOx=18.5 ... Pressure=101.3 Flag=N"
 
-    每个测点都要过两关：先 math.isfinite（挡 NaN/inf），再比量程白名单
-    （挡负数、超量程）。任一测点不合格就整条拒收 —— 因为 NaN/inf 会让
-    TDengine 报 syntax error，整行连其余正常测点一起丢，不如提前拦下。
+    ★★ **两种"坏"分开处理**（ADR-0009 §3 + §10.1，这是本函数存在的全部理由）：
+
+    | 坏法 | 判定 | 处理 |
+    |---|---|---|
+    | **语法坏** | 时间戳不可解析 / 报文长度不足 / **一个测点都没有** / **同一个测点出现两次** / 测点值根本不是数 | 抛 `PayloadFormatError` → 调用方**整条拒收** |
+    | **语义坏** | 单点 `NaN`/`inf`/超量程（`kind=invalid`）、报文里没给这个点（`kind=missing`） | 收进第三个返回值，**不抛**；其余测点照常入库 |
+
+    ⚠️ **为什么"重复测点"算语法坏**（§10.1）：同一个点有两个值，是**报文自相矛盾** ——
+      采信哪个都是猜。这不是数据质量问题，是格式问题，所以整条拒收。
+    ⚠️ **为什么"值不是数"（`SO2=abc`）算语法坏**：它连"一个合法的数"都不是，
+      值对象 `PointInvalid.raw`（`float | None`）表达不了它；而且这类报文通常是
+      **编码/配置错**（网关把文本当数发），不是单点仪表故障 —— 宁可整条拦住，别把
+      8 个本来正确的点一起放行到"看起来正常"的库里。
+    ⚠️ **语义坏一律不抛异常**：它是**正常的数据分类结果**（`src/common/errors.py` 的口径），
+      一条报文里 3 个点超量程不该走 3 次异常。
+    ⚠️ **缺测点现在是"语义坏"**（§10.1）：与"超量程"一样是单点问题；
+      判整条坏就把单点问题又放大成整条。
     """
     parts = payload.split()
     if len(parts) < 3:
-        raise ValueError(f"报文长度不足: {payload!r}")
+        raise PayloadFormatError(f"报文长度不足: {payload!r}")
 
-    ts = parse_timestamp(f"{parts[0]} {parts[1]}")
+    try:
+        ts = parse_timestamp(f"{parts[0]} {parts[1]}")
+    except ValueError as exc:
+        raise PayloadFormatError(str(exc)) from exc
 
     names = set(NAMES)
-    data: dict[str, float] = {}
+    values: dict[str, float] = {}
+    invalid: dict[str, PointInvalid] = {}
     for item in parts[2:]:
         key, sep, value = item.partition("=")
         if not sep or key not in names:
             continue                    # 跳过 Flag 等非测点字段
+        if key in values or key in invalid:
+            raise PayloadFormatError(
+                f"测点 {key} 在报文里出现两次（同一测点两个值，报文自相矛盾）: {payload!r}"
+            )
         try:
             number = float(value)
         except ValueError as exc:
-            raise ValueError(f"测点 {key} 数值非法: {value!r}") from exc
+            raise PayloadFormatError(f"测点 {key} 数值非法: {value!r}") from exc
         if not math.isfinite(number):
-            raise ValueError(f"测点 {key} 不是有限数值（NaN/inf）: {value!r}")
+            # 语法上解析得出来、数学上是个数，但 TDengine 写不进去也不能拿去算 —— 该点无效
+            invalid[key] = PointInvalid(
+                key, PointInvalidKind.INVALID,
+                f"测点 {key} 不是有限数值（NaN/inf）: {value!r}", number,
+            )
+            continue
         low, high = POINT_RANGES[key]
         if not low <= number <= high:
-            raise ValueError(f"测点 {key} 超出量程 [{low}, {high}]: {number}")
-        data[key] = number
+            invalid[key] = PointInvalid(
+                key, PointInvalidKind.INVALID,
+                f"测点 {key} 超出量程 [{low}, {high}]: {number}", number,
+            )
+            continue
+        values[key] = number
 
-    missing = [name for name in NAMES if name not in data]
-    if missing:
-        raise ValueError(f"缺少测点 {missing}: {payload!r}")
+    # "一个测点都没有" = 语法坏：没有可写的列，报文无意义（§3）
+    if not values and not invalid:
+        raise PayloadFormatError(f"报文里一个测点都没有（没有可写的列）: {payload!r}")
 
-    return ts, data
+    # 报文里根本没给的测点 → kind=missing（与"给了但不可信"分开，§10.1）
+    for name in NAMES:
+        if name not in values and name not in invalid:
+            invalid[name] = PointInvalid(
+                name, PointInvalidKind.MISSING, "报文未提供", None,
+            )
+
+    return ts, values, invalid
+
+
+#: 算折算值 / 跑告警判据所需的那几个测点（**必须同帧齐全**）。
+#: 折算公式要 O2；`AlarmJudge.on_sample()` 还要三个污染物的标干值
+#: （它按 `values[NAME]` 直接取键，缺一个就 KeyError）。
+REFERENCE_FRAME_POINTS: Final[tuple[str, ...]] = (
+    O2_FIELD_NAME,
+    *(COLUMN_TO_NAME[column] for column in ZS_TARGETS),
+)
+
+
+def supports_reference(values: Mapping[str, float]) -> bool:
+    """该条报文能不能算折算值（= 判据能不能跑）：要求 O2 + 三个污染物**同帧齐全**。
+
+    ⚠️ 逐点化（ADR-0009）之后这是个**必然会出现**的新情况：某个点被判无效/缺失时，
+    帧就不完整了。此时**跳过折算与告警判定**（该条仍照常入库），
+    而不是猜一个值、也不是把整条报文丢掉 ——
+    "折算用的 O2 必须与浓度同帧"是 ADR-0002 §3.1 的既有口径，本次不动判据。
+    """
+    return all(name in values for name in REFERENCE_FRAME_POINTS)
 
 
 # ==================== 4. TDengine 写入器 ====================
@@ -476,14 +587,28 @@ class TdWriter:
     def _insert(self, ts: str, values: dict[str, float]) -> bool:
         """执行一次插入：自动建子表（USING 超级表模板 + TAGS 标签）。
 
-        显式列出列名、列序由 POINTS 统一决定，避免报文顺序与建表顺序漂移导致写错列。
+        ★ **逐点化（ADR-0009 §10.2 第 1 步）**：**传入哪几列就写哪几列** ——
+          只按 `values` 里实际有的测点拼列，缺失的列**整列不出现**，
+          由 TDengine 按"省略的列就是 NULL"处理（部分列 INSERT 与 USING/TAGS 共存
+          已实测，见 ADR-0009 §6.2）。
+
+        ⚠️ **9 列齐全时，拼出来的 SQL 与逐点化之前逐字节相同**（既有路径零变化）：
+          列名仍按 `POINTS` 契约顺序展开（不是 `values` 的键序），
+          所以报文顺序/建表顺序漂移都不会写错列。
+        ⚠️ 一个可写的列都没有（全列判无效）时返回 False 且**不执行 SQL**：
+          这类报文 TDengine 写不进去（没有 ts 列之外的内容），
+          调用方（`on_message`）会提前拦住，不让它进落盘队列空转。
         """
         if self._cur is None:
             return False
+        points = [point for point in POINTS if point.name in values]
+        if not points:
+            LOGGER.error("没有可写入的测点列，跳过插入（ts=%s）", ts)
+            return False
         # 显式列出列名时，主时间戳列 ts 必须一起列出，否则 TDengine 报
         # "Primary timestamp column should not be null"
-        columns = ", ".join(("ts", *TD_COLUMNS))
-        numbers = ", ".join(f"{values[point.name]}" for point in POINTS)  # 与 TD_COLUMNS 同序
+        columns = ", ".join(("ts", *(point.column for point in points)))
+        numbers = ", ".join(f"{values[point.name]}" for point in points)   # 与 columns 同序
         sql = (
             f"INSERT INTO {TD_DB}.{CHILD_TABLE} USING {TD_DB}.{TD_STABLE} "
             f"TAGS ('{TD_PLANT}', '{TD_DEVICE}') "
@@ -599,6 +724,173 @@ class AlarmWriter:
         conn, self._conn, self._cur = self._conn, None, None
         if conn is not None:
             TdWriter._safe_close(conn)
+
+
+# ==================== 4d. 无效点事件表（ADR-0009 §4.1） ====================
+#
+# ★ 这张表是**证据层**，不是数据层：
+#     - 不进主表、不给主表加列（主表列布局保持不动，既有报表/导出不受影响）
+#     - 不参与达标判定（覆盖率怎么算、小时门限怎么定，本次都不动）
+#     - 只回答一个问题：**哪一分钟、哪个点、为什么没进主表**
+#
+# ⚠️ 为什么 `point` 不写成 TAG（照 §4.1 的字面：TAGS 只有 plant/device），
+#    却把点名列进**子表名**（`plant_device_invalid_<point>`）：
+#    TDengine 的幂等/覆盖语义是 **(子表, ts)** —— 若所有点共用一张子表，
+#    同一条报文里 2 个点同时无效时会**互相覆盖**，只剩一条证据（静默丢证据）。
+#    按点分子表既保住了"同一报文重投不重复"（V5），也不丢多点的行。
+@dataclass(frozen=True)
+class PointInvalidTables:
+    """无效点事件表在 TDengine 里的位置与命名，以及 DDL/DML 文本（纯字符串）。"""
+
+    db: str
+    plant: str
+    device: str
+    stable: str = "cems_point_invalid"
+
+    def child(self, point: str) -> str:
+        """该测点的子表名（幂等键 = `(子表, ts)`，同一报文重投只覆盖不新增）。"""
+        return f"{self.plant}_{self.device}_invalid_{point}".lower()
+
+    def create_sql(self) -> str:
+        """建超级表（`IF NOT EXISTS`，可重复执行；照 AlarmTables 的写法）。"""
+        return (
+            f"CREATE STABLE IF NOT EXISTS {self.db}.{self.stable} "
+            f"(ts TIMESTAMP, point NCHAR(16), kind NCHAR(10), "
+            f"reason NCHAR(200), raw FLOAT) "
+            f"TAGS (plant NCHAR(20), device NCHAR(20))"
+        )
+
+    def insert_sql(self, ts: str, item: PointInvalid) -> str:
+        """一条无效点证据行。
+
+        - `kind`：`invalid`（有值但不可信）/ `missing`（报文里根本没这个点）
+        - `raw`：原始值（**保留证据**）；`missing` 与非有限值（NaN/inf）写 `NULL`
+          —— `sql_float()` 与非有限值必须写 NULL 的口径同源（NaN 进 SQL 会让 TDengine
+          报 syntax error，原始文本已经写在 `reason` 里，证据不丢）
+        """
+        columns = "ts, point, kind, reason, raw"
+        values = ", ".join((
+            sql_timestamp(ts),
+            sql_text(item.point),
+            sql_text(PointInvalidKind(item.kind).value),
+            sql_text(str(item.reason)[:200]),
+            sql_float(item.raw),
+        ))
+        return (
+            f"INSERT INTO {self.db}.{self.child(item.point)} USING {self.db}.{self.stable} "
+            f"TAGS ({sql_text(self.plant)}, {sql_text(self.device)}) "
+            f"({columns}) VALUES ({values})"
+        )
+
+
+#: 本实例的无效点事件表（表名由 POINT_INVALID_STABLE 覆盖，默认 cems_point_invalid）
+POINT_INVALID_TABLES: Final[PointInvalidTables] = PointInvalidTables(
+    db=TD_DB, plant=TD_PLANT, device=TD_DEVICE, stable=POINT_INVALID_STABLE,
+)
+
+
+class PointInvalidWriter:
+    """无效点事件表写入器：建表 + 逐条写证据行。
+
+    为什么要独立一个写入器（而不是复用 TdWriter / AlarmWriter）：
+        - **失败域要分清**：它与主表写入是两件事。主表写入失败要落盘队列补传，
+          证据行写失败只是**少一条证据**，不能反过来把主链路的落盘逻辑搅乱；
+        - `AlarmWriter.connect()` 会连带建三张**告警**表，而告警开关（ALARM_ENABLE=0）
+          与本表无关，不该被它绑定；
+        - 连接、重连、重试的口径与 `AlarmWriter` 完全一致（照抄既有写法，不另造一套）。
+    """
+
+    def __init__(self, tables: PointInvalidTables) -> None:
+        self._tables = tables
+        self._conn: Optional[Any] = None
+        self._cur: Optional[Any] = None
+
+    @property
+    def ready(self) -> bool:
+        """当前是否持有可用的数据库游标。"""
+        return self._cur is not None
+
+    def connect(self) -> bool:
+        """连接并保证无效点事件超级表存在；成功返回 True（失败只记 error 不抛）。"""
+        conn: Optional[Any] = None
+        try:
+            conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
+            cur = conn.cursor()
+            cur.execute(self._tables.create_sql())
+        except Exception as exc:
+            LOGGER.error("无效点事件表连接或建表失败: %s", exc)
+            self.close()
+            if conn is not None:
+                TdWriter._safe_close(conn)
+            return False
+
+        self.close()
+        self._conn, self._cur = conn, cur
+        LOGGER.info("无效点事件表就绪: %s.%s", self._tables.db, self._tables.stable)
+        return True
+
+    def execute(self, sql: str) -> bool:
+        """执行一条写语句；失败自动重连重试一次，仍失败返回 False。"""
+        if not self.ready and not self.connect():
+            return False
+        if self._execute(sql):
+            return True
+        LOGGER.error("无效点事件写库失败，重连后重试一次")
+        if self.connect() and self._execute(sql):
+            return True
+        return False
+
+    def _execute(self, sql: str) -> bool:
+        if self._cur is None:
+            return False
+        try:
+            self._cur.execute(sql)
+            return True
+        except Exception as exc:
+            LOGGER.error("无效点事件写库失败: %s | SQL: %s", exc, sql)
+            return False
+
+    def write(self, ts: str, items: Sequence[PointInvalid]) -> int:
+        """逐条写本次的无效点证据行；返回成功条数（一条失败不影响其余）。"""
+        return sum(1 for item in items if self.execute(self._tables.insert_sql(ts, item)))
+
+    def close(self) -> None:
+        """释放当前连接（游标置空，下次操作会自动重连）。"""
+        conn, self._conn, self._cur = self._conn, None, None
+        if conn is not None:
+            TdWriter._safe_close(conn)
+
+
+def record_invalid_points(
+    writer: PointInvalidWriter,
+    ts: str,
+    invalid: Mapping[str, PointInvalid],
+) -> int:
+    """逐点留痕：把本条报文的无效测点写进事件表，返回成功条数。
+
+    ⚠️ **绝不抛异常、也绝不阻断入库**：证据写失败只记 CRITICAL ——
+      反过来把 8 个本来正确的点丢掉，是这个改造最不该发生的事
+      （而且事件表与主表在同一个 TDengine 实例上，它单独坏掉的概率极低）。
+    ⚠️ 调用点**在写主表之前**（见 `on_message`）：先留痕再入库，
+      这样"主表有 NULL 列"与"事件表有证据"不会因为顺序而错开。
+    """
+    items = list(invalid.values())
+    if not items:
+        return 0
+    for item in items:
+        LOGGER.warning(
+            "[无效点] %s %s kind=%s raw=%s: %s",
+            ts, item.point, PointInvalidKind(item.kind).value,
+            "NULL" if item.raw is None else repr(item.raw), item.reason,
+        )
+    written = writer.write(ts, items)
+    if written != len(items):
+        LOGGER.critical(
+            "[无效点] 事件表写入不完整: %d/%d 条 —— 主表对应列会是 NULL 且没有留痕"
+            "（分不清「没采到」还是「被判无效」），请查事件表连接: ts=%s points=%s",
+            written, len(items), ts, [item.point for item in items],
+        )
+    return written
 
 
 def _post_webhook(url: str, payload_json: str, timeout: float) -> bool:
@@ -965,18 +1257,45 @@ def on_disconnect(
 
 
 def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-    """收到消息 → 解析 → 入库；解析或入库失败只记日志，绝不抛异常打断订阅。"""
+    """收到消息 → 解析 → 逐点留痕 → 入库；任何失败只记日志，绝不抛异常打断订阅。
+
+    ★ 逐点化（ADR-0009）后的四条路径：
+      1. **语法坏** → `PayloadFormatError` → `STATS["rejected_messages"] += 1`，整条拒收（不写库）；
+      2. **语义坏** → 该点进事件表（`kind=invalid/missing`）+ `STATS["invalid_points"] += n`，
+         其余点**照常入库**（主表该列是 NULL，证据在事件表里）；
+      3. 全部测点都语义坏 → 没有可写的列：只留痕、不写主表、**也不落盘**
+         （落盘会永远补不进去，只会把队列堵死）；
+      4. 入库失败（TDengine 不可用）→ 与以前一样落本地队列，等补传。
+    """
     payload = msg.payload.decode("utf-8", errors="replace")
     STATS["received"] += 1
 
     try:
-        ts, values = parse_payload(payload)
-    except ValueError as exc:
-        # 故意拒收（格式错、非有限值、超量程）：计数并记下原因，方便看上游数据质量
-        STATS["rejected"] += 1
+        ts, values, invalid = parse_payload(payload)
+    except PayloadFormatError as exc:
+        # 语法坏（格式错/自相矛盾）：整条拒收，计数并记下原因，方便看上游数据质量
+        STATS["rejected_messages"] += 1
         LOGGER.warning(
-            "报文已拒收（累计 %d 条）: %s | 原始报文: %s",
-            STATS["rejected"], exc, payload,
+            "报文已整条拒收（语法坏，累计 %d 条）: %s | 原始报文: %s",
+            STATS["rejected_messages"], exc, payload,
+        )
+        return
+
+    if invalid:
+        # ⚠️ 顺序：**先把证据写下来，再写主表** —— 免得"主表已经有 NULL 列"而事件表还没落。
+        STATS["invalid_points"] += len(invalid)
+        try:
+            record_invalid_points(userdata["point_invalid_writer"], ts, invalid)
+        # 证据层失败绝不打断数据主链路（record_invalid_points 内部已记 CRITICAL）
+        except Exception:
+            LOGGER.exception("[无效点] 留痕异常（入库与订阅不受影响）")
+
+    if not values:
+        # 9 个点全判坏/全缺：没有可写的列（ADR-0009 §3 的"没有可写的列"）。
+        # ⚠️ 这里**不能**走落盘队列：补传时同样一列都写不进去，只会永远堵在队首。
+        LOGGER.warning(
+            "本条报文的测点全部无效（无可写列），只留痕、不写主表也不落盘: %s",
+            sorted(invalid),
         )
         return
 
@@ -984,38 +1303,47 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
     writer: TdWriter = userdata["writer"]
     spool: IngestSpool = userdata["spool"]
     if writer.write(ts, values):
-        # 折算值全链路只在这里算一次：数学层（nan 语义）留给判定，协议层（哨兵值）留给出站
-        math_references = reference_values(values)
-        references = record_reference(ts, values, math_references)
-        if STATS["accepted"] == 1 or STATS["accepted"] % REFERENCE_LOG_EVERY == 0:
-            # 抽样打 INFO 而不是每条都打（首条也打：重启后立刻能看到折算出口是活的）
-            # 打的是**传输值**：O2 >= 21% 时应当看到哨兵值，而不是 nan
-            LOGGER.info(
-                "折算值抽样（第 %d 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理："
-                "无法折算时传缺省类型最大值哨兵 %.2f；"
-                "⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: "
-                "标干 ts=%s O2=%.4f -> %s",
-                STATS["accepted"],
-                ZS_UNAVAILABLE_SENTINEL,
-                ts,
-                values[O2_FIELD_NAME],
-                " ".join(f"{column}={references[column]:.4f}" for column in ZS_TARGETS),
+        # ★ 折算值 / 告警判定要 O2 与三个污染物**同帧齐全**（ADR-0002 §3.1）。
+        #   逐点化后可能出现"整帧不齐"：这时**跳过折算与判定**，但该条仍然已经入库。
+        if not supports_reference(values):
+            LOGGER.warning(
+                "本条报文缺折算/判定所需的测点（O2 或 dust/so2/nox 之一被判无效或缺失），"
+                "折算值与告警判定本次跳过（该条已按有效点入库）: 缺 %s",
+                sorted(name for name in REFERENCE_FRAME_POINTS if name not in values),
             )
-        # ★ 排放超标告警：逐条判**折算值**（吃上面算好的数学层结果，不同帧不判、不重算公式）
-        #   O2 >= 21% 时数学层是 nan → 判"数据无效"，绝不拿哨兵值去比限值
-        if ALARM_CONFIG.enable:
-            try:
-                events = userdata["judge"].on_sample(ts, values, math_references)
-                if events:
-                    publish_alarm_events(
-                        userdata["alarm_writer"], ALARM_TABLES, events,
-                        ALARM_CONFIG.push_channel,
-                    )
-            except Exception:
-                # 告警链路出问题绝不影响入库与订阅（判定只是入库后的附加动作）
-                LOGGER.exception("告警判定/落库异常（入库与订阅不受影响）")
-            if STATS["accepted"] % ALARM_STATS_LOG_SAMPLES == 0:
-                LOGGER.info("告警判据统计: %s", userdata["judge"].stats)
+        else:
+            # 折算值全链路只在这里算一次：数学层（nan 语义）留给判定，协议层（哨兵值）留给出站
+            math_references = reference_values(values)
+            references = record_reference(ts, values, math_references)
+            if STATS["accepted"] == 1 or STATS["accepted"] % REFERENCE_LOG_EVERY == 0:
+                # 抽样打 INFO 而不是每条都打（首条也打：重启后立刻能看到折算出口是活的）
+                # 打的是**传输值**：O2 >= 21% 时应当看到哨兵值，而不是 nan
+                LOGGER.info(
+                    "折算值抽样（第 %d 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理："
+                    "无法折算时传缺省类型最大值哨兵 %.2f；"
+                    "⚠️ 注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: "
+                    "标干 ts=%s O2=%.4f -> %s",
+                    STATS["accepted"],
+                    ZS_UNAVAILABLE_SENTINEL,
+                    ts,
+                    values[O2_FIELD_NAME],
+                    " ".join(f"{column}={references[column]:.4f}" for column in ZS_TARGETS),
+                )
+            # ★ 排放超标告警：逐条判**折算值**（吃上面算好的数学层结果，不同帧不判、不重算公式）
+            #   O2 >= 21% 时数学层是 nan → 判"数据无效"，绝不拿哨兵值去比限值
+            if ALARM_CONFIG.enable:
+                try:
+                    events = userdata["judge"].on_sample(ts, values, math_references)
+                    if events:
+                        publish_alarm_events(
+                            userdata["alarm_writer"], ALARM_TABLES, events,
+                            ALARM_CONFIG.push_channel,
+                        )
+                except Exception:
+                    # 告警链路出问题绝不影响入库与订阅（判定只是入库后的附加动作）
+                    LOGGER.exception("告警判定/落库异常（入库与订阅不受影响）")
+                if STATS["accepted"] % ALARM_STATS_LOG_SAMPLES == 0:
+                    LOGGER.info("告警判据统计: %s", userdata["judge"].stats)
         # 高频成功降到 debug；只在排查数据问题时才需要开
         LOGGER.debug("已入库: %s %s", ts, " ".join(f"{k}={v}" for k, v in values.items()))
     else:
@@ -1041,11 +1369,12 @@ def drain_spool_once(
     spool: IngestSpool,
     *,
     batch_limit: int = SPOOL_BATCH_LIMIT,
+    point_invalid_writer: Optional[PointInvalidWriter] = None,
 ) -> int:
     """把落盘队列里的一批报文补传进 TDengine，返回本轮成功条数。
 
     语义（顺序与崩溃安全见 ingest_spool 头部）：
-      - 取批（原子改名）→ 逐条 parse + `writer.write` → 收尾（未成功的放回队首、删段）
+      - 取批（原子改名）→ 逐条 parse + 留痕 + `writer.write` → 收尾（未成功的放回队首、删段）
       - **第一条写失败就停**：说明 TDengine 整体不可用，没必要把整批都试一遍（每次失败都带重连）；
         本条及之后（含未处理的尾部）原样放回，下一个节拍再试。
       - 解析不了的行走 CRITICAL 后**丢弃**：入队前已校验过，落盘内容本不该解析失败；真遇到
@@ -1054,6 +1383,10 @@ def drain_spool_once(
         小时结算是从库里回读的，补传进去的行照样参与小时三态结论。
       - ⚠️ 补传**不更新 `LAST_REFERENCE` 快照**：那是"最近一条已入库数据的折算出口"，
         让迟到的旧样本把它往回拨没有意义。
+      - ★ **补传也要补留痕**（ADR-0009 §4.1）：报文入队时若含无效点，那条证据同样得落库，
+        否则"补传成功"的数据会出现 NULL 列而没有证据行。留痕写失败**也算本条没补成功**
+        （放回队首，下一个节拍重试），避免留下"NULL 无证据"的行。
+      - `point_invalid_writer=None`（单测里只关心主表路径时）跳过留痕。
     """
     if not spool.has_backlog():
         return 0
@@ -1067,11 +1400,21 @@ def drain_spool_once(
     remaining: list[str] = []
     for index, line in enumerate(head):
         try:
-            ts, values = parse_payload(line)
-        except ValueError as exc:
+            ts, values, invalid = parse_payload(line)
+        except PayloadFormatError as exc:
             LOGGER.critical(
                 "[落盘队列] 补传报文无法解析，丢弃这一条（不影响其余）: %s | %s", exc, line,
             )
+            continue
+        if invalid and point_invalid_writer is not None:
+            written = record_invalid_points(point_invalid_writer, ts, invalid)
+            if written != len(invalid):
+                # 证据没写全 → 本条不算补成功，放回队首下个节拍重试（别留下"NULL 无证据"的行）
+                remaining = head[index:] + tail
+                break
+        if not values:
+            # 全列无效：没有可写的列（与 on_message 同一处置，别放回队列空转）
+            LOGGER.warning("[落盘队列] 本条测点全部无效，无可写列，丢弃: %s", line)
             continue
         if writer.write(ts, values):
             confirmed += 1
@@ -1089,7 +1432,11 @@ def drain_spool_once(
     return confirmed
 
 
-def spool_retry_loop(writer: TdWriter, spool: IngestSpool) -> None:
+def spool_retry_loop(
+    writer: TdWriter,
+    spool: IngestSpool,
+    point_invalid_writer: Optional[PointInvalidWriter] = None,
+) -> None:
     """补传线程主体：启动先补一轮（清上次残留），之后每个节拍补一轮。
 
     任何异常都只记日志、绝不退出线程 —— 它守护的是"不丢数据"，比它自己活着更重要。
@@ -1097,7 +1444,7 @@ def spool_retry_loop(writer: TdWriter, spool: IngestSpool) -> None:
     """
     while not SPOOL_STOP.is_set():
         try:
-            drain_spool_once(writer, spool)
+            drain_spool_once(writer, spool, point_invalid_writer=point_invalid_writer)
         # 线程边界：任何异常都不能让补传线程静默死掉（下一轮继续）
         except Exception:
             LOGGER.exception("[落盘队列] 补传线程异常（下一轮继续）")
@@ -1131,7 +1478,14 @@ def main() -> None:
     if not writer.connect():
         LOGGER.error("首次连接 TDengine 失败，将在收到数据时自动重试")
 
-    # 1a. 落盘队列：目录可写检查 + 补传线程
+    # 1a. 无效点事件表（ADR-0009 §4.1：逐点化之后的"证据层"）
+    #     失败**不阻止启动**：第一次要写证据时会自动重连重试；
+    #     它坏了只影响"留痕"，绝不该把主链路（入库）一起拖住。
+    point_invalid_writer = PointInvalidWriter(POINT_INVALID_TABLES)
+    if not point_invalid_writer.connect():
+        LOGGER.error("首次连接无效点事件表失败，将在需要写入时自动重试")
+
+    # 1b. 落盘队列：目录可写检查 + 补传线程
     #     ⚠️ 目录必须**每实例一份**（多设备部署的关键约束，见配置区）。这一行是排查
     #     "两个实例串味"的第一现场：它必须每实例互不相同。
     if not SPOOL.check_writable():
@@ -1147,12 +1501,12 @@ def main() -> None:
     )
     threading.Thread(
         target=spool_retry_loop,
-        args=(writer, SPOOL),
+        args=(writer, SPOOL, point_invalid_writer),
         name="ingest-spool-retry",
         daemon=True,
     ).start()
 
-    # 1b. 初始化告警链路：判据状态从事件表折叠恢复 + 独立的告警表写入器
+    # 1c. 初始化告警链路：判据状态从事件表折叠恢复 + 独立的告警表写入器
     alarm_writer = AlarmWriter(ALARM_TABLES)
     if not alarm_writer.connect():
         LOGGER.error("首次连接告警表失败，将在需要写入时自动重试")
@@ -1203,6 +1557,8 @@ def main() -> None:
     )
     client.user_data_set({
         "writer": writer, "judge": judge, "alarm_writer": alarm_writer, "spool": SPOOL,
+        # ★ 逐点化（ADR-0009）：无效测点的证据写入器，按 (子表, ts) 幂等
+        "point_invalid_writer": point_invalid_writer,
     })
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
@@ -1229,6 +1585,7 @@ def main() -> None:
             LOGGER.debug("断开 MQTT 时出错（忽略）: %s", exc)
         writer.close()
         alarm_writer.close()
+        point_invalid_writer.close()
 
 
 if __name__ == "__main__":

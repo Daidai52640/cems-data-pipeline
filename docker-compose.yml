@@ -138,6 +138,11 @@ x-subscriber-env: &subscriber-env
   ALARM_EVENT_STABLE: ${ALARM_EVENT_STABLE:-cems_alarm_event}
   ALARM_VERDICT_STABLE: ${ALARM_VERDICT_STABLE:-cems_hourly_verdict}
   ALARM_PUSH_STABLE: ${ALARM_PUSH_STABLE:-cems_alarm_push}
+  # ---- 逐点质量位（ADR-0009：语法坏整条拒收 / 语义坏逐点处理 + 无效点事件表）----
+  # 逐点丢之后主表那一列是 NULL，与"这一分钟没采到"不可区分 → 无效点必须**逐点留痕**。
+  # 表结构：ts + point/kind(invalid|missing)/reason/raw，TAGS(plant, device)；
+  # 它**不加列到主表**、不参与达标判定，只是证据层。env 可覆盖表名。
+  POINT_INVALID_STABLE: ${POINT_INVALID_STABLE:-cems_point_invalid}
 
 # ---- 两个接入实例共用的健康检查与启动依赖 ----
 # 订阅端是事件驱动的、没有自己的端口，这里探"能否连上 broker"：
