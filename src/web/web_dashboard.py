@@ -144,6 +144,17 @@ POLL_INTERVAL_SECONDS: Final[float] = float(os.getenv("POLL_INTERVAL", "5.0"))
 HEALTH_STALE_POLL_FACTOR: Final[int] = int(os.getenv("HEALTH_STALE_POLL_FACTOR", "3"))
 HEALTH_STALE_AFTER_SECONDS: Final[float] = POLL_INTERVAL_SECONDS * HEALTH_STALE_POLL_FACTOR
 
+# ---- 数据新鲜度指示（页面上那一条"最后一条数据：N 秒前"，见 §5 的 loadFreshness）----
+# ★ 为什么单独一个阈值，而不直接复用上面的 HEALTH_STALE_AFTER_SECONDS（15 s）：
+#   两者**用途不同、容忍度不同**。
+#     · 健康判据（/api/health）是**编排层**的判据，超了要让容器变 unhealthy → 必须敏感（15 s）；
+#     · 页面指示是**给人看**的"数据流有没有停"。真机链路上偶发一次补传滞后（实测最大 32.1 s，
+#       见 docs/reference/性能与可靠性指标.md §4.2）就会让 15 s 的判据闪红，人会被训练成
+#       "红色=正常抖动"，真正停流时反而没人看 —— 所以展示层阈值要更宽，默认 30 s。
+# ⚠️ 这正是"治全绿零数据"的最小方案：不引入 Prometheus、不加容器、不加依赖，
+#    取数走**已有的** /api/health（它内部用**已有的** query_recent 查 TDengine 最新 ts）。
+FRESHNESS_WARN_SECONDS: Final[float] = float(os.getenv("FRESHNESS_WARN_SECONDS", "30"))
+
 # ---- 报表导出 ----
 XLSX_MIME: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 # 给老浏览器用的 ASCII 兜底名；中文名走 Content-Disposition 的 filename*
@@ -436,7 +447,7 @@ def api_cache_clear() -> Response:
 
 
 def _render_page(template: str) -> Response:
-    """页面模板统一注入：刷新周期 / 测点表 / 面板表 / 测点数（都是契约现算，不写死）。"""
+    """页面模板统一注入：刷新周期 / 测点表 / 面板表 / 测点数 / 新鲜度阈值（都是契约现算，不写死）。"""
     html = (
         template
         .replace("__REFRESH_MS__", str(REFRESH_SECONDS * 1000))
@@ -444,6 +455,8 @@ def _render_page(template: str) -> Response:
         .replace("__POINTS_JSON__", POINT_VIEWS_JSON)
         .replace("__PANELS_JSON__", PANELS_JSON)
         .replace("__POINT_COUNT__", str(len(POINTS)))
+        # 新鲜度阈值只注入一个数：判据实现留在服务端（/api/health），前端只负责上色
+        .replace("__FRESHNESS_WARN__", str(FRESHNESS_WARN_SECONDS))
     )
     return Response(html, mimetype="text/html")
 
@@ -659,10 +672,16 @@ HTML_PAGE = """<!DOCTYPE html>
   .devices .dev.active { background:#22c55e; border-color:#22c55e; color:#0f172a; font-weight:600; }
   .devices .dev.muted { opacity:.45; cursor:default; }
   .panelnote { font-size:12px; color:#64748b; margin:-4px 0 8px; }
+  /* 数据新鲜度指示：绿色=在流；超过 __FRESHNESS_WARN__ 秒变红加粗 —— 见 §5 的 loadFreshness */
+  .fresh { display:inline-block; margin-left:12px; padding:4px 12px; border-radius:999px;
+           font-size:13px; font-weight:600; border:1px solid transparent; vertical-align:middle; }
+  .fresh.ok { background:#052e1a; color:#4ade80; border-color:#15803d; }
+  .fresh.bad { background:#450a0a; color:#fca5a5; border-color:#b91c1c; font-weight:700; }
+  .fresh.unknown { background:#1e293b; color:#94a3b8; border-color:#334155; }
 </style>
 </head>
 <body>
-  <h1>CEMS 烟气在线监测 · 曲线（__POINT_COUNT__ 测点）</h1>
+  <h1>CEMS 烟气在线监测 · 曲线（__POINT_COUNT__ 测点）<span class="fresh unknown" id="fresh">数据新鲜度：加载中…</span></h1>
   <div style="font-size:13px;margin-bottom:10px;">
     <a href="/" style="color:#38bdf8;text-decoration:none;">☰ 返回表格视图</a>
   </div>
@@ -821,6 +840,37 @@ HTML_PAGE = """<!DOCTYPE html>
   function showInfo(msg) {
     status.className = '';
     status.textContent = msg;
+  }
+
+  // ---- 数据新鲜度指示（"最后一条数据：N 秒前"） ----
+  // ★ 取数走**已有的** /api/health：它内部用**已有的** query_recent() 查 TDengine 最新 ts，
+  //   不新增容器、不新增依赖、不新造查询路径。本函数只负责把返回的两个数上色。
+  // ⚠️ 阈值用页面注入的 FRESHNESS_WARN（默认 30 s），**不等于** /api/health 的
+  //   stale_after_seconds（默认 15 s）—— 理由见 web_dashboard.py 配置区那一段注释。
+  var FRESHNESS_WARN = __FRESHNESS_WARN__;
+  var freshEl = document.getElementById('fresh');
+  function setFreshness(text, cls) {
+    if (!freshEl) { return; }
+    freshEl.textContent = '数据新鲜度：' + text;
+    freshEl.className = 'fresh ' + cls;
+  }
+  function loadFreshness() {
+    fetch('/api/health')
+      .then(function(res) { return res.json(); })
+      .then(function(h) {
+        var age = h.data_age_seconds;
+        if (age === null || age === undefined) {
+          setFreshness('库中无数据（' + (h.reason || '未知') + '）', 'bad');
+          return;
+        }
+        var secs = Math.round(age * 10) / 10;
+        if (age > FRESHNESS_WARN) {
+          setFreshness('最后一条数据：' + secs + ' 秒前（已超过 ' + FRESHNESS_WARN + ' 秒，疑似停流）', 'bad');
+        } else {
+          setFreshness('最后一条数据：' + secs + ' 秒前', 'ok');
+        }
+      })
+      .catch(function() { setFreshness('取新鲜度失败（/api/health 不可达）', 'unknown'); });
   }
 
   function val(id) {
@@ -991,6 +1041,7 @@ HTML_PAGE = """<!DOCTYPE html>
         // 上一轮结束后才排下一轮（后端变慢不会堆请求）；切到自由区间后不再排，
         // 否则固定窗口的自动刷新会把用户选的区间覆盖掉
         if (token === viewToken && mode === 'realtime') {
+          loadFreshness();          // 与数据刷新同一节拍，不另开定时器
           timer = setTimeout(loadRealtime, REFRESH_MS);
         }
       });
@@ -1137,10 +1188,16 @@ TABLE_PAGE = """<!DOCTYPE html>
   .null { color:#64748b; }
   #status { font-size:13px; color:#94a3b8; margin-top:10px; }
   #status.err { color:#f87171; }
+  /* 数据新鲜度指示：绿色=在流；超过 __FRESHNESS_WARN__ 秒变红加粗 —— 见 §5 的 loadFreshness */
+  .fresh { display:inline-block; margin-left:12px; padding:4px 12px; border-radius:999px;
+           font-size:13px; font-weight:600; border:1px solid transparent; vertical-align:middle; }
+  .fresh.ok { background:#052e1a; color:#4ade80; border-color:#15803d; }
+  .fresh.bad { background:#450a0a; color:#fca5a5; border-color:#b91c1c; font-weight:700; }
+  .fresh.unknown { background:#1e293b; color:#94a3b8; border-color:#334155; }
 </style>
 </head>
 <body>
-  <h1>CEMS 监测数据 · __POINT_COUNT__ 测点</h1>
+  <h1>CEMS 监测数据 · __POINT_COUNT__ 测点<span class="fresh unknown" id="fresh">数据新鲜度：加载中…</span></h1>
   <div class="bar">
     <a class="icon" id="tochart" href="/chart" title="切换到曲线视图">☰</a>
     <select id="device"></select>
@@ -1306,6 +1363,33 @@ TABLE_PAGE = """<!DOCTYPE html>
 
   function showStatus(msg, err) { el('status').className = err ? 'err' : ''; el('status').textContent = msg; }
 
+  // ---- 数据新鲜度指示（"最后一条数据：N 秒前"） ----
+  // ★ 与曲线页同一套：取数走**已有的** /api/health（内部用**已有的** query_recent 查库），
+  //   不新增容器、不新增依赖、不新造查询路径。
+  var FRESHNESS_WARN = __FRESHNESS_WARN__;
+  function setFreshness(text, cls) {
+    el('fresh').textContent = '数据新鲜度：' + text;
+    el('fresh').className = 'fresh ' + cls;
+  }
+  function loadFreshness() {
+    fetch('/api/health')
+      .then(function(res) { return res.json(); })
+      .then(function(h) {
+        var age = h.data_age_seconds;
+        if (age === null || age === undefined) {
+          setFreshness('库中无数据（' + (h.reason || '未知') + '）', 'bad');
+          return;
+        }
+        var secs = Math.round(age * 10) / 10;
+        if (age > FRESHNESS_WARN) {
+          setFreshness('最后一条数据：' + secs + ' 秒前（已超过 ' + FRESHNESS_WARN + ' 秒，疑似停流）', 'bad');
+        } else {
+          setFreshness('最后一条数据：' + secs + ' 秒前', 'ok');
+        }
+      })
+      .catch(function() { setFreshness('取新鲜度失败（/api/health 不可达）', 'unknown'); });
+  }
+
   function refresh() {
     var url = withScope('/api/report/range?unit=' + unit
       + '&start=' + encodeURIComponent(el('start').value)
@@ -1342,6 +1426,7 @@ TABLE_PAGE = """<!DOCTYPE html>
       + '&end=' + encodeURIComponent(el('end').value));
   }
   function autoTick() {
+    loadFreshness();              // 与"自动刷新"同一节拍；未勾选时 initFreshness 的低频定时器兜底
     if (!el('auto').checked) { return; }
     refresh();
   }
@@ -1386,6 +1471,10 @@ TABLE_PAGE = """<!DOCTYPE html>
   defaultsFor(unit);
   setUnit(unit);
   syncExport();
+  // ★ 新鲜度指示：与刷新周期同节拍固定轮询（**不**只在"自动刷新"勾选时才跑）——
+  //   这一条是页面上的**告警面**，"没勾自动刷新"恰恰是最可能正在盯停流的时候。
+  loadFreshness();
+  setInterval(loadFreshness, REFRESH_SEC * 1000);
 })();
 </script>
 </body>

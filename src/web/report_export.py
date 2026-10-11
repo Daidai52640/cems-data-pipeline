@@ -120,10 +120,8 @@ BOLD_FONT: Final[Font] = Font(bold=True)
 TD_SOURCE: Final[str] = f"{report.TD_DB}.{report.TD_STABLE}"
 
 # ---- 日志 ----
-LOG_LEVEL: Final[int] = logging.INFO
-LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
-
+# ⚠️ 级别/格式/时间格式的**唯一真源**是 src/common/logging.py，本模块不复制那三个常量
+#    （历史上这里抄过一份逐字相同的 `LOG_LEVEL`/`LOG_FORMAT`/`LOG_DATEFMT`，从未被引用，已删）。
 LOGGER: Final[logging.Logger] = logging.getLogger("web.report_export")
 
 
