@@ -98,6 +98,42 @@ SLAVE_IDS: Final[tuple[int, ...]] = parse_slave_ids(os.getenv("SLAVE_IDS", "").s
 #: 它只改读数所用的仿真时刻，不改网关打的时间戳，所以不会被误读成设备时钟故障。
 SLAVE_PHASE_OFFSET: Final[float] = float(os.getenv("SLAVE_PHASE_OFFSET", "10800"))
 
+# ---- 真机接入（2026-10-11）：把 2 个寄存器改由**真实设备**供给 ----
+#
+# 真机是一台 RS485 温湿度变送器，挂在 **Windows 宿主的 COM3** 上。
+# Docker 容器**访问不到宿主的 COM 口**，所以由 `scripts/serial_bridge.py`（跑在宿主）
+# 把它转成 Modbus TCP（扮演现场那台"**串口服务器**"），本层再按 TCP 读它。
+#
+# ⭐ 现场对应形态：CEMS 里的**数采仪**就是把多路仪表聚合成一个寄存器块，上位机只读它。
+#    本开关相当于"数采仪接进来一路真仪表" —— **网关/接入层/库表/大屏全都不用改**，
+#    因为它们看到的仍然是一个 9 寄存器的 Modbus TCP 从站。
+#
+# ⚠️⚠️ **语义边界（必须记住）**：真机测的是**环境**温湿度，
+#    而本系统的 `Temp`(地址6) / `Humidity`(地址7) 在环保口径上是**烟气**温度/湿度 ——
+#    **两个不同的物理量**。所以启用本开关的部署，这两列**只能当"数据链路演示"看，
+#    不是环保口径数据**。完整说明见 `docs/runbooks/真机接入.md`。
+#
+# ⚠️ **读不到真机时绝不回落到仿真值** —— 那正是本项目刚从真机上学到的"静默假数据"
+#    （真机读错地址会沉默返回 0，见 `docs/runbooks/真机接入.md` S4 发现 1）。
+#    本层的做法：**启动预检**（读不到就拒绝启动）+ **运行期保留上次好值并记 ERROR**。
+REAL_DEVICE_ENABLE: Final[bool] = os.getenv("REAL_DEVICE_ENABLE", "0").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+REAL_DEVICE_HOST: Final[str] = os.getenv("REAL_DEVICE_HOST", "host.docker.internal")
+REAL_DEVICE_PORT: Final[int] = int(os.getenv("REAL_DEVICE_PORT", "5021"))
+REAL_DEVICE_UNIT: Final[int] = int(os.getenv("REAL_DEVICE_UNIT", "1"))
+#: 只覆盖**这一个**从站的寄存器（默认 = 第一个从站）。多从站时其余从站仍是纯仿真。
+REAL_DEVICE_SLAVE: Final[int] = int(os.getenv("REAL_DEVICE_SLAVE", str(SLAVE_ID)))
+#: 覆盖哪两个测点（地址取自 `src/common/points.py`：Temp=6、Humidity=7）
+REAL_DEVICE_POINTS: Final[tuple[str, ...]] = ("Temp", "Humidity")
+#: 桥的寄存器布局（见 `scripts/serial_bridge.py`）：0=湿度×10、1=温度×10
+REAL_DEVICE_REG_HUMIDITY: Final[int] = 0
+REAL_DEVICE_REG_TEMPERATURE: Final[int] = 1
+REAL_DEVICE_POLL_INTERVAL: Final[float] = float(os.getenv("REAL_DEVICE_POLL_INTERVAL", "2.0"))
+
 
 def device_simulators(
     slave_ids: Sequence[int],
@@ -220,6 +256,126 @@ def build_server_context(
     return ModbusServerContext(slaves=slaves, single=False)
 
 
+# ==================== 3.5 真机接入（可选，默认关闭） ====================
+
+
+class RealDeviceReader:
+    """从"串口服务器"（`scripts/serial_bridge.py` 暴露的 Modbus TCP 从站）读真机温湿度。
+
+    - 后台线程持续轮询；**任何异常都只记不抛**（真机拔线是常态，不能让设备层退出）
+    - `snapshot()` 返回最近一次**成功**读到的 `(湿度×10, 温度×10)`；从未成功过返回 `None`
+    - ⚠️ 读失败时**保留上次好值**，**绝不回落仿真值**（见配置区注释）
+    """
+
+    def __init__(self, host: str, port: int, unit: int, interval: float) -> None:
+        self.host = host
+        self.port = port
+        self.unit = unit
+        self.interval = interval
+        self._lock = threading.Lock()
+        self._values: Optional[tuple[int, int]] = None
+        self._failures = 0
+
+    def _note_success(self, value: tuple[int, int]) -> None:
+        with self._lock:
+            if self._failures:
+                LOGGER.warning("真机恢复读取（此前连续失败 %d 次）", self._failures)
+            self._failures = 0
+            self._values = value
+
+    def _note_failure(self) -> int:
+        with self._lock:
+            self._failures += 1
+            return self._failures
+
+    def read_once(self) -> Optional[tuple[int, int]]:
+        """读一次并**更新内部状态**；成功返回 `(湿度×10, 温度×10)`，失败返回 `None`。
+
+        ⚠️ **成功时必须写入 `self._values`** —— 启动预检也走这个方法。
+        若预检只"读一下"而不落状态，`main()` 通过预检之后、轮询第一次成功之前
+        会有一个窗口，期间 `overlay_real_values` 拿不到值 → 设备层会对外**发布仿真温湿度**，
+        而那正是我们要避免的"**静默假数据**"。所以状态更新与读取放在同一个方法里。
+        """
+        from pymodbus.client import ModbusTcpClient
+
+        client = ModbusTcpClient(self.host, port=self.port, timeout=2)
+        try:
+            if not client.connect():
+                self._note_failure()
+                return None
+            response = client.read_holding_registers(
+                address=REAL_DEVICE_REG_HUMIDITY, count=2, slave=self.unit
+            )
+            if response.isError():
+                self._note_failure()
+                return None
+            value = (
+                int(response.registers[REAL_DEVICE_REG_HUMIDITY]),
+                int(response.registers[REAL_DEVICE_REG_TEMPERATURE]),
+            )
+        except Exception:
+            self._note_failure()
+            return None
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
+        self._note_success(value)
+        return value
+
+    def snapshot(self) -> Optional[tuple[int, int]]:
+        with self._lock:
+            return self._values
+
+    def poll_forever(self) -> None:
+        while True:
+            got = self.read_once()
+            if got is None:
+                with self._lock:
+                    failures = self._failures
+                LOGGER.error(
+                    "读真机失败（连续第 %d 次）：%s:%d 从站%d —— "
+                    "Temp/Humidity 保持**上次好值**，不回落到仿真值",
+                    failures, self.host, self.port, self.unit,
+                )
+            time.sleep(self.interval)
+
+
+#: 真机读取器（仅 `REAL_DEVICE_ENABLE=1` 时创建，其余情况保持 `None`）
+_REAL_READER: Optional[RealDeviceReader] = None
+
+
+def overlay_real_values(values: list[int], slave_id: int) -> list[int]:
+    """把真机的温湿度覆盖进寄存器块（返回新列表，不改入参）。
+
+    ⚠️ 只在 `REAL_DEVICE_ENABLE=1` 且 `slave_id == REAL_DEVICE_SLAVE` 时生效 ——
+    **未设开关时逐位不变**。
+
+    单位对齐：CEMS 寄存器存 `物理值 × point.scale`，而 `Temp`/`Humidity` 的 scale 都是 10；
+    桥给出的也是「×10」的整数，所以**直接赋值即可，不需要再换算**。
+
+    ⚠️ **负温会被拒收（刻意保留）**：环境温度 <0 degC 时桥给的是补码（如 `0xFF9F`=65439），
+    放进无符号寄存器后网关会读到 6543.9 degC，**超出 Temp 量程 300 → 接入层拒收**。
+    宁可拒收，也不要一个"看起来合理的错数"。
+    """
+    if not REAL_DEVICE_ENABLE or slave_id != REAL_DEVICE_SLAVE or _REAL_READER is None:
+        return values
+    snap = _REAL_READER.snapshot()
+    if snap is None:
+        # 启动预检保证这里基本不会发生；真到了就叫出来，**不静默**
+        LOGGER.error("[从站%d] 真机尚无有效读数，Temp/Humidity 仍是仿真值", slave_id)
+        return values
+    humidity_raw, temperature_raw = snap
+    out = list(values)
+    for point in POINTS:
+        if point.name == "Humidity":
+            out[point.address - REG_BASE] = humidity_raw
+        elif point.name == "Temp":
+            out[point.address - REG_BASE] = temperature_raw
+    return out
+
+
 def refresh_once(context: ModbusServerContext, simulators: Mapping[int, CemsSimulator]) -> None:
     """刷新一轮：逐个从站取自己的仿真读数并写进自己的保持寄存器。
 
@@ -227,7 +383,7 @@ def refresh_once(context: ModbusServerContext, simulators: Mapping[int, CemsSimu
     """
     for slave_id, simulator in simulators.items():
         try:
-            values = build_registers(simulator)
+            values = overlay_real_values(build_registers(simulator), slave_id)
             # 写入从站的保持寄存器（功能码 3 对应 hr 区），起始地址 REG_BASE
             context[slave_id].setValues(3, REG_BASE, values)
             if LOGGER.isEnabledFor(logging.DEBUG):
@@ -266,6 +422,38 @@ def main() -> None:
 
     simulators = device_simulators(SLAVE_IDS, BASE_SEED, SLAVE_PHASE_OFFSET)
     context = build_server_context(SLAVE_IDS)
+
+    # ---- 真机接入（可选）：**启动预检** + 后台轮询 ----
+    global _REAL_READER  # noqa: PLW0603 - 模块级单例，供 overlay_real_values 读取
+    if REAL_DEVICE_ENABLE:
+        reader = RealDeviceReader(
+            REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT, REAL_DEVICE_POLL_INTERVAL
+        )
+        first = reader.read_once()
+        if first is None:
+            # ⚠️ 刻意**不回落到仿真值**：那样大屏会显示假数据、且没人看得出来。
+            # 与网关既有的"读不到本从站就拒绝启动"是同一套纪律。
+            LOGGER.critical(
+                "REAL_DEVICE_ENABLE=1 但读不到真机（%s:%d 从站%d）—— **拒绝启动**。\n"
+                "  排查顺序：① 宿主上 `scripts/serial_bridge.py` 是否在跑；"
+                "② REAL_DEVICE_HOST/PORT 是否指对（容器里应是 host.docker.internal）；"
+                "③ 变送器供电与 A/B 接线；④ 桥的 5021 端口是否在监听。\n"
+                "  ⚠️ 刻意不回落仿真值 —— 那会让大屏显示假数据而无人察觉。",
+                REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT,
+            )
+            raise SystemExit(1)
+        _REAL_READER = reader
+        threading.Thread(target=reader.poll_forever, name="real-device-poller", daemon=True).start()
+        temp_display = first[1] - 65536 if first[1] > 32767 else first[1]
+        LOGGER.info(
+            "⭐ 真机接入已启用：%s:%d 从站%d → 覆盖从站%d 的 %s（首次读数 湿度%.1f%%RH / 温度%.1f degC）",
+            REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT, REAL_DEVICE_SLAVE,
+            "/".join(REAL_DEVICE_POINTS), first[0] / SCALE, temp_display / SCALE,
+        )
+        LOGGER.warning(
+            "⚠️ 语义边界：Temp/Humidity 两列装的是**环境**温湿度，"
+            "不是烟气参数；本部署只用于**数据链路演示**，不作环保口径依据。"
+        )
 
     # 后台线程：持续更新仿真数据
     threading.Thread(
