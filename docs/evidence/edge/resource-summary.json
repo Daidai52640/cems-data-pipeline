@@ -1,7 +1,7 @@
 {
-  "input_rows": 2277,
+  "input_rows": 4353,
   "first_ts": "2026-10-11T18:58:44+08:00",
-  "last_ts": "2026-10-12T01:44:15+08:00",
+  "last_ts": "2026-10-12T07:54:45+08:00",
   "runs": [
     "20261011T185844-852b72",
     "20261011T214302-0d4952",
@@ -11,28 +11,28 @@
   "cpu_ceiling_percent": 100.0,
   "containers": {
     "cems-device": {
-      "samples": 759,
+      "samples": 1451,
       "missing_samples": 0,
       "mem_limit_bytes": 134217728.0,
       "mem_limit_human": "128.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 1.355,
+        "avg": 1.309,
         "max": 10.95
       },
       "mem_bytes": {
         "min": 23058186.0,
-        "avg": 26362636.957,
+        "avg": 26600912.879,
         "max": 41607495.0
       },
       "mem_human": {
         "min": "22.0MiB",
-        "avg": "25.1MiB",
+        "avg": "25.4MiB",
         "max": "39.7MiB"
       },
       "pids": {
         "min": 3.0,
-        "avg": 3.029,
+        "avg": 3.035,
         "max": 9.0
       },
       "cpu_ceiling_hits": 0,
@@ -40,53 +40,53 @@
       "mem_max_ratio_of_limit": 0.31
     },
     "cems-gateway": {
-      "samples": 759,
+      "samples": 1451,
       "missing_samples": 0,
       "mem_limit_bytes": 134217728.0,
       "mem_limit_human": "128.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.608,
+        "avg": 0.599,
         "max": 10.18
       },
       "mem_bytes": {
         "min": 0.0,
-        "avg": 26126949.107,
-        "max": 39405486.0
+        "avg": 26169587.534,
+        "max": 39699087.0
       },
       "mem_human": {
         "min": "0.0B",
-        "avg": "24.9MiB",
-        "max": "37.6MiB"
+        "avg": "25.0MiB",
+        "max": "37.9MiB"
       },
       "pids": {
         "min": 0.0,
-        "avg": 1.995,
+        "avg": 1.999,
         "max": 3.0
       },
       "cpu_ceiling_hits": 0,
       "mem_ceiling_hits": 0,
-      "mem_max_ratio_of_limit": 0.2936
+      "mem_max_ratio_of_limit": 0.2958
     },
     "cems-gateway-plant2": {
-      "samples": 759,
+      "samples": 1451,
       "missing_samples": 0,
       "mem_limit_bytes": 134217728.0,
       "mem_limit_human": "128.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.461,
+        "avg": 0.463,
         "max": 10.01
       },
       "mem_bytes": {
         "min": 25302138.0,
-        "avg": 26174791.253,
-        "max": 35735470.0
+        "avg": 26205142.274,
+        "max": 40485519.0
       },
       "mem_human": {
         "min": "24.1MiB",
         "avg": "25.0MiB",
-        "max": "34.1MiB"
+        "max": "38.6MiB"
       },
       "pids": {
         "min": 2.0,
@@ -95,9 +95,9 @@
       },
       "cpu_ceiling_hits": 0,
       "mem_ceiling_hits": 0,
-      "mem_max_ratio_of_limit": 0.2662
+      "mem_max_ratio_of_limit": 0.3016
     }
   },
-  "span_hours": 6.759,
+  "span_hours": 12.934,
   "csv": "docs\\evidence\\edge\\resource-24h.append-live.csv"
 }
