@@ -43,16 +43,23 @@ name: cems
 #    仍然**两种都写**：service 级的 `mem_limit` / `cpus` 是 compose 的原生字段、语义最确定；
 #    `deploy.resources.limits` 让这份编排在 swarm/其它编排器下也带着同样的约束，
 #    不会因为"换了个入口"就悄悄变成无上限。
-# 取值理由：每容器 512 MiB / 1 vCPU —— 量级对应一台 2 核 2 GB 的边缘盒子能给单服务留的额度。
-#   本机实测边缘侧三容器常驻 CPU 峰值 < 8%（均值 < 1%）、内存 22~27 MiB（见同文档的资源采证小节），
-#   512m/1.0 是**有余量**的顶，不是贴着用。
+# 取值理由：每容器 **128 MiB** / 1 vCPU。
+#   ⚠️ **从 512 MiB 收紧到 128 MiB 是刻意的（2026-10-11）**：实测边缘侧三容器常驻内存只有
+#   **22~27 MiB**，512 MiB 上限 = **10 倍余量，约束太松、证明不了什么**。
+#   128 MiB 的依据：
+#     · 实测常驻 22~27 MiB；
+#     · 网关最坏情况 = 运行期 ~25 MiB + 断网缓存上限 64 MiB（`CACHE_MAX_BYTES`）≈ **89 MiB**；
+#     · ⇒ 128 MiB 仍留 ~39 MiB 余量，同时把上限压到"**贴着一个真实小盒子能给单服务的额度**"。
+#   ⭐ 对标真实工业边缘网关（如 GW101：**512 MiB RAM** 还要分给 OS + 协议栈，
+#      能留给单个应用的也就百来 MiB）——**128 MiB 才是"边缘级足迹"的有效证明**。
+#      参考：https://wiki.i2som.com/cn/gw101manualdoccn/gw101manualdoccn-1gfdmp1u9kna2
 x-edge-limits: &edge-limits
-  mem_limit: 512m
+  mem_limit: 128m
   cpus: 1.0
   deploy:
     resources:
       limits:
-        memory: 512m
+        memory: 128m
         cpus: "1.0"
 
 x-app: &app
@@ -587,6 +594,10 @@ services:
       #   "红色=正常抖动"（真机偶发补传滞后实测最大 32.1 s），所以默认 30 s。
       # 演示"停流变红"时把它调到 1~2 秒：容器里只影响上色，不影响 healthcheck。
       FRESHNESS_WARN_SECONDS: ${FRESHNESS_WARN_SECONDS:-30}
+      # ⛔ "连续 N 分钟无入库"的**主动告警**阈值（秒）。⚠️ 与上面的展示阈值**刻意不同、别合并**：
+      #    30 s 那个只让大屏胶囊变红（给人看）；这一个到点就往日志打 **CRITICAL**（把"看得见"变成"叫得出来"）。
+      #    默认 300 s = 5 分钟：短了会被真机补传滞后（实测 32.1 s）和抖动误报。
+      STALE_ALERT_SECONDS: ${STALE_ALERT_SECONDS:-300}
       # 门限（0~1）：低于它判 insufficient，绝不判达标。默认 0.75 =
       # docs/adr/0002-告警判据选型.md §3.4 的 ALARM_COVERAGE_MIN；调到 0.84 以上会误标正常数据
       # （实测天花板 5.0/5.154 = 97.0%，干净 1 分钟窗口覆盖率 P05=91.7% / 最差 83.3%）。

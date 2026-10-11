@@ -155,6 +155,22 @@ HEALTH_STALE_AFTER_SECONDS: Final[float] = POLL_INTERVAL_SECONDS * HEALTH_STALE_
 #    取数走**已有的** /api/health（它内部用**已有的** query_recent 查 TDengine 最新 ts）。
 FRESHNESS_WARN_SECONDS: Final[float] = float(os.getenv("FRESHNESS_WARN_SECONDS", "30"))
 
+# ---- ⛔ "连续 N 分钟无入库"的**主动告警**（2026-10-11 新增）----
+#
+# ⚠️ 与上面 FRESHNESS_WARN_SECONDS 的分工（两个阈值刻意不同，别合并）：
+#   · `FRESHNESS_WARN_SECONDS`（默认 30 s）= **展示**阈值 —— 大屏胶囊变红，给人看；
+#   · `STALE_ALERT_SECONDS`（默认 300 s）= **告警**阈值 —— 连续停流超过它才升到 CRITICAL 日志。
+# ⭐ 为什么需要它：有了 30 s 的红色胶囊，只是"**看得见**"；
+#   而"全绿零数据"最危险的地方是**没人盯着大屏** —— 停流 5 分钟没有任何主动信号。
+#   这个计时器把"看得见"变成"**叫得出来**"：停流超阈值就往 CRITICAL 打一行，
+#   谁在收日志都能被叫醒，不需要有人守着页面。
+# ⚠️ 状态是**进程内**的（web 只有一个实例，够用）；容器重启会把计时清零 ——
+#   这是刻意的取舍：重启本身就是一次新的观测起点。
+STALE_ALERT_SECONDS: Final[float] = float(os.getenv("STALE_ALERT_SECONDS", "300"))
+
+#: 本轮"连续不健康"的起始时刻（健康一次就清空）。
+_stale_since: Optional[datetime] = None
+
 # ---- 报表导出 ----
 XLSX_MIME: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 # 给老浏览器用的 ASCII 兜底名；中文名走 Content-Disposition 的 filename*
@@ -385,6 +401,7 @@ def api_health() -> tuple[Response, int] | Response:
       （仓库内没有解析这些字段的消费者：容器 healthcheck 直接按 HTTP 状态码判成败，
         scripts/measure_nginx_redis.py 只量接口耗时。字段只增不减，不影响既有调用方。）
     """
+    global _stale_since   # ⭐ "连续停流"计时（见 STALE_ALERT_SECONDS 的说明）
     threshold = HEALTH_STALE_AFTER_SECONDS
     try:
         rows = query_recent(1)
@@ -410,14 +427,38 @@ def api_health() -> tuple[Response, int] | Response:
     elif age > threshold:
         reason = "stale_data"
     else:
+        # ⭐ 恢复 ⇒ 清掉停流计时：下一次不健康**从这一刻重新算**
+        _stale_since = None
         payload.update({"ok": True, "healthy": True, "reason": "fresh"})
         return jsonify(payload)
 
-    payload.update({"ok": False, "healthy": False, "reason": reason})
-    LOGGER.warning(
-        "健康检查不通过：reason=%s rows_last_1min=%d data_age_seconds=%s 阈值=%ss",
-        reason, payload["rows_last_1min"], payload["data_age_seconds"], threshold,
-    )
+    # ---- 不健康分支：维护"连续停流"计时，超阈值升到 CRITICAL ----
+    now = datetime.now()
+    if _stale_since is None:
+        _stale_since = now
+    stale_for = (now - _stale_since).total_seconds()
+    payload.update({
+        "ok": False,
+        "healthy": False,
+        "reason": reason,
+        "stale_for_seconds": round(stale_for, 1),
+        "stale_alert_after_seconds": STALE_ALERT_SECONDS,
+    })
+    if stale_for >= STALE_ALERT_SECONDS:
+        # ⛔ **主动告警**：不是"看得见"，是"叫得出来"（治债 15 的正解）
+        LOGGER.critical(
+            "⛔ 连续 %.1f 分钟无有效入库（告警阈值 %.0f s；reason=%s；最近 1 分钟 %d 条）"
+            " —— 这不是抖动，是**停流**。按五层顺序排查："
+            "① 设备层(device) ② 网关上/下行 ③ broker(emqx) ④ 接入层(subscriber) ⑤ 库(tdengine)",
+            stale_for / 60.0, STALE_ALERT_SECONDS, reason, payload["rows_last_1min"],
+        )
+    else:
+        LOGGER.warning(
+            "健康检查不通过：reason=%s rows_last_1min=%d data_age_seconds=%s 阈值=%ss"
+            "（已连续 %.0f s；到 %.0f s 仍未恢复就报 CRITICAL）",
+            reason, payload["rows_last_1min"], payload["data_age_seconds"], threshold,
+            stale_for, STALE_ALERT_SECONDS,
+        )
     return jsonify(payload), 503
 
 
