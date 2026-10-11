@@ -1,102 +1,102 @@
 {
-  "input_rows": 162,
-  "first_ts": "2026-10-11T18:28:01+08:00",
-  "last_ts": "2026-10-11T18:55:56+08:00",
+  "input_rows": 927,
+  "first_ts": "2026-10-11T18:58:44+08:00",
+  "last_ts": "2026-10-11T21:43:34+08:00",
   "runs": [
-    "20261011T182801-3070e4",
-    "20261011T182915-b325ab"
+    "20261011T185844-852b72",
+    "20261011T214302-0d4952"
   ],
   "ceiling_ratio": 0.9,
   "cpu_ceiling_percent": 100.0,
   "containers": {
     "cems-device": {
-      "samples": 54,
+      "samples": 309,
       "missing_samples": 0,
-      "mem_limit_bytes": 536870912.0,
-      "mem_limit_human": "512.0MiB",
+      "mem_limit_bytes": 134217728.0,
+      "mem_limit_human": "128.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.964,
-        "max": 7.08
+        "avg": 1.378,
+        "max": 10.95
       },
       "mem_bytes": {
-        "min": 23582474.0,
-        "avg": 24882902.204,
-        "max": 26350714.0
+        "min": 23058186.0,
+        "avg": 26171065.191,
+        "max": 41009807.0
       },
       "mem_human": {
-        "min": "22.5MiB",
-        "avg": "23.7MiB",
-        "max": "25.1MiB"
+        "min": "22.0MiB",
+        "avg": "25.0MiB",
+        "max": "39.1MiB"
       },
       "pids": {
         "min": 3.0,
-        "avg": 3.0,
+        "avg": 3.026,
+        "max": 5.0
+      },
+      "cpu_ceiling_hits": 0,
+      "mem_ceiling_hits": 0,
+      "mem_max_ratio_of_limit": 0.3055
+    },
+    "cems-gateway": {
+      "samples": 309,
+      "missing_samples": 0,
+      "mem_limit_bytes": 134217728.0,
+      "mem_limit_human": "128.0MiB",
+      "cpu_percent": {
+        "min": 0.0,
+        "avg": 0.496,
+        "max": 8.73
+      },
+      "mem_bytes": {
+        "min": 0.0,
+        "avg": 25969053.107,
+        "max": 39405486.0
+      },
+      "mem_human": {
+        "min": "0.0B",
+        "avg": "24.8MiB",
+        "max": "37.6MiB"
+      },
+      "pids": {
+        "min": 0.0,
+        "avg": 1.981,
         "max": 3.0
       },
       "cpu_ceiling_hits": 0,
       "mem_ceiling_hits": 0,
-      "mem_max_ratio_of_limit": 0.0491
-    },
-    "cems-gateway": {
-      "samples": 54,
-      "missing_samples": 0,
-      "mem_limit_bytes": 536870912.0,
-      "mem_limit_human": "512.0MiB",
-      "cpu_percent": {
-        "min": 0.0,
-        "avg": 0.307,
-        "max": 7.9
-      },
-      "mem_bytes": {
-        "min": 0.0,
-        "avg": 16493517.593,
-        "max": 27808235.0
-      },
-      "mem_human": {
-        "min": "0.0B",
-        "avg": "15.7MiB",
-        "max": "26.5MiB"
-      },
-      "pids": {
-        "min": 0.0,
-        "avg": 1.259,
-        "max": 2.0
-      },
-      "cpu_ceiling_hits": 0,
-      "mem_ceiling_hits": 0,
-      "mem_max_ratio_of_limit": 0.0518
+      "mem_max_ratio_of_limit": 0.2936
     },
     "cems-gateway-plant2": {
-      "samples": 54,
+      "samples": 309,
       "missing_samples": 0,
-      "mem_limit_bytes": 536870912.0,
-      "mem_limit_human": "512.0MiB",
+      "mem_limit_bytes": 134217728.0,
+      "mem_limit_human": "128.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.624,
-        "max": 7.97
+        "avg": 0.443,
+        "max": 10.01
       },
       "mem_bytes": {
-        "min": 25417482.0,
-        "avg": 26260420.315,
-        "max": 27242004.0
+        "min": 25302138.0,
+        "avg": 26162344.006,
+        "max": 35735470.0
       },
       "mem_human": {
-        "min": "24.2MiB",
+        "min": "24.1MiB",
         "avg": "25.0MiB",
-        "max": "26.0MiB"
+        "max": "34.1MiB"
       },
       "pids": {
         "min": 2.0,
-        "avg": 2.0,
-        "max": 2.0
+        "avg": 2.003,
+        "max": 3.0
       },
       "cpu_ceiling_hits": 0,
       "mem_ceiling_hits": 0,
-      "mem_max_ratio_of_limit": 0.0507
+      "mem_max_ratio_of_limit": 0.2662
     }
   },
-  "span_hours": 0.465,
-  "csv": "F:\\Project1\\cems-data-pipeline\\docs\\evidence\\edge\\resource-24h.csv"
+  "span_hours": 2.747,
+  "csv": "docs\\evidence\\edge\\resource-24h.append-live.csv"
 }
