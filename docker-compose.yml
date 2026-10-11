@@ -140,9 +140,32 @@ x-subscriber-env: &subscriber-env
   ALARM_PUSH_STABLE: ${ALARM_PUSH_STABLE:-cems_alarm_push}
   # ---- 逐点质量位（ADR-0009：语法坏整条拒收 / 语义坏逐点处理 + 无效点事件表）----
   # 逐点丢之后主表那一列是 NULL，与"这一分钟没采到"不可区分 → 无效点必须**逐点留痕**。
-  # 表结构：ts + point/kind(invalid|missing)/reason/raw，TAGS(plant, device)；
+  # 表结构：ts + point/kind(invalid|missing|jump|frozen)/reason/raw/stored，TAGS(plant, device)；
   # 它**不加列到主表**、不参与达标判定，只是证据层。env 可覆盖表名。
   POINT_INVALID_STABLE: ${POINT_INVALID_STABLE:-cems_point_invalid}
+  # ---- 数据合理性判据（ADR-0010：跳变 / 冻结；⭐⭐「可疑」≠「无效」）----
+  # 超量程/NaN/inf 是**物理上不可能** → 不写该列（stored=0，ADR-0009 既有，未改）；
+  # 跳变/冻结只是**可疑**（可能是真实的设备启停 / 停机检修恒值）→ ⭐ **照常入库**+留痕（stored=1）。
+  # ⚠️ 丢掉可疑数据 = 掩盖真实事件，所以判据**只留痕、绝不丢数**。
+  # ⚠️ 阈值都用"量程宽度的百分比"表达，**不需要逐点配置**（9 个测点量纲差 4 个数量级）。
+  # ⚠️ 默认**开**：只留痕不丢数，"开着"的代价远小于"把真实数据丢掉"。
+  # ⚠️⚠️ **阈值标定（2026-10-11 实测 · W4）—— ADR §5 的默认值会在真机数据上误报**：
+  #    连续重放 3.2 小时真实数据（cems.plant1_device1，2262 条）：
+  #      (容差 0.005, N=12 ) → 238 条 frozen，任意 10 分钟窗口**最多 18 条**（在线实测 10.4 分钟 39 条）
+  #      (容差 0.005, N=180) →  12 条，10 分钟最多 2 条（在线实测 20.5 分钟 3 条）
+  #      (容差 1e-4 , N=360) →   0 条，10 分钟最多 0 条（在线实测 13.7 分钟 0 条）
+  #    ⚠️ 在 ADR 的容差（0.5% 量程）下 **加大 N 也到不了 0**：真机数据本来就存在跨越十几分钟、
+  #       始终落在 0.5% 带内的慢漂移段（ADR §2 自己观测的"Temp 在 26.0~26.2 稳了 40 分钟"就是它）。
+  #    ⭐ 零误报要**同时**收紧容差（≈寄存器分辨率，1e-4×量程）**并**拉长 N（≥360 ≈ 30 分钟 @5s）——
+  #       语义随之变成"读数 30 分钟没动过"，比 ADR §5 的"1 分钟没动过"保守得多。
+  #    ⚠️ 本文件与代码的默认值**仍是 ADR-0010 §5 的 12 / 0.005**（不擅自改 ADR）。要切标定值（不必改这里）：
+  #         QUALITY_FREEZE_SAMPLES=360 QUALITY_FREEZE_TOLERANCE_RATIO=0.0001 docker compose ... up -d
+  #    ⚠️ W4 的口径注意：N=360（30 分钟）比"10 分钟窗口"长 ⇒ 那个零新增带**构造性**；
+  #       真正的证据是 3.2 小时连续重放 0 条 + 13.7 分钟在线 0 条。
+  QUALITY_CHECK_ENABLE: ${QUALITY_CHECK_ENABLE:-1}
+  QUALITY_JUMP_RATIO: ${QUALITY_JUMP_RATIO:-0.25}                   # 跳变阈值 = 量程宽度 × 该比例
+  QUALITY_FREEZE_SAMPLES: ${QUALITY_FREEZE_SAMPLES:-12}             # 连续 N 个样本落在容差带内 = 冻结
+  QUALITY_FREEZE_TOLERANCE_RATIO: ${QUALITY_FREEZE_TOLERANCE_RATIO:-0.005}   # 容差 = 量程宽度 × 该比例
 
 # ---- 两个接入实例共用的健康检查与启动依赖 ----
 # 订阅端是事件驱动的、没有自己的端口，这里探"能否连上 broker"：

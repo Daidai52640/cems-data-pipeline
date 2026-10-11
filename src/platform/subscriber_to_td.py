@@ -16,6 +16,23 @@
   ⚠️ 计数也跟着拆（§10.3）：`rejected_messages`（语法坏丢的**报文条数**）
     + `invalid_points`（语义坏丢的**测点个数**）—— 一个指标看不出"整条不通"还是"偶尔一个点坏"。
 
+★ 数据合理性判据（2026-10-11 接入，依据 docs/adr/0010-数据合理性判据.md）：
+  ⭐⭐ 核心是**「可疑」≠「无效」**：
+
+    | 判据 | `kind` | `stored` | 处置 |
+    |---|---|---|---|
+    | 超量程 / `NaN` / `inf` | `invalid` | **0** | **不写该列**（ADR-0009 既有，未改） |
+    | 报文没有该点 | `missing` | **0** | 不写（ADR-0009 既有，未改） |
+    | ⭐ **跳变可疑** | `jump` | **1** | ⭐ **照常入库** + 留痕 |
+    | ⭐ **冻结可疑** | `frozen` | **1** | ⭐ **照常入库** + 留痕 |
+
+  ⚠️ **为什么可疑不能丢**：跳变可能是**真实的工况突变**（设备启停），
+    冻结可能是**真实的停机/检修恒值** —— **丢掉等于掩盖真实事件**。
+  ⚠️ 判据用"**量程宽度的百分比**"表达（免逐点配置），且冻结是「**容差 + 持续**」
+    而非「值相等」：CEMS 稳态本来就极稳，用相等会**大量误报**，而误报比漏报更糟。
+  ⚠️ 事件表**新增 `stored` 列**：老库升级靠 `ALTER STABLE ... ADD COLUMN`
+    （`CREATE STABLE IF NOT EXISTS` **不会**给已存在的表加列，见 `ensure_stored_column`）。
+
 ★ 排放超标告警（2026-10-02 接入，依据 docs/adr/0002-告警判据选型.md 方案乙）：
   入库成功 → 算折算值（全链路唯一一处）→ **接入层逐条判折算值超限** → 落告警事件表/推送记录。
   判定不改拒收逻辑、不改契约、不加服务、不加依赖；
@@ -244,6 +261,10 @@ STATS: Final[dict[str, int]] = {
     "rejected_messages": 0,
     # 语义坏丢掉的**测点个数**（超量程/NaN/inf → invalid；报文没给 → missing）
     "invalid_points": 0,
+    # ★ ADR-0010：被标为**可疑**的测点个数（跳变/冻结，`stored=1`）——
+    #   ⚠️ 它与 `invalid_points` **不是一回事**：可疑点**照样入库**，
+    #   这个计数涨起来说明"数据在动/在停"，不代表丢了数（漏看它会把真实工况当噪声）。
+    "suspect_points": 0,
     "accepted": 0,
     "spooled": 0,        # 写库失败 → 已落本地队列（有持久副本，等补传）
     "spool_lost": 0,     # 写库失败且落盘也失败 → 真丢（伴随 CRITICAL 日志）
@@ -285,6 +306,35 @@ ALARM_STATS_LOG_SAMPLES: Final[int] = int(os.getenv("ALARM_STATS_LOG_SAMPLES", "
 ALARM_SETTLE_DELAY_SECONDS: Final[float] = float(
     os.getenv("ALARM_SETTLE_DELAY_SECONDS", "60")
 )
+
+# ---- 数据合理性判据（跳变 / 冻结）：ADR-0010 ----
+# ★★ 核心：**「可疑」≠「无效」** ——
+#     超量程/NaN/inf（invalid）**物理上不可能** → 不写该列（丢）；
+#     跳变/冻结（jump/frozen）**可疑但可能是真实工况**（设备启停、停机检修恒值）→
+#     ⭐ **照常入库** + 留痕（`stored=1`）。**丢掉等于掩盖真实事件。**
+# ⚠️ 判据都用"**量程宽度的百分比**"表达 → **不需要逐点配置**
+#    （9 个测点量纲差 4 个数量级：`Flow ≈ 34000` vs `O2 ≈ 6.8`）。
+# ⚠️ 冻结**不能**用"值完全相等"：CEMS 稳态本来就极稳（实测 `Temp` 在 `26.0~26.2`
+#    稳了 40 分钟），用相等会**大量误报** —— 而误报比漏报更糟（运维会直接关掉它）。
+#    所以判据是「**容差 + 持续**」，不是「相等」（ADR-0010 §2）。
+# ⚠️ 默认**开**：判据只留痕不丢数，"开着"的代价远小于"把真实数据丢掉"；
+#    标定手段就是 ADR-0010 §8 的 **W4**。
+# ⚠️⚠️ **实测（2026-10-11 · W4）：ADR-0010 §5 的默认阈值会在真机数据上误报** ——
+#    连续重放 3.2 小时真实数据（2262 条）：
+#      (容差 0.005, N=12 ) → 238 条 frozen，任意 10 分钟窗口最多 18 条（在线实测 10.4 分钟 39 条）
+#      (容差 0.005, N=180) →  12 条，10 分钟最多 2 条（在线实测 20.5 分钟 3 条）
+#      (容差 1e-4 , N=360) →   0 条，10 分钟最多 0 条（在线实测 13.7 分钟 0 条）
+#    ⚠️ 在 ADR 的容差（0.5% 量程）下**加大 N 也到不了 0**：真机数据里本来就有跨越十几分钟、
+#       始终落在带内的慢漂移段（ADR §2 自己观测的"Temp 26.0~26.2 稳了 40 分钟"就是它）。
+#    ⭐ 零误报要**同时**收紧容差（≈寄存器分辨率）并拉长 N（≥360 ≈ 30 分钟 @5s）。
+#    ⚠️ 本文件的默认值**仍是 ADR 的 12 / 0.005**（未擅自改 ADR），标定值用 env 覆盖
+#      （compose 注释里有完整数据与一行命令）。
+# ⚠️ 附带实测：即使把容差设成 **0（"值完全相等"）也躲不掉误报**（Dust 量化后连续 12 个样本
+#    读数完全相同，3.2 小时里 16 次）—— 这反过来印证了 ADR §2"不能用相等"的判断。
+# ⚠️ env 的**解析**在下面的 `QualityConfig.from_env()`（照 AlarmConfig 的既有写法）：
+#    QUALITY_CHECK_ENABLE / QUALITY_JUMP_RATIO / QUALITY_FREEZE_SAMPLES /
+#    QUALITY_FREEZE_TOLERANCE_RATIO —— 加在 compose 的 `x-subscriber-env` 锚点，
+#    两个 subscriber 实例都拿到（照 ADR-0009 的教训：漏一个实例就有一半数据不判）。
 
 # ---- 日志 ----
 # 级别/格式/时间格式统一在 src/common/logging.py（唯一真源）；
@@ -358,6 +408,8 @@ def validate_config() -> None:
             raise ValueError(f"{label} {SQL_NAME_RULE}: {value!r}")
     # 告警侧：判据参数自检 + 表名同样要能安全拼进 SQL
     ALARM_CONFIG.validate()
+    # 合理性判据（ADR-0010）：阈值自检（写错的阈值比不开更糟 —— 会静默误报或静默失能）
+    QUALITY_CONFIG.validate()
     for label, value in (
         ("ALARM_EVENT_STABLE", ALARM_TABLES.event_stable),
         ("ALARM_VERDICT_STABLE", ALARM_TABLES.verdict_stable),
@@ -478,6 +530,181 @@ def supports_reference(values: Mapping[str, float]) -> bool:
     "折算用的 O2 必须与浓度同帧"是 ADR-0002 §3.1 的既有口径，本次不动判据。
     """
     return all(name in values for name in REFERENCE_FRAME_POINTS)
+
+
+# ==================== 3b. 数据合理性判据（跳变 / 冻结，ADR-0010） ====================
+#
+# ⭐⭐ 本节的**唯一**要点：**「可疑」≠「无效」**。
+#     这里产出的 `PointInvalid` 是**可疑**（`kind=jump/frozen`，`stored=1`）——
+#     ⚠️ 它的值**照常入库**，只是**额外留一笔痕**。判据本身**绝不**把值从报文里拿掉。
+#
+# 判据定义（都用"量程宽度的百分比"，免逐点配置）：
+#   - 跳变：`|当前值 − 该点上一次值| > 量程宽度 × jump_ratio`
+#   - 冻结：连续 N 个样本都落在 `[v0 − 容差, v0 + 容差]`，`v0` = 该游程的第一个值，
+#           容差 = `量程宽度 × freeze_tolerance_ratio`
+#
+# ⚠️ **判据只吃"已过量程检查"的点**（`parse_payload` 的 `values`）：
+#    超量程/NaN 的原始值不是可信测量值，拿它推进"上一次值/游程"会让状态被垃圾带偏。
+# ⚠️ **冷启动窗口**（ADR-0010 §9）：进程重启后第一个样本没有"上一次值"、
+#    也凑不满 N 个样本 → 前 N-1 个样本**判不出冻结**。这是进程内状态的固有代价，登记为已知边界。
+
+@dataclass(frozen=True)
+class QualityConfig:
+    """数据合理性判据参数（全部来自 `QUALITY_*` 环境变量；默认值即 ADR-0010 §5 那一组）。
+
+    ⚠️ **默认值是"拍的"，没有标定** —— 标定手段就是 ADR-0010 §8 的 **W4**（真机稳态跑 ≥10 分钟零新增）。
+    ⚠️⚠️ **W4 已实测（2026-10-11）：这组默认值在真机数据上误报** —— 在线 10.4 分钟 39 条 frozen；
+    3.2 小时连续重放：`(0.005, 12)` 238 条 / `(0.005, 180)` 12 条 / `(1e-4, 360)` 0 条。
+    ⚠️ 这里**仍按 ADR 保留默认值**，标定值请在部署层覆盖（见 compose 里同名的注释与一行命令）。
+    """
+
+    enable: bool = True                          # QUALITY_CHECK_ENABLE（默认开，见 ADR-0010 §7）
+    jump_ratio: float = 0.25                     # QUALITY_JUMP_RATIO（量程宽度的 25%）
+    freeze_samples: int = 12                     # QUALITY_FREEZE_SAMPLES（≈ 1 分钟 @5s；⚠️ W4 标定值 180）
+    freeze_tolerance_ratio: float = 0.005        # QUALITY_FREEZE_TOLERANCE_RATIO（量程的 0.5%）
+    #: 用哪个门限算"跳变/容差"：默认取**契约** `points.RANGES`（唯一真源，不重复抄量程）
+    ranges: Mapping[str, tuple[float, float]] = None      # type: ignore[assignment]
+
+    def resolve_ranges(self) -> Mapping[str, tuple[float, float]]:
+        """取判据用的量程表（默认就是契约 `points.RANGES`，允许测试注入自定义量程）。"""
+        return POINT_RANGES if self.ranges is None else self.ranges
+
+    def validate(self) -> None:
+        """参数自检；不合法抛 ValueError（由接入层在启动阶段拦下，别带病运行）。"""
+        if self.jump_ratio <= 0:
+            raise ValueError(f"QUALITY_JUMP_RATIO 必须 > 0: {self.jump_ratio}")
+        if self.freeze_tolerance_ratio < 0:
+            raise ValueError(
+                f"QUALITY_FREEZE_TOLERANCE_RATIO 不能为负: {self.freeze_tolerance_ratio}"
+            )
+        # ⚠️ 冻结至少要 2 个样本才有意义（1 个样本"不变"是恒真的，会把每条报文都标成冻结）
+        if self.freeze_samples < 2:
+            raise ValueError(f"QUALITY_FREEZE_SAMPLES 必须 >= 2: {self.freeze_samples}")
+
+    @classmethod
+    def from_env(cls) -> "QualityConfig":
+        """从 `QUALITY_*` 环境变量构造（未设置时取 ADR-0010 §5 的默认值）。"""
+
+        def flag(key: str, default: str) -> bool:
+            return os.getenv(key, default).strip().lower() not in ("0", "false", "no", "off", "")
+
+        return cls(
+            enable=flag("QUALITY_CHECK_ENABLE", "1"),
+            jump_ratio=float(os.getenv("QUALITY_JUMP_RATIO", "0.25")),
+            freeze_samples=int(os.getenv("QUALITY_FREEZE_SAMPLES", "12")),
+            freeze_tolerance_ratio=float(
+                os.getenv("QUALITY_FREEZE_TOLERANCE_RATIO", "0.005")
+            ),
+        )
+
+
+def _fmt_number(value: float) -> str:
+    """把数值写进 `reason` 时用的紧凑格式（`%g`：34000.0 → `34000`，26.18 → `26.18`）。"""
+    return f"{value:g}"
+
+
+class QualityChecker:
+    """跳变 / 冻结判据：**每设备实例一份的进程内状态**（ADR-0010 §9 的冷启动窗口见类注释）。
+
+    ⚠️ 它**只产出"可疑"证据**，**从不**删改 `values` —— 「可疑照常入库」这条纪律
+    由调用方（`on_message`）保证：把本函数的返回值**加**进事件表，值本身仍写主表。
+    """
+
+    def __init__(self, config: QualityConfig) -> None:
+        self._config = config
+        #: 该点**上一次**通过量程检查的值（跳变判据的基准）
+        self._last: dict[str, float] = {}
+        #: 该点当前冻结游程的基准值 v0（不随游程漂移，严格照 ADR-0010 §2 的定义）
+        self._run_base: dict[str, float] = {}
+        #: 该点当前游程里已累计的样本数（含基准样本自身）
+        self._run_len: dict[str, int] = {}
+        #: 该点当前游程**是否已经报过**冻结（一个游程只报一次，别每来一个样本报一次）
+        self._run_reported: set[str] = set()
+
+    @property
+    def config(self) -> QualityConfig:
+        return self._config
+
+    def check(self, values: Mapping[str, float]) -> list[PointInvalid]:
+        """对一条报文的**有效测点**跑两类判据，返回可疑证据（**可能为空**）。
+
+        - 只读 `values`（已过量程/有限性检查的点）；返回的项**不属于** `values` 的删改，
+          调用方必须继续把 `values` 照常入库；
+        - 按 **契约 `NAMES` 顺序**遍历（不用 `values` 的键序）→ 同一条报文的事件顺序**确定**；
+        - `enable=False`（W5）→ 直接返回空表，且**不推进任何状态**。
+        """
+        if not self._config.enable:
+            return []
+        ranges = self._config.resolve_ranges()
+        suspects: list[PointInvalid] = []
+        for name in NAMES:
+            if name not in values:
+                continue
+            value = values[name]
+            low, high = ranges[name]
+            width = high - low
+            jump = self._check_jump(name, value, width)
+            if jump is not None:
+                suspects.append(jump)
+            frozen = self._check_frozen(name, value, width)
+            if frozen is not None:
+                suspects.append(frozen)
+            self._last[name] = value
+        return suspects
+
+    def _check_jump(self, name: str, value: float, width: float) -> Optional[PointInvalid]:
+        """跳变判据：与**该点上一次值**比；首次见到该点（冷启动）不判。"""
+        previous = self._last.get(name)
+        if previous is None:
+            return None
+        threshold = width * self._config.jump_ratio
+        delta = abs(value - previous)
+        if delta <= threshold:
+            return None
+        return PointInvalid(
+            name, PointInvalidKind.JUMP,
+            f"测点 {name} 跳变可疑（值已入库）: 上次 {_fmt_number(previous)} → "
+            f"本次 {_fmt_number(value)}，|Δ|={_fmt_number(delta)} > "
+            f"量程宽度 {_fmt_number(width)}×{_fmt_number(self._config.jump_ratio)}"
+            f"={_fmt_number(threshold)}",
+            value,
+        )
+
+    def _check_frozen(self, name: str, value: float, width: float) -> Optional[PointInvalid]:
+        """冻结判据：连续 N 个样本落在 `[v0 ± 容差]` 内；**一个游程只报一次**。
+
+        ⚠️ 容差不是 0（"值完全相等"会大量误报）：CEMS 稳态本来就极稳，见 ADR-0010 §2。
+        """
+        tolerance = width * self._config.freeze_tolerance_ratio
+        base = self._run_base.get(name)
+        if base is not None and abs(value - base) <= tolerance:
+            self._run_len[name] = self._run_len.get(name, 1) + 1
+        else:
+            # 换了游程（冷启动 / 超出容差）：重新起算，并复位"已报过"标记
+            self._run_base[name] = value
+            self._run_len[name] = 1
+            self._run_reported.discard(name)
+        if self._run_len[name] < self._config.freeze_samples:
+            return None
+        if name in self._run_reported:
+            return None
+        self._run_reported.add(name)
+        return PointInvalid(
+            name, PointInvalidKind.FROZEN,
+            f"测点 {name} 冻结可疑（值已入库）: 连续 {self._run_len[name]} 个样本落在 "
+            f"[{_fmt_number(base if base is not None else value)}±{_fmt_number(tolerance)}] 内",
+            value,
+        )
+
+
+#: 本实例的合理性判据配置（env 解析失败 → 拒绝启动，照 ALARM_* 的既有纪律）
+try:
+    QUALITY_CONFIG: Final[QualityConfig] = QualityConfig.from_env()
+except (ValueError, TypeError) as exc:
+    raise SystemExit(f"QUALITY_* 配置无法解析，拒绝启动: {exc}") from exc
+
+#: 本实例的判据状态（**进程内**、每设备一份；⚠️ 模块级是为了让 MQTT 回调线程拿到同一份状态）
+QUALITY_CHECKER = QualityChecker(QUALITY_CONFIG)
 
 
 # ==================== 4. TDengine 写入器 ====================
@@ -726,18 +953,28 @@ class AlarmWriter:
             TdWriter._safe_close(conn)
 
 
-# ==================== 4d. 无效点事件表（ADR-0009 §4.1） ====================
+# ==================== 4d. 无效点 / 可疑点事件表（ADR-0009 §4.1 + ADR-0010 §4） ====================
 #
 # ★ 这张表是**证据层**，不是数据层：
 #     - 不进主表、不给主表加列（主表列布局保持不动，既有报表/导出不受影响）
 #     - 不参与达标判定（覆盖率怎么算、小时门限怎么定，本次都不动）
-#     - 只回答一个问题：**哪一分钟、哪个点、为什么没进主表**
+#     - 只回答一个问题：**哪一分钟、哪个点、为什么**
+#
+# ★ ADR-0010 之后它同时装两类证据（**同一张表、同一套 kind**，靠 `stored` 列分开）：
+#     - `stored=0`：**丢了什么**（`invalid` 超量程/NaN/inf、`missing` 报文没给）
+#     - `stored=1`：**标了什么但留着**（`jump` 跳变可疑、`frozen` 冻结可疑，值已入库）
 #
 # ⚠️ 为什么 `point` 不写成 TAG（照 §4.1 的字面：TAGS 只有 plant/device），
 #    却把点名列进**子表名**（`plant_device_invalid_<point>`）：
 #    TDengine 的幂等/覆盖语义是 **(子表, ts)** —— 若所有点共用一张子表，
 #    同一条报文里 2 个点同时无效时会**互相覆盖**，只剩一条证据（静默丢证据）。
 #    按点分子表既保住了"同一报文重投不重复"（V5），也不丢多点的行。
+#    ⚠️ ADR-0010 的跳变/冻结同样受益：一条报文里多点同时跳变也各留一条证据。
+
+#: ADR-0010 新增列：该 kind 的值**有没有进主表**（0=丢了 / 1=标了可疑但留着）
+STORED_COLUMN: Final[str] = "stored"
+
+
 @dataclass(frozen=True)
 class PointInvalidTables:
     """无效点事件表在 TDengine 里的位置与命名，以及 DDL/DML 文本（纯字符串）。"""
@@ -752,35 +989,86 @@ class PointInvalidTables:
         return f"{self.plant}_{self.device}_invalid_{point}".lower()
 
     def create_sql(self) -> str:
-        """建超级表（`IF NOT EXISTS`，可重复执行；照 AlarmTables 的写法）。"""
+        """建超级表（`IF NOT EXISTS`，可重复执行；照 AlarmTables 的写法）。
+
+        ⚠️ **`CREATE STABLE IF NOT EXISTS` 不会给已存在的表加列** —— 所以
+        `stored`（ADR-0010 新增）**不能只靠这一条**：老库升级必须显式 `ALTER`
+        （见 `alter_stored_column_sql()` 与 `PointInvalidWriter.connect()`）。
+        """
         return (
             f"CREATE STABLE IF NOT EXISTS {self.db}.{self.stable} "
             f"(ts TIMESTAMP, point NCHAR(16), kind NCHAR(10), "
-            f"reason NCHAR(200), raw FLOAT) "
+            f"reason NCHAR(200), raw FLOAT, stored TINYINT) "
             f"TAGS (plant NCHAR(20), device NCHAR(20))"
         )
 
+    def alter_stored_column_sql(self) -> str:
+        """老库平滑升级：给**已存在**的事件超级表补 `stored TINYINT`（ADR-0010 §6①）。
+
+        ✅ 已实测 `ALTER STABLE xxx ADD COLUMN stored TINYINT;` 在 TDengine 3.3.6.13 上可用，
+        且**旧行读回 stored = NULL**（向后兼容）——
+        所以"老行没有 stored"不等于数据坏了，查"标了什么但留着"时用
+        `WHERE stored = 1`（`NULL` 不满足该条件，老行自然不被算进去）。
+        ⚠️ 列已存在时这条会报错 —— 调用方按 `DESCRIBE` 判断后再执行（幂等，见 `ensure_stored_column`）。
+        """
+        return f"ALTER STABLE {self.db}.{self.stable} ADD COLUMN stored TINYINT"
+
     def insert_sql(self, ts: str, item: PointInvalid) -> str:
-        """一条无效点证据行。
+        """一条证据行。
 
         - `kind`：`invalid`（有值但不可信）/ `missing`（报文里根本没这个点）
+          / ⭐ `jump` / `frozen`（**可疑，值已入库**）—— 短名，受 `NCHAR(10)` 限制（ADR-0010 §6②）
+        - ⭐ `stored`：该 kind 的值**有没有进主表**（`0`=丢了 / `1`=留着但标了可疑）。
+          这是"「丢了什么」与「标了什么但留着」各是一句 SQL"的落点（ADR-0010 §4）。
         - `raw`：原始值（**保留证据**）；`missing` 与非有限值（NaN/inf）写 `NULL`
           —— `sql_float()` 与非有限值必须写 NULL 的口径同源（NaN 进 SQL 会让 TDengine
           报 syntax error，原始文本已经写在 `reason` 里，证据不丢）
         """
-        columns = "ts, point, kind, reason, raw"
+        columns = "ts, point, kind, reason, raw, stored"
         values = ", ".join((
             sql_timestamp(ts),
             sql_text(item.point),
             sql_text(PointInvalidKind(item.kind).value),
             sql_text(str(item.reason)[:200]),
             sql_float(item.raw),
+            str(PointInvalidKind(item.kind).stored),
         ))
         return (
             f"INSERT INTO {self.db}.{self.child(item.point)} USING {self.db}.{self.stable} "
             f"TAGS ({sql_text(self.plant)}, {sql_text(self.device)}) "
             f"({columns}) VALUES ({values})"
         )
+
+
+def ensure_stored_column(cur: Any, tables: PointInvalidTables) -> bool:
+    """确保事件超级表有 `stored` 列（幂等，可重复执行）；返回"本次是否真的 ALTER 了"。
+
+    ⚠️ **为什么必须显式做这一步**：`CREATE STABLE IF NOT EXISTS` **不会**给已存在的表加列 ——
+    只改建表语句，老库（ADR-0009 建的、没有 `stored`）会一直缺列，
+    于是**新写入的行也没有 `stored`**，`WHERE stored = 1` 永远查不到东西（静默失能）。
+
+    ⚠️ **ALTER 必须容忍"列已存在"**（不能因此崩，也不能因此拒绝启动）：
+    先 `DESCRIBE` 判断（正常路径），ALTER 报错时**再 `DESCRIBE` 复核一次** ——
+    只有"复核后确实还是没有这一列"才算真失败。这样并发/重复 ALTER 也安全。
+    """
+    def columns() -> set[str]:
+        cur.execute(f"DESCRIBE {tables.db}.{tables.stable}")
+        return {str(row[0]).lower() for row in cur.fetchall()}
+
+    if STORED_COLUMN in columns():
+        return False
+    try:
+        cur.execute(tables.alter_stored_column_sql())
+    except Exception as exc:
+        # 列已存在 / 并发 ALTER 都会走到这里：以 DESCRIBE 为准复核，别凭异常文本猜
+        if STORED_COLUMN not in columns():
+            raise
+        LOGGER.info("事件表 %s.%s 的 %s 列已存在（ALTER 被拒后复核通过，忽略）: %s",
+                    tables.db, tables.stable, STORED_COLUMN, exc)
+        return False
+    LOGGER.info("事件表新增列（老库平滑升级）: %s.%s %s TINYINT",
+                tables.db, tables.stable, STORED_COLUMN)
+    return True
 
 
 #: 本实例的无效点事件表（表名由 POINT_INVALID_STABLE 覆盖，默认 cems_point_invalid）
@@ -811,12 +1099,19 @@ class PointInvalidWriter:
         return self._cur is not None
 
     def connect(self) -> bool:
-        """连接并保证无效点事件超级表存在；成功返回 True（失败只记 error 不抛）。"""
+        """连接并保证无效点事件超级表存在（含 ADR-0010 的 `stored` 列）；成功返回 True。
+
+        ⚠️ **建表两条都要做**（ADR-0010 §6①）：`CREATE STABLE IF NOT EXISTS`（新建时带列）
+        + `ensure_stored_column()`（已存在时 `ALTER` 补列）——
+        只做前者的话，**老库永远缺 `stored`**，新写入的行也带上 `NULL`（静默失能）。
+        失败只记 error 不抛。
+        """
         conn: Optional[Any] = None
         try:
             conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
             cur = conn.cursor()
             cur.execute(self._tables.create_sql())
+            ensure_stored_column(cur, self._tables)
         except Exception as exc:
             LOGGER.error("无效点事件表连接或建表失败: %s", exc)
             self.close()
@@ -866,7 +1161,12 @@ def record_invalid_points(
     ts: str,
     invalid: Mapping[str, PointInvalid],
 ) -> int:
-    """逐点留痕：把本条报文的无效测点写进事件表，返回成功条数。
+    """逐点留痕：把本条报文的证据行写进事件表，返回成功条数。
+
+    ⚠️ 名字里的 "invalid" 是 **ADR-0009 的历史包袱**：ADR-0010 之后这里同时装
+    **可疑**（`kind=jump/frozen`，`stored=1`，**值已入库**）与**无效**
+    （`kind=invalid/missing`，`stored=0`，值没入库）—— 两者的落点完全一样，
+    靠事件表的 `stored` 列区分。**调用方不要在这里做区分**。
 
     ⚠️ **绝不抛异常、也绝不阻断入库**：证据写失败只记 CRITICAL ——
       反过来把 8 个本来正确的点丢掉，是这个改造最不该发生的事
@@ -879,15 +1179,17 @@ def record_invalid_points(
         return 0
     for item in items:
         LOGGER.warning(
-            "[无效点] %s %s kind=%s raw=%s: %s",
+            "[事件表] %s %s kind=%s stored=%d raw=%s: %s",
             ts, item.point, PointInvalidKind(item.kind).value,
+            PointInvalidKind(item.kind).stored,
             "NULL" if item.raw is None else repr(item.raw), item.reason,
         )
     written = writer.write(ts, items)
     if written != len(items):
         LOGGER.critical(
-            "[无效点] 事件表写入不完整: %d/%d 条 —— 主表对应列会是 NULL 且没有留痕"
-            "（分不清「没采到」还是「被判无效」），请查事件表连接: ts=%s points=%s",
+            "[事件表] 证据写入不完整: %d/%d 条 —— 对应的留痕会缺"
+            "（无效点会分不清「没采到」还是「被判无效」；可疑点会看不出标过），"
+            "请查事件表连接: ts=%s points=%s",
             written, len(items), ts, [item.point for item in items],
         )
     return written
@@ -1207,6 +1509,24 @@ def latest_reference_timestamp() -> str:
 
 # ==================== 6. MQTT 回调 ====================
 
+def _run_quality_check(userdata: Any, values: Mapping[str, float]) -> list[PointInvalid]:
+    """跑一次合理性判据（跳变/冻结），返回可疑证据；**绝不抛异常、绝不改 `values`**。
+
+    - 判据实例优先取 `userdata["quality_checker"]`（每个订阅实例一份状态）；
+      单测/未接线时退回模块级的 `QUALITY_CHECKER` —— "忘了接线"只会**少判可疑**，
+      **绝不会**把数据判丢（这是本 ADR 里唯一允许的失败方向）。
+    - 判据异常只记日志：它**只是加一笔痕**，绝不能拖垮入库与订阅。
+    """
+    checker = userdata.get("quality_checker") if isinstance(userdata, dict) else None
+    if checker is None:
+        checker = QUALITY_CHECKER
+    try:
+        return checker.check(values)
+    except Exception:
+        LOGGER.exception("[可疑点] 合理性判据异常（入库与订阅不受影响）")
+        return []
+
+
 def on_connect(
     client: mqtt.Client,
     userdata: Any,
@@ -1261,11 +1581,17 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
 
     ★ 逐点化（ADR-0009）后的四条路径：
       1. **语法坏** → `PayloadFormatError` → `STATS["rejected_messages"] += 1`，整条拒收（不写库）；
-      2. **语义坏** → 该点进事件表（`kind=invalid/missing`）+ `STATS["invalid_points"] += n`，
+      2. **语义坏** → 该点进事件表（`kind=invalid/missing`，`stored=0`）+ `STATS["invalid_points"] += n`，
          其余点**照常入库**（主表该列是 NULL，证据在事件表里）；
       3. 全部测点都语义坏 → 没有可写的列：只留痕、不写主表、**也不落盘**
          （落盘会永远补不进去，只会把队列堵死）；
       4. 入库失败（TDengine 不可用）→ 与以前一样落本地队列，等补传。
+
+    ★★ 数据合理性判据（ADR-0010）插在 2 与 3 之间，**只加证据、不动数据**：
+      5. **可疑**（`kind=jump/frozen`，`stored=1`）→ ⭐ **该点照常入库** + 留一笔痕。
+         ⚠️ 这里**绝不能**像 `invalid` 那样把值从 `values` 里拿掉 ——
+         跳变可能是真实的工况突变（设备启停），冻结可能是真实的停机恒值，
+         **丢掉等于掩盖真实事件**（ADR-0010 §3）。
     """
     payload = msg.payload.decode("utf-8", errors="replace")
     STATS["received"] += 1
@@ -1281,14 +1607,30 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
         )
         return
 
-    if invalid:
+    # ★★ ADR-0010：数据合理性判据（跳变 / 冻结）——
+    #    ⚠️ 它**只产出"可疑"证据**，`values` 一个点都不删（可疑照常入库）；
+    #    只对**过了量程检查的点**判（超量程的原始值不是可信测量值）。
+    #    判据状态在 userdata 里（每实例一份）；单测没接线时退回模块级的 QUALITY_CHECKER，
+    #    这样"忘了接线"只会少判可疑，绝不会把数据判丢。
+    suspects = _run_quality_check(userdata, values)
+    if suspects:
+        STATS["suspect_points"] += len(suspects)
+
+    # 无效（stored=0）与可疑（stored=1）**共用同一张事件表与同一次写入**：
+    # 区别只在 `kind`（⇒ `stored` 列）。逐点一次性写，避免"两条路径各写一次"造成计数与顺序分叉。
+    # ⚠️ 键不会冲突：`parse_payload` 把每个点**要么**放进 values **要么**放进 invalid，
+    #    而可疑点只可能来自 values；万一真撞上，保留先到的那条（`setdefault`），不静默吞掉证据。
+    evidence: dict[str, PointInvalid] = dict(invalid)
+    for item in suspects:
+        evidence.setdefault(item.point, item)
+    if evidence:
         # ⚠️ 顺序：**先把证据写下来，再写主表** —— 免得"主表已经有 NULL 列"而事件表还没落。
         STATS["invalid_points"] += len(invalid)
         try:
-            record_invalid_points(userdata["point_invalid_writer"], ts, invalid)
+            record_invalid_points(userdata["point_invalid_writer"], ts, evidence)
         # 证据层失败绝不打断数据主链路（record_invalid_points 内部已记 CRITICAL）
         except Exception:
-            LOGGER.exception("[无效点] 留痕异常（入库与订阅不受影响）")
+            LOGGER.exception("[事件表] 留痕异常（入库与订阅不受影响）")
 
     if not values:
         # 9 个点全判坏/全缺：没有可写的列（ADR-0009 §3 的"没有可写的列"）。
@@ -1386,6 +1728,10 @@ def drain_spool_once(
       - ★ **补传也要补留痕**（ADR-0009 §4.1）：报文入队时若含无效点，那条证据同样得落库，
         否则"补传成功"的数据会出现 NULL 列而没有证据行。留痕写失败**也算本条没补成功**
         （放回队首，下一个节拍重试），避免留下"NULL 无证据"的行。
+      - ⚠️ **补传不重跑合理性判据（ADR-0010）**：判据吃的是"**相邻样本**"，
+        而补传是**迟到的旧样本**（还可能与实时流交错），重跑会让进程内状态被带偏；
+        而且可疑证据在**收报文那一刻**（`on_message` 写主表之前）就已经落库了，
+        同一条报文重投也只是 `(子表, ts)` 覆盖 —— 不会漏，也不需要重判。
       - `point_invalid_writer=None`（单测里只关心主表路径时）跳过留痕。
     """
     if not spool.has_backlog():
@@ -1472,6 +1818,21 @@ def main() -> None:
         "本实例负责: 主题 %s → 最终子表名 = %s（plant=%s, device=%s）",
         TOPIC, CHILD_TABLE, TD_PLANT, TD_DEVICE,
     )
+    # 0c. 合理性判据（ADR-0010）：把**生效的那一组阈值**打进启动日志 ——
+    #     "判据到底开没开、阈值是多少"必须一眼可查，否则事后没法解释事件表里的行。
+    if QUALITY_CONFIG.enable:
+        LOGGER.info(
+            "数据合理性判据已启用（ADR-0010）: 跳变阈值 = 量程宽度×%.4g；"
+            "冻结 = 连续 %d 个样本落在 量程宽度×%.4g 的容差带内；"
+            "⚠️ 两者都**只留痕不丢数**（可疑点照常入库，事件表 stored=1）",
+            QUALITY_CONFIG.jump_ratio, QUALITY_CONFIG.freeze_samples,
+            QUALITY_CONFIG.freeze_tolerance_ratio,
+        )
+    else:
+        LOGGER.warning(
+            "QUALITY_CHECK_ENABLE=0：本次**不判**跳变/冻结（行为与不实现 ADR-0010 一致，"
+            "事件表不会再出现 kind=jump/frozen）"
+        )
 
     # 1. 初始化 TDengine（失败不退出：收到数据时会自动重连重试）
     writer = TdWriter()
@@ -1559,6 +1920,8 @@ def main() -> None:
         "writer": writer, "judge": judge, "alarm_writer": alarm_writer, "spool": SPOOL,
         # ★ 逐点化（ADR-0009）：无效测点的证据写入器，按 (子表, ts) 幂等
         "point_invalid_writer": point_invalid_writer,
+        # ★ 合理性判据（ADR-0010）：跳变/冻结的**进程内状态**（每实例一份）
+        "quality_checker": QUALITY_CHECKER,
     })
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect

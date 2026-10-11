@@ -27,12 +27,29 @@
    分类依据是 `src/common/errors.py`）：`test_parse_payload_too_short_rejects`、
    `test_parse_payload_bad_timestamp_rejects_whole_payload`。
 
+============================ 第二次"有意的改写"（ADR-0010） ============================
+`docs/adr/0010-数据合理性判据.md` 给事件表**加了 `stored` 列**（`0`=丢了 / `1`=可疑但留着），
+所以**只有 3 条**钉"列清单/行尾"的断言被**有意改写**（行为语义未变，只是列多了）：
+
+| 用例 | 改动 |
+|---|---|
+| `test_point_invalid_insert_sql_carries_kind_reason_and_raw` | 列清单 `(ts, point, kind, reason, raw)` → `…, stored)`；行尾 `60.0)` → `60.0, 0)` |
+| `test_point_invalid_missing_row_has_null_raw` | 行尾 `NULL)` → `NULL, 0)` |
+| `test_point_invalid_non_finite_raw_becomes_null_but_reason_keeps_evidence` | 行尾 `, NULL)` → `, NULL, 0)` |
+
+⭐ 其余 499 条**一条未改**；`test_point_invalid_ddl_shape_and_defaults` 只是**加了**一个
+   `stored TINYINT` 片段断言（既有片段断言全保留）。
+⚠️ 新用例里 `test_jump_*` / `test_frozen_*` / `test_stored_column_*` / `test_quality_*`
+   钉的是 ADR-0010 的机制断言（**可疑照常入库 + 留痕**），与上表无关。
+====================================================================================
+
 覆盖范围（纯函数为主，末尾几节是"离线可测的接线点"，都用假对象/假游标，不碰网络与磁盘）：
     parse_timestamp / parse_payload（逐点化后三返回值）/ supports_reference /
     reference_values / transmit_reference_values / record_reference + latest_reference_values /
     topic_plant_of / check_topic_matches_plant / enforce_topic_scope / resolve_spool_dir /
-    validate_config / on_message（语法坏拒收、语义坏留痕、落盘）/ TdWriter._insert（部分列）/
-    PointInvalidTables（DDL/DML 文本）+ PointInvalidWriter
+    validate_config / on_message（语法坏拒收、语义坏留痕、可疑留痕、落盘）/
+    TdWriter._insert（部分列）/ QualityConfig + QualityChecker（跳变/冻结）/
+    PointInvalidTables（DDL/DML 文本 + stored 列平滑升级）+ PointInvalidWriter
 ====================================================================================
 """
 from __future__ import annotations
@@ -699,7 +716,14 @@ class FakeMessage:
 
 def userdata(writer: Optional[FakeWriter] = None, spool: Optional[FakeSpool] = None,
              judge: Optional[FakeJudge] = None,
-             point_invalid_writer: Optional[FakePointInvalidWriter] = None) -> dict:
+             point_invalid_writer: Optional[FakePointInvalidWriter] = None,
+             quality_checker: Optional[sub.QualityChecker] = None) -> dict:
+    """组装 `on_message` 的 userdata。
+
+    ⚠️ `quality_checker` **默认每次都给一个全新的判据实例**（ADR-0010）——
+    否则用例之间会共用同一个**模块级**判据状态，前一个用例的"上一次值/冻结游程"
+    会污染后一个用例，测试就变成了顺序相关的（病态地难查）。
+    """
     return {
         "writer": writer if writer is not None else FakeWriter(),
         "spool": spool if spool is not None else FakeSpool(),
@@ -708,12 +732,16 @@ def userdata(writer: Optional[FakeWriter] = None, spool: Optional[FakeSpool] = N
             point_invalid_writer if point_invalid_writer is not None
             else FakePointInvalidWriter()
         ),
+        "quality_checker": (
+            quality_checker if quality_checker is not None
+            else sub.QualityChecker(sub.QualityConfig())
+        ),
     }
 
 
 @pytest.fixture(autouse=True)
 def restore_module_state():
-    """`STATS` / `LAST_REFERENCE` 是模块级可变状态：每个用例后复原，避免互相污染。"""
+    """`STATS` / `LAST_REFERENCE` / 模块级判据是可变状态：每个用例后复原，避免互相污染。"""
     stats_before = dict(sub.STATS)
     reference_before = dict(sub.LAST_REFERENCE["values"])
     ts_before = sub.LAST_REFERENCE["ts"]
@@ -722,6 +750,9 @@ def restore_module_state():
     sub.STATS.update(stats_before)
     sub.LAST_REFERENCE["values"] = reference_before
     sub.LAST_REFERENCE["ts"] = ts_before
+    # ADR-0010：`on_message` 在 userdata 缺判据时回落到模块级 `QUALITY_CHECKER`，
+    # 所以它也必须在用例之间复位（换一个新实例 = 清空全部进程内状态）。
+    sub.QUALITY_CHECKER = sub.QualityChecker(sub.QUALITY_CONFIG)
 
 
 def test_stats_keys_are_the_split_counters():
@@ -729,6 +760,8 @@ def test_stats_keys_are_the_split_counters():
     assert "rejected" not in sub.STATS
     assert sub.STATS["rejected_messages"] == 0        # 语法坏丢的**报文条数**
     assert sub.STATS["invalid_points"] == 0           # 语义坏丢的**测点个数**
+    # ADR-0010：可疑点单独计数 —— ⚠️ 它与 invalid_points 不是一回事（可疑点**没丢**）
+    assert sub.STATS["suspect_points"] == 0
 
 
 def test_on_message_valid_payload_writes_all_nine_values():
@@ -999,13 +1032,17 @@ def test_insert_returns_false_when_cursor_missing_or_execute_fails():
 # ==================== 十三、无效点事件表（DDL/DML 文本 + 写入器） ====================
 
 def test_point_invalid_ddl_shape_and_defaults():
-    """建表语句：`CREATE STABLE IF NOT EXISTS`，列与 §4.1 一致，TAGS 只有 plant/device。"""
+    """建表语句：`CREATE STABLE IF NOT EXISTS`，列与 §4.1 + ADR-0010 §4 一致，TAGS 只有 plant/device。
+
+    ⚠️ ADR-0010 之后**多了 `stored TINYINT`**（下面单独钉死），本用例的既有断言**一条未改**。
+    """
     tables = sub.PointInvalidTables(db="cems", plant="plant1", device="device1")
     assert tables.stable == "cems_point_invalid"
     sql = tables.create_sql()
     assert sql.startswith("CREATE STABLE IF NOT EXISTS cems.cems_point_invalid (")
     for fragment in ("ts TIMESTAMP", "point NCHAR(16)", "kind NCHAR(10)",
-                     "reason NCHAR(200)", "raw FLOAT", "TAGS (plant NCHAR(20), device NCHAR(20))"):
+                     "reason NCHAR(200)", "raw FLOAT", "stored TINYINT",
+                     "TAGS (plant NCHAR(20), device NCHAR(20))"):
         assert fragment in sql
     assert sub.POINT_INVALID_TABLES.stable == sub.POINT_INVALID_STABLE
 
@@ -1032,25 +1069,36 @@ def test_point_invalid_child_is_per_point_so_one_row_per_point_per_ts():
 
 
 def test_point_invalid_insert_sql_carries_kind_reason_and_raw():
-    """一条证据行必须含 `kind` / `reason` / `raw`（含原始值）—— 否则"逐点留痕"是空话。"""
+    """一条证据行必须含 `kind` / `reason` / `raw`（含原始值）—— 否则"逐点留痕"是空话。
+
+    ⚠️ **本用例的断言在 ADR-0010 实现时被有意改写**（列的**清单**多了 `stored`）：
+    行尾从 `…, 60.0)` 变成 `…, 60.0, 0)`。这不是为了让测试变绿 ——
+    `stored` 是 ADR-0010 §4 的硬要求，**每一行都必须表态"这个值进没进主表"**。
+    """
     tables = sub.PointInvalidTables(db="cems", plant="plant1", device="device1")
     sql = tables.insert_sql(
         TS, PointInvalid("Pressure", PointInvalidKind.INVALID, "测点 Pressure 超出量程 [85.0, 105.0]: 60.0", 60.0),
     )
-    assert "(ts, point, kind, reason, raw) VALUES ('2026-09-10 12:00:00', 'Pressure', 'invalid', " in sql
-    assert "'测点 Pressure 超出量程 [85.0, 105.0]: 60.0', 60.0)" in sql
+    assert "(ts, point, kind, reason, raw, stored) VALUES ('2026-09-10 12:00:00', 'Pressure', 'invalid', " in sql
+    assert "'测点 Pressure 超出量程 [85.0, 105.0]: 60.0', 60.0, 0)" in sql      # stored=0：丢了
 
 
 def test_point_invalid_missing_row_has_null_raw():
-    """`kind=missing` 的 `raw` 必须是 `NULL`（本来就没值，别编一个）。"""
+    """`kind=missing` 的 `raw` 必须是 `NULL`（本来就没值，别编一个）。
+
+    ⚠️ ADR-0010：行尾由 `NULL)` 变为 `NULL, 0)`（`missing` 同样 `stored=0`）。
+    """
     tables = sub.PointInvalidTables(db="cems", plant="plant1", device="device1")
     sql = tables.insert_sql(TS, PointInvalid("Humidity", PointInvalidKind.MISSING, "报文未提供", None))
-    assert "'missing', '报文未提供', NULL)" in sql
+    assert "'missing', '报文未提供', NULL, 0)" in sql
 
 
 def test_point_invalid_non_finite_raw_becomes_null_but_reason_keeps_evidence():
     """NaN/inf 的 `raw` 写 `NULL`：**非有限值不能拼进 SQL**（TDengine 会报 syntax error），
-    原始文本已经写在 `reason` 里 —— 证据不丢，行也不会写坏。"""
+    原始文本已经写在 `reason` 里 —— 证据不丢，行也不会写坏。
+
+    ⚠️ ADR-0010：行尾由 `, NULL)` 变为 `, NULL, 0)`。
+    """
     tables = sub.PointInvalidTables(db="cems", plant="plant1", device="device1")
     sql = tables.insert_sql(
         TS,
@@ -1058,7 +1106,7 @@ def test_point_invalid_non_finite_raw_becomes_null_but_reason_keeps_evidence():
                      float("nan")),
     )
     assert "'测点 SO2 不是有限数值（NaN/inf）: ''NaN'''" in sql   # 单引号被转义
-    assert sql.endswith(", NULL)")
+    assert sql.endswith(", NULL, 0)")
 
 
 def test_point_invalid_insert_sql_is_deterministic_for_repeat_delivery():
@@ -1106,3 +1154,446 @@ def test_point_invalid_writer_ready_flag():
     assert writer.ready is False
     writer._cur = FakeCursor()
     assert writer.ready is True
+
+
+# ==================== 十四、数据合理性判据（跳变/冻结，ADR-0010） ====================
+#
+# ⭐⭐ 本节钉的是 ADR-0010 的**核心决策**：**「可疑」≠「无效」** ——
+#     跳变/冻结（`kind=jump/frozen`，`stored=1`）**照常入库**，只是额外留一笔痕。
+#     所以下面每一条"可疑"用例都同时断言两件事：
+#       ① 值**在写主表的调用里**（没被丢掉）；② 事件表有一条 `stored=1` 的证据。
+
+def quality_config(**overrides: Any) -> sub.QualityConfig:
+    """测试用判据配置：默认取 ADR-0010 §5 那一组，可按用例覆盖。"""
+    return sub.QualityConfig(**overrides)
+
+
+def test_kind_stored_splits_dropped_from_kept():
+    """⭐ ADR-0010 §4 的**核心可区分性**：`stored=0` = 丢了 / `stored=1` = 标了但留着。"""
+    assert PointInvalidKind.INVALID.stored == 0
+    assert PointInvalidKind.MISSING.stored == 0
+    assert PointInvalidKind.JUMP.stored == 1
+    assert PointInvalidKind.FROZEN.stored == 1
+
+
+def test_kind_values_fit_nchar10_column():
+    """⚠️ ADR-0010 §6②：`kind` 列是 `NCHAR(10)`，取值超 10 字符会 `DB error: Value too long`。
+
+    实测踩过：`kind='suspect_jump'` 直接写不进去。所以取值只能是短名，
+    人可读解释放 `reason`（`NCHAR(200)`）。
+    """
+    for kind in PointInvalidKind:
+        assert len(kind.value) <= 10, kind
+        assert kind.value.isascii() and kind.value.islower()
+
+
+def test_quality_config_defaults_match_adr_0010():
+    """⚠️ 默认值 = ADR-0010 §5 那一组（**"拍的"、未标定**，标定手段是 §8 的 W4）。"""
+    config = sub.QualityConfig()
+    assert config.enable is True          # §7：默认开（只留痕不丢数，开着代价小）
+    assert config.jump_ratio == 0.25
+    assert config.freeze_samples == 12
+    assert config.freeze_tolerance_ratio == 0.005
+    assert config.resolve_ranges() is RANGES      # 量程唯一真源是契约 points.RANGES
+
+
+def test_quality_config_from_env_reads_all_four(monkeypatch):
+    monkeypatch.setenv("QUALITY_CHECK_ENABLE", "0")
+    monkeypatch.setenv("QUALITY_JUMP_RATIO", "0.5")
+    monkeypatch.setenv("QUALITY_FREEZE_SAMPLES", "7")
+    monkeypatch.setenv("QUALITY_FREEZE_TOLERANCE_RATIO", "0.02")
+    config = sub.QualityConfig.from_env()
+    assert config.enable is False
+    assert config.jump_ratio == 0.5
+    assert config.freeze_samples == 7
+    assert config.freeze_tolerance_ratio == 0.02
+
+
+def test_quality_config_from_env_defaults_to_adr_values(monkeypatch):
+    for name in ("QUALITY_CHECK_ENABLE", "QUALITY_JUMP_RATIO",
+                 "QUALITY_FREEZE_SAMPLES", "QUALITY_FREEZE_TOLERANCE_RATIO"):
+        monkeypatch.delenv(name, raising=False)
+    assert sub.QualityConfig.from_env() == sub.QualityConfig()
+
+
+@pytest.mark.parametrize("overrides", [
+    {"jump_ratio": 0.0},
+    {"jump_ratio": -0.1},
+    {"freeze_tolerance_ratio": -0.001},
+    {"freeze_samples": 1},          # 1 个样本"不变"是恒真的 —— 会把每条报文都标成冻结
+    {"freeze_samples": 0},
+])
+def test_quality_config_validate_rejects_bad_values(overrides):
+    with pytest.raises(ValueError):
+        quality_config(**overrides).validate()
+
+
+def test_quality_config_validate_accepts_adr_defaults():
+    sub.QualityConfig().validate()          # 不抛即通过
+
+
+# ---- 14.1 跳变 ----
+
+def test_jump_fires_on_step_over_ratio():
+    """注入单点阶跃：`Dust` 2.5 → 60（量程 [0,100]，跳了 57.5% > 25%）→ 一条 `jump`。"""
+    checker = sub.QualityChecker(quality_config())
+    assert checker.check({"Dust": 2.5}) == []          # 冷启动：没有"上一次值"
+    suspects = checker.check({"Dust": 60.0})
+    assert len(suspects) == 1
+    item = suspects[0]
+    assert item.point == "Dust"
+    assert item.kind is PointInvalidKind.JUMP
+    assert item.kind.stored == 1                       # ⭐ 值**已入库**（不是丢了）
+    assert item.raw == 60.0
+    assert "跳变可疑" in item.reason and "Dust" in item.reason
+
+
+def test_jump_does_not_fire_on_first_sample_cold_start():
+    """冷启动窗口（ADR-0010 §9）：第一次见到该点没有参照，**不判**跳变。"""
+    assert sub.QualityChecker(quality_config()).check({"Dust": 99.0}) == []
+
+
+def test_jump_threshold_is_strict_greater_than():
+    """边界：`|Δ| == 阈值` **不算**跳变（定义写的是 `>`），略超才算。"""
+    checker = sub.QualityChecker(quality_config())
+    checker.check({"Dust": 2.5})
+    assert checker.check({"Dust": 27.5}) == []          # Δ=25.0 == 量程宽度 100 × 0.25
+    assert checker.check({"Dust": 2.5}) == []           # 反向也恰好等于阈值 → 同样不判
+    assert [item.kind for item in checker.check({"Dust": 27.51})] == [PointInvalidKind.JUMP]
+
+
+def test_jump_uses_the_points_own_range_width():
+    """免逐点配置的关键：阈值按**该点自己**的量程宽度算（Pressure [85,105] 宽 20 ⇒ 阈值 5）。"""
+    checker = sub.QualityChecker(quality_config())
+    checker.check({"Pressure": 90.0})
+    assert checker.check({"Pressure": 94.9}) == []      # Δ=4.9 < 5
+    assert checker.check({"Pressure": 90.0}) == []      # 反向 4.9 < 5
+    assert [item.kind for item in checker.check({"Pressure": 95.1})] == [PointInvalidKind.JUMP]
+
+
+def test_quality_config_accepts_injected_ranges():
+    """测试可注入自定义量程（生产走契约 `points.RANGES`，不重复抄一遍量程）。"""
+    config = quality_config(ranges={"Dust": (0.0, 10.0)})
+    checker = sub.QualityChecker(config)
+    checker.check({"Dust": 1.0})
+    suspects = checker.check({"Dust": 5.0})             # Δ=4.0 > 10×0.25=2.5
+    assert [item.kind for item in suspects] == [PointInvalidKind.JUMP]
+
+
+def test_check_only_looks_at_points_present_in_values():
+    """判据只吃**过了量程检查的点**：报文里没有的点不参与，也不推进状态。"""
+    checker = sub.QualityChecker(quality_config())
+    assert checker.check({}) == []
+    assert checker.check({"O2": 6.0}) == []
+
+
+# ---- 14.2 冻结 ----
+
+def test_frozen_fires_after_n_samples_inside_tolerance():
+    """注入持续不变（同一 `Dust` 值）→ 第 N 个样本报一条 `frozen`（照常入库）。"""
+    checker = sub.QualityChecker(quality_config(freeze_samples=4))
+    assert checker.check({"Dust": 2.5}) == []
+    assert checker.check({"Dust": 2.5}) == []
+    assert checker.check({"Dust": 2.5}) == []
+    suspects = checker.check({"Dust": 2.5})            # 第 4 个样本
+    assert len(suspects) == 1
+    assert suspects[0].kind is PointInvalidKind.FROZEN
+    assert suspects[0].kind.stored == 1
+    assert suspects[0].raw == 2.5
+    assert "冻结可疑" in suspects[0].reason
+
+
+def test_frozen_reports_only_once_per_run():
+    """一个游程**只报一次** —— 否则一个冻结的测点会每 5 秒刷一条事件（写入放大）。"""
+    checker = sub.QualityChecker(quality_config(freeze_samples=3))
+    fired = sum(len(checker.check({"Dust": 2.5})) for _ in range(10))
+    assert fired == 1
+
+
+def test_frozen_tolerance_band_keeps_the_run_alive():
+    """⚠️ ADR-0010 §2：判据是「**容差 + 持续**」，不是「相等」——
+
+    `Temp` 量程宽 300 ⇒ 容差 1.5；26.0/26.1/26.2 这种**稳态抖动**都在带内，
+    所以它们**算同一个游程**（这正是"用相等会误报"的那条设计取舍的落点）。
+    """
+    checker = sub.QualityChecker(quality_config(freeze_samples=3))
+    assert checker.check({"Temp": 26.0}) == []
+    assert checker.check({"Temp": 26.1}) == []
+    suspects = checker.check({"Temp": 26.2})
+    assert [item.kind for item in suspects] == [PointInvalidKind.FROZEN]
+
+
+def test_frozen_run_restarts_when_value_leaves_tolerance_band():
+    """走出容差带 ⇒ 游程重起算（基准 `v0` 固定为游程第一个值，照 ADR-0010 §2 的字面）。"""
+    checker = sub.QualityChecker(quality_config(freeze_samples=3))
+    assert checker.check({"Temp": 26.0}) == []
+    assert checker.check({"Temp": 26.0}) == []
+    assert checker.check({"Temp": 30.0}) == []          # 出了 ±1.5 ⇒ 重起算（此时游程=1）
+    assert checker.check({"Temp": 30.0}) == []          # 游程=2
+    suspects = checker.check({"Temp": 30.0})            # 游程=3 ⇒ 报
+    assert [item.kind for item in suspects] == [PointInvalidKind.FROZEN]
+    assert suspects[0].raw == 30.0
+
+
+def test_jump_starts_a_new_freeze_run():
+    """跳变之后值换了 ⇒ 冻结游程从**新值**重新起算（不会把跳变前的游程续上）。"""
+    checker = sub.QualityChecker(quality_config(freeze_samples=3))
+    checker.check({"Dust": 2.5})
+    checker.check({"Dust": 2.5})
+    jumped = checker.check({"Dust": 60.0})              # 跳变 + 游程重起算（=1）
+    assert [item.kind for item in jumped] == [PointInvalidKind.JUMP]
+    assert checker.check({"Dust": 60.0}) == []          # 游程=2
+    frozen = checker.check({"Dust": 60.0})              # 游程=3
+    assert [item.kind for item in frozen] == [PointInvalidKind.FROZEN]
+
+
+def test_freeze_state_is_per_point():
+    """每个测点一份游程：其它点在动，不影响本点的冻结判定。"""
+    checker = sub.QualityChecker(quality_config(freeze_samples=3))
+    checker.check({"Dust": 2.5, "O2": 6.0})
+    checker.check({"Dust": 2.5, "O2": 6.5})             # O2 出了容差 ⇒ O2 重起算
+    suspects = checker.check({"Dust": 2.5, "O2": 6.0})  # Dust 游程=3、O2 游程=2
+    assert [(item.point, item.kind) for item in suspects] == [("Dust", PointInvalidKind.FROZEN)]
+
+
+def test_suspects_are_ordered_by_contract_names():
+    """同一条报文里多个点可疑时，事件顺序按契约 `NAMES` 顺序（不用报文键序）→ 确定性。"""
+    checker = sub.QualityChecker(quality_config(freeze_samples=2))
+    checker.check({"O2": 6.0, "Dust": 2.5})
+    suspects = checker.check({"O2": 6.0, "Dust": 2.5})
+    assert [item.point for item in suspects] == [
+        name for name in NAMES if name in ("Dust", "O2")
+    ]
+
+
+# ---- 14.3 总开关（W5） ----
+
+def test_check_disabled_produces_nothing_while_enabled_produces_evidence():
+    """W5 的机制断言：`QUALITY_CHECK_ENABLE=0` ⇒ 不产证据；同样输入开着时**必须**产证据。"""
+    sequence = [{"Dust": 2.5}] + [{"Dust": 2.5}] * 20 + [{"Dust": 90.0}]
+    off = sub.QualityChecker(quality_config(enable=False))
+    assert [item for values in sequence for item in off.check(values)] == []
+    on = sub.QualityChecker(quality_config(enable=True, freeze_samples=3))
+    kinds = [item.kind for values in sequence for item in on.check(values)]
+    assert PointInvalidKind.FROZEN in kinds and PointInvalidKind.JUMP in kinds
+
+
+def test_disabled_checker_does_not_advance_any_state():
+    """关掉时**连状态都不推进**（否则"开着"的那一刻会突然按旧状态报一堆）。"""
+    checker = sub.QualityChecker(quality_config(enable=False))
+    for _ in range(5):
+        checker.check({"Dust": 2.5})
+    assert checker._last == {} and checker._run_len == {}
+
+
+# ---- 14.4 on_message 接线：⭐ 可疑照常入库 + 留痕（W1/W2/W3/W6） ----
+
+def test_on_message_jump_point_is_still_written_and_evidence_marked_stored():
+    """⭐⭐ 本 ADR 最重要的一条：跳变点**照常入库**（W1/W6），事件表 `kind=jump / stored=1`。"""
+    writer = FakeWriter()
+    invalid_writer = FakePointInvalidWriter()
+    checker = sub.QualityChecker(quality_config())
+    data = userdata(writer, point_invalid_writer=invalid_writer, quality_checker=checker)
+    invalid_before = sub.STATS["invalid_points"]
+
+    sub.on_message(None, data, FakeMessage(build_payload()))                    # 打底
+    sub.on_message(None, data, FakeMessage(build_payload({**GOOD_VALUES, "Dust": 60.0})))
+
+    assert len(writer.calls) == 2
+    _ts, values = writer.calls[1]
+    assert values["Dust"] == 60.0                       # ⭐ 值**在写库调用里**（没被丢掉）
+    assert set(values) == set(GOOD_VALUES)              # 一个点都没少
+    assert sub.STATS["invalid_points"] == invalid_before     # 可疑 ≠ 无效（不计 invalid）
+    assert sub.STATS["suspect_points"] == 1
+    ts_event, items = invalid_writer.calls[-1]
+    assert ts_event == TS
+    assert [(item.point, item.kind, item.kind.stored) for item in items] == [
+        ("Dust", PointInvalidKind.JUMP, 1)
+    ]
+
+
+def test_on_message_frozen_point_is_still_written_and_evidence_marked_stored():
+    """W2：持续不变 → 每个样本都**照常入库**，事件表出现一条 `kind=frozen / stored=1`。
+
+    ⚠️ 注入的报文体 9 个测点**全都**是不变值，所以第 3 条时 9 个点**同时**判冻结
+    （这正是"冻结"在稳态数据上的真实形态）；这里钉的是"照常入库 + 每个点只报一次"。
+    """
+    writer = FakeWriter()
+    invalid_writer = FakePointInvalidWriter()
+    checker = sub.QualityChecker(quality_config(freeze_samples=3))
+    data = userdata(writer, point_invalid_writer=invalid_writer, quality_checker=checker)
+    for _ in range(4):
+        sub.on_message(None, data, FakeMessage(build_payload()))
+    assert len(writer.calls) == 4                       # 4 条都进主表了（含被标冻结的那条）
+    assert all(call[1]["Dust"] == 2.5 for call in writer.calls)
+    # 第 3 条（达到门限）报一次；第 4 条仍在同一游程里 → **不再重复报**
+    assert len(invalid_writer.calls) == 1
+    _ts, items = invalid_writer.calls[0]
+    assert [item.point for item in items] == list(NAMES)      # 按契约 NAMES 顺序
+    assert all(item.kind is PointInvalidKind.FROZEN for item in items)
+    dust = next(item for item in items if item.point == "Dust")
+    assert dust.kind.stored == 1 and dust.raw == 2.5
+
+
+def test_on_message_invalid_point_still_stored_zero_regression():
+    """W3 回归：超量程仍然是"丢"（`stored=0`）—— ADR-0010 **没有**放宽 ADR-0009 的判据。"""
+    writer = FakeWriter()
+    invalid_writer = FakePointInvalidWriter()
+    sub.on_message(
+        None, userdata(writer, point_invalid_writer=invalid_writer),
+        FakeMessage(build_payload({**GOOD_VALUES, "Dust": 150.0})),
+    )
+    assert "Dust" not in writer.calls[0][1]             # 不给主表
+    _ts, items = invalid_writer.calls[0]
+    assert [(item.kind, item.kind.stored) for item in items] == [(PointInvalidKind.INVALID, 0)]
+
+
+def test_on_message_uses_module_checker_when_userdata_lacks_one(monkeypatch):
+    """接线兜底：userdata 里没给判据时用**模块级**那份（"忘了接线"只少判可疑，不丢数）。"""
+    monkeypatch.setattr(sub, "QUALITY_CHECKER", sub.QualityChecker(quality_config()))
+    writer = FakeWriter()
+    invalid_writer = FakePointInvalidWriter()
+    data = userdata(writer, point_invalid_writer=invalid_writer)
+    data.pop("quality_checker")
+    sub.on_message(None, data, FakeMessage(build_payload()))
+    sub.on_message(None, data, FakeMessage(build_payload({**GOOD_VALUES, "Dust": 60.0})))
+    assert writer.calls[1][1]["Dust"] == 60.0
+    assert [item.kind for _ts, items in invalid_writer.calls for item in items] == [
+        PointInvalidKind.JUMP
+    ]
+
+
+def test_on_message_quality_check_failure_does_not_block_ingest():
+    """判据抛异常**绝不能**影响入库（它只是加一笔痕）。"""
+
+    class BrokenChecker:
+        def check(self, values):                       # noqa: D401 - 故意抛
+            raise RuntimeError("boom")
+
+    writer = FakeWriter()
+    sub.on_message(
+        None, userdata(writer, quality_checker=BrokenChecker()),
+        FakeMessage(build_payload()),
+    )
+    assert len(writer.calls) == 1 and writer.calls[0][1] == GOOD_VALUES
+
+
+def test_on_message_disabled_checker_produces_no_jump_or_frozen_rows():
+    """W5 的接线断言：判据关闭 + 跳变报文 ⇒ 事件表**没有** jump/frozen，主表照常有值。"""
+    writer = FakeWriter()
+    invalid_writer = FakePointInvalidWriter()
+    checker = sub.QualityChecker(quality_config(enable=False))
+    data = userdata(writer, point_invalid_writer=invalid_writer, quality_checker=checker)
+    sub.on_message(None, data, FakeMessage(build_payload()))
+    sub.on_message(None, data, FakeMessage(build_payload({**GOOD_VALUES, "Dust": 60.0})))
+    kinds = [item.kind for _ts, items in invalid_writer.calls for item in items]
+    assert PointInvalidKind.JUMP not in kinds and PointInvalidKind.FROZEN not in kinds
+    assert writer.calls[1][1]["Dust"] == 60.0
+
+
+# ---- 14.5 事件表 stored 列（建表 + 老库 ALTER 升级） ----
+
+def test_point_invalid_insert_sql_marks_suspect_rows_stored_1():
+    """可疑证据行必须是 `stored=1`（人可读解释在 `reason`，`kind` 保持短名）。"""
+    tables = sub.PointInvalidTables(db="cems", plant="plant1", device="device1")
+    for kind in (PointInvalidKind.JUMP, PointInvalidKind.FROZEN):
+        sql = tables.insert_sql(TS, PointInvalid("Dust", kind, "可疑（值已入库）", 60.0))
+        assert f"'{kind.value}', '可疑（值已入库）', 60.0, 1)" in sql
+
+
+def test_create_sql_and_alter_sql_both_carry_stored_column():
+    """⚠️ ADR-0010 §6①：**两条都要有** —— 建表带列（新建），ALTER 补列（老库升级）。"""
+    tables = sub.PointInvalidTables(db="cems", plant="plant1", device="device1")
+    assert "stored TINYINT" in tables.create_sql()
+    assert tables.alter_stored_column_sql() == (
+        "ALTER STABLE cems.cems_point_invalid ADD COLUMN stored TINYINT"
+    )
+
+
+class DescribeCursor:
+    """假游标：`DESCRIBE` 返回预设列清单，其余 SQL 记进 `sqls`；可让 ALTER 抛错。
+
+    `alter_error`：ALTER 时抛出的异常文本。
+    `alter_adds_column`：ALTER 抛错后列是否"其实已经有了"（模拟并发 DDL / 重复 ALTER）。
+    """
+
+    def __init__(self, columns: list[str], alter_error: Optional[str] = None,
+                 alter_adds_column: bool = False) -> None:
+        self.columns = list(columns)
+        self.alter_error = alter_error
+        self.alter_adds_column = alter_adds_column
+        self.sqls: list[str] = []
+
+    def execute(self, sql: str) -> None:
+        self.sqls.append(sql)
+        head = sql.strip().lower()
+        if head.startswith("alter"):
+            if self.alter_error is not None:
+                if self.alter_adds_column and "stored" not in self.columns:
+                    self.columns.append("stored")
+                raise RuntimeError(self.alter_error)
+            if "stored" not in self.columns:
+                self.columns.append("stored")
+
+    def fetchall(self) -> list[list[Any]]:
+        return [[name, "TINYINT" if name == "stored" else "NCHAR(16)"] for name in self.columns]
+
+
+def test_ensure_stored_column_alters_when_missing():
+    cursor = DescribeCursor(["ts", "point", "kind", "reason", "raw"])
+    assert sub.ensure_stored_column(cursor, sub.POINT_INVALID_TABLES) is True
+    assert cursor.sqls[-1] == sub.POINT_INVALID_TABLES.alter_stored_column_sql()
+
+
+def test_ensure_stored_column_is_idempotent_when_present():
+    """列已在 ⇒ 不执行 ALTER（幂等，可重复 connect）。"""
+    cursor = DescribeCursor(["ts", "point", "kind", "reason", "raw", "stored"])
+    assert sub.ensure_stored_column(cursor, sub.POINT_INVALID_TABLES) is False
+    assert not any(sql.lower().startswith("alter") for sql in cursor.sqls)
+
+
+def test_ensure_stored_column_tolerates_already_exists_error():
+    """⚠️ 硬约束：ALTER 报"列已存在"**不能崩** —— 复核后确实有该列就算成功。"""
+    cursor = DescribeCursor(
+        ["ts", "point", "kind", "reason", "raw"],
+        alter_error="Column already exists", alter_adds_column=True,
+    )
+    assert sub.ensure_stored_column(cursor, sub.POINT_INVALID_TABLES) is False
+
+
+def test_ensure_stored_column_reraises_when_column_really_missing():
+    """ALTER 失败且复核后**确实没有**该列 ⇒ 真失败，必须抛（别静默假装升级好了）。"""
+    cursor = DescribeCursor(
+        ["ts", "point", "kind", "reason", "raw"],
+        alter_error="permission denied", alter_adds_column=False,
+    )
+    with pytest.raises(RuntimeError):
+        sub.ensure_stored_column(cursor, sub.POINT_INVALID_TABLES)
+
+
+class FakeConnection:
+    """假 taosrest 连接：只提供 cursor()/close()。"""
+
+    def __init__(self, cursor: Any) -> None:
+        self._cursor = cursor
+
+    def cursor(self) -> Any:
+        return self._cursor
+
+    def close(self) -> None:
+        pass
+
+
+def test_point_invalid_writer_connect_creates_table_then_alters(monkeypatch):
+    """`connect()` 必须**两条都做**：建表（带 stored）+ 补列 —— 否则老库永远缺 `stored`。"""
+    cursor = DescribeCursor(["ts", "point", "kind", "reason", "raw"])
+    monkeypatch.setattr(
+        sub.taosrest, "connect", lambda **kwargs: FakeConnection(cursor)
+    )
+    writer = sub.PointInvalidWriter(sub.PointInvalidTables(db="cems", plant="p", device="d"))
+    assert writer.connect() is True
+    assert "stored TINYINT" in cursor.sqls[0]                       # 新建路径带列
+    assert [sql for sql in cursor.sqls if sql.lower().startswith("alter")] == [
+        sub.POINT_INVALID_TABLES.alter_stored_column_sql()
+    ]
+
