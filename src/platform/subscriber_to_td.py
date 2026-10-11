@@ -16,7 +16,6 @@ import re
 import sys
 import threading
 import time
-from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Final, Iterable, Optional, Sequence
@@ -41,81 +40,17 @@ from src.common.alarm_judge import (   # noqa: E402
     normalize_ts,
 )
 from src.common.logging import setup_logging   # noqa: E402
-from src.common.points import active_point_set   # noqa: E402
-
-# ==================== 0. 点位集（能力守卫） ====================
-# ⚠️ 本模块要服务**两类设备**：9 点烟气（CEMS，默认）与 RS485 温湿度变送器（2 点真机）。
-#    两套点集刻意保持同名属性（POINTS / NAMES / COLUMNS / RANGES / SCALES …），
-#    所以"换设备"= 换一个取值来源，而**不是**分叉代码路径。
-#
-# ⚠️ 但 CEMS 专有的语义在变送器点集里**根本不存在**（无排放限值、无基准氧折算、
-#    无哨兵编码）。这些名字一律用 `getattr(点集, 名字, 缺省)` 取，取不到就是缺省值；
-#    是否走那条代码路径由**能力标志**决定，而不是靠"属性恰好存在"。
-#
-# ⭐ `EMISSION_LIMIT_APPLICABLE` 的缺省方向**必须朝 True**（这条踩过一次，留在这里）：
-#    `points.py` 是"共用实现"所在地，它**没有**这个常量；`points_transmitter.py` 才显式写了
-#    `EMISSION_LIMIT_APPLICABLE = False`。
-#    → 若写成 `getattr(点集, "EMISSION_LIMIT_APPLICABLE", False)`，**默认的 cems 点集**
-#      会因为"常量不存在"被判成"不适用"，于是 9 点烟气的告警与小时结算**整体静默消失**
-#      （入库照常、容器照常 healthy，没有任何报错）—— 正是本项目最在意的一类故障。
-#    → 所以缺省必须是"**既有语义照旧**"：只有点集**显式写 False** 才关；不写就等于适用。
-#      另外要求 `ZS_TARGETS`/`to_reference_o2` 同时在位，这样"标志说适用、函数却不在"
-#      不可能被放行（那种组合下折算必炸，而不是判成不适用后静默跳过）。
-#    这样"温湿度没有排放限值语义"仍然是**可执行的事实**：
-#    变送器模式下不折算、不编码哨兵、不判超标、不出小时结论。
-def _has_callable(module: Any, name: str) -> bool:
-    """点集模块里是否有**可调用**的该名字（能力守卫的判据，不用 try/except 掩盖）。"""
-    return callable(getattr(module, name, None))
-
-
-POINT_SET: Final[Any] = active_point_set()
-#: `POINT_SET` 环境变量的**归一化**取值（与 active_point_set 同一套口径：strip+lower）。
-#: 只用于日志（"本实例用的是哪套点集"）。
-POINT_SET_ENV: Final[str] = os.getenv("POINT_SET", "cems").strip().lower()
-#: 被选中的点集**模块名**（取自模块自身，不是环境变量字符串）。
-POINT_SET_NAME: Final[str] = POINT_SET.__name__.rsplit(".", 1)[-1]
-POINTS: Final[Any] = POINT_SET.POINTS
-NAMES: Final[tuple[str, ...]] = POINT_SET.NAMES
-COLUMNS: Final[tuple[str, ...]] = POINT_SET.COLUMNS
-RANGES: Final[dict[str, tuple[float, float]]] = POINT_SET.RANGES
-SCALES: Final[dict[str, int]] = POINT_SET.SCALES
-#: 线格式（dtype/endian）—— 只作**只读视图**暴露给调用方（建表 SQL 用不上它，理由见
-#: `td_column_ddl()`：列里存的是工程值，不是寄存器原始整数）。
-DTYPES: Final[dict[str, str]] = getattr(POINT_SET, "DTYPES", {})
-#: 本点集是否参与"排放限值达标判定"。**显式声明优先**，没声明 = 既有烟气语义（见上）。
-EMISSION_LIMIT_APPLICABLE: Final[bool] = bool(
-    getattr(POINT_SET, "EMISSION_LIMIT_APPLICABLE", True)
-    and getattr(POINT_SET, "ZS_TARGETS", None)
-    and _has_callable(POINT_SET, "to_reference_o2")
+from src.common.points import (   # noqa: E402
+    COLUMNS,
+    NAMES,
+    O2_COLUMN,
+    POINTS,
+    RANGES,
+    ZS_TARGETS,
+    ZS_UNAVAILABLE_SENTINEL,
+    to_reference_o2,
+    to_transmit_value,
 )
-#: CEMS 专有：参与基准氧折算的污染物列（变送器无此概念 → 空元组）
-ZS_TARGETS: Final[tuple[str, ...]] = tuple(getattr(POINT_SET, "ZS_TARGETS", ()))
-#: CEMS 专有：氧含量列名（变送器无 → None；该字段名只在折算路径里用得到）
-O2_COLUMN: Final[Optional[str]] = getattr(POINT_SET, "O2_COLUMN", None)
-#: CEMS 专有：折算值哨兵（无法折算时按 HJ212 传输 +9999.99）；变送器无 → None
-ZS_UNAVAILABLE_SENTINEL: Final[Optional[float]] = getattr(
-    POINT_SET, "ZS_UNAVAILABLE_SENTINEL", None
-)
-#: CEMS 专有：折算公式与传输编码的契约函数；变送器无 → None（调用即报错，绝不静默）
-_TO_REFERENCE_O2: Final[Any] = getattr(POINT_SET, "to_reference_o2", None)
-_TO_TRANSMIT_VALUE: Final[Any] = getattr(POINT_SET, "to_transmit_value", None)
-
-
-def _require_emission_semantics(what: str) -> None:
-    """折算/哨兵/达标判定只在**排放限值语义适用**的点集上可用；不适用时**显式报错**。
-
-    ⚠️ 为什么是 raise 而不是"返回原值/返回空字典"：变送器的温湿度**没有排放限值语义**，
-       上层若调用折算，说明调用点写错了。静默返回会让"环境温度被当成折算浓度去判超标"
-       变成一个没有任何报错的错（本项目最在意的故障形态），所以宁可当场炸。
-    """
-    if not EMISSION_LIMIT_APPLICABLE:
-        raise RuntimeError(
-            f"{what} 不适用于当前点位集（POINT_SET={POINT_SET_ENV!r}）："
-            "本点集没有排放限值/基准氧折算语义（见 points_transmitter.py 顶部说明）。"
-            "该路径只对 CEMS 点集有意义，调用方应先用 EMISSION_LIMIT_APPLICABLE 判断"
-        )
-
-
 # 会被拼进 SQL 的标识符/tag 值白名单：**唯一真源**在 src/common/sql_safety.py，
 # 展示层读路径（src/web/cache.py 的 device_tag_parts）共用同一条正则。
 from src.common.sql_safety import SQL_NAME_RE, SQL_NAME_RULE   # noqa: E402
@@ -255,52 +190,6 @@ TD_COLUMNS: Final[tuple[str, ...]] = COLUMNS
 POINT_RANGES: Final[dict[str, tuple[float, float]]] = RANGES
 TS_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
 
-#: ⭐ 入库列类型一律 FLOAT（**实测决定，不要"按线格式选类型"**）：
-#:   列里存的是**工程值**（`values[点名]`，已 ÷scale），不是寄存器原始整数。
-#:   实测反例（本机 TDengine 3.3.6.13）：把变送器的列建成 SMALLINT 后，
-#:   插入 57.8 / -9.7 分别被**静默取整**成 58 / -10 —— 入库成功、无任何报错，
-#:   而库里已经不是网关读到（并上送）的那个数了。这与 CEMS 的既有口径一致
-#:   （`so2 FLOAT, nox FLOAT, …` 全部 FLOAT），也让"报文里那个 float 原样进库"。
-#:   线格式（dtype/endian）描述的是**线上字节的符号性与字节序**，
-#:   它的解释权在契约的 decode_points/decode_register，与列类型是两件事。
-
-
-def td_column_ddl() -> str:
-    """超级表的测点列定义（由**当前点集**派生，列序 = COLUMNS 顺序）。
-
-    ⚠️ 为什么必须派生而不是写死 9 个烟气列：变送器的子表若被建成 9 个烟气列，
-       写入的 2 个值会按**列序**落到前两列（so2 / nox）上 —— 入库成功、报表张冠李戴，
-       正是本项目最在意的一类静默错。列定义与 `TdWriter._insert` 使用的 `TD_COLUMNS`
-       同源（都来自当前点集），所以"建表"与"写入"不可能分叉。
-    """
-    return ", ".join(f"{point.column} FLOAT" for point in POINTS)
-
-
-#: 烟气（CEMS）点集的**字面量**列定义 —— 与改造前逐字一致。
-#: ⚠️ 默认路径**故意不走派生**：`CREATE STABLE IF NOT EXISTS` 对已存在的表是空操作，
-#:    但改动这段 SQL 会把"默认行为零变化"从"显然成立"变成"依赖幂等语义成立"。
-#:    派生只用于新设备（transmitter），既有 9 点契约的建表语句一个字都不动。
-_CEMS_COLUMN_DDL: Final[str] = (
-    "so2 FLOAT, nox FLOAT, flow FLOAT, "
-    "dust FLOAT, o2 FLOAT, temp FLOAT, humidity FLOAT, pressure FLOAT"
-)
-#: 当前点集是否就是那 9 点烟气契约（列名集合逐一相等，不是"模块名看起来像"）。
-#: ⚠️ 判据用**列名集合相等**而不是字符串比较点集名：点集名是配置，列名是契约事实。
-#:    相等 ⇒ 建表 SQL 走字面量（对既有部署零差异）；否则走派生（新设备）。
-_IS_CEMS_POINT_SET: Final[bool] = set(COLUMNS) == {
-    "flow", "dust", "so2", "nox", "o2", "velocity", "temp", "humidity", "pressure",
-}
-
-
-def stable_create_sql() -> str:
-    """`CREATE STABLE IF NOT EXISTS` 语句：列定义随点集（见上）。"""
-    columns = _CEMS_COLUMN_DDL if _IS_CEMS_POINT_SET else td_column_ddl()
-    return (
-        f"CREATE STABLE IF NOT EXISTS {TD_DB}.{TD_STABLE} "
-        f"(ts TIMESTAMP, {columns}) "
-        f"TAGS (plant NCHAR(20), device NCHAR(20))"
-    )
-
 # ---- 折算值（导出量）：只算、不进库 ----
 # ⚠️ 折算值**不给 TDengine 建列**。它是从"标干浓度 + 氧含量"算出来的导出量，
 #    存一份就必然有一天跟算出来的对不上（冗余必然漂）；库里保持 9 个物理量列。
@@ -310,11 +199,7 @@ def stable_create_sql() -> str:
 # 公式、基准氧含量（6%）、参与折算的污染物、氧含量测点名全部来自 src/common/points.py
 # 契约，这里**不重复推导公式**，也不硬编码列名字符串。
 COLUMN_TO_NAME: Final[dict[str, str]] = {point.column: point.name for point in POINTS}
-#: 氧含量在**报文里**的字段名（= points.NAMES 里的那个）。变送器点集没有氧含量列
-#: → None；此时折算路径整体不可用（见 _require_emission_semantics）。
-O2_FIELD_NAME: Final[Optional[str]] = (
-    COLUMN_TO_NAME[O2_COLUMN] if O2_COLUMN is not None else None
-)
+O2_FIELD_NAME: Final[str] = COLUMN_TO_NAME[O2_COLUMN]
 REFERENCE_LOG_EVERY: Final[int] = 20       # 折算值抽样日志周期（条），避免每条都刷屏
 
 # ---- 收发/拒收/落盘计数（把上游数据质量与"落盘队列"状态量化出来）----
@@ -509,9 +394,12 @@ class TdWriter:
                 f"KEEP {TD_KEEP_DAYS} DURATION {TD_DURATION_DAYS}"
             )
             # ★ REST 接口无状态：USE 不生效，每条 SQL 必须显式带库名前缀 cems.xxx
-            #   列定义由当前点集派生（见 stable_create_sql）：烟气走字面量（与改造前逐字
-            #   一致），变送器走派生（2 列 FLOAT，理由见 td_column_ddl 的注释）。
-            cur.execute(stable_create_sql())
+            cur.execute(
+                f"CREATE STABLE IF NOT EXISTS {TD_DB}.{TD_STABLE} "
+                f"(ts TIMESTAMP, so2 FLOAT, nox FLOAT, flow FLOAT, "
+                f"dust FLOAT, o2 FLOAT, temp FLOAT, humidity FLOAT, pressure FLOAT) "
+                f"TAGS (plant NCHAR(20), device NCHAR(20))"
+            )
             self._ensure_columns(cur)
             self._check_tags(cur)
         except Exception as exc:
@@ -825,10 +713,7 @@ def settle_hour(
     ⚠️ 折算值不落库，所以这里**回读原始行、用契约函数重算**（`points.to_reference_o2()`，
     仍然是唯一一份公式）；覆盖率分母 = 3600 / ALARM_POLL_INTERVAL = 720 条/小时。
     ⚠️ 覆盖率不足判 `insufficient`，**绝不判达标**（§3.4：最危险的漏报形态是"缺数据被当达标"）。
-    ⚠️ 只对排放限值语义适用的点集可用（本函数按 `ZS_TARGETS`/氧含量列回读并折算）：
-       变送器点集没有这些列，调用即报错 —— 不适用就不该被调用（见 main() 的能力守卫）。
     """
-    _require_emission_semantics("小时结算 settle_hour()")
     start_text = hour_start.strftime(TS_FORMAT)
     end_text = (hour_start + timedelta(hours=1)).strftime(TS_FORMAT)
     rows = writer.query(tables.hour_rows_sql(start_text, end_text))
@@ -959,13 +844,10 @@ def reference_values(values: dict[str, float]) -> dict[str, float]:
     ⚠️ 返回 nan 的情形：实测 O2 >= 21%（契约行为，别绕过、别当 0）。
        要**往外传输**时必须经 transmit_reference_values() 编码，不能直接把 nan 发出去。
     ⚠️ 判定口径：**超标判的是折算值，不是标干值**（本函数不做告警判定）。
-    ⚠️ 只对排放限值语义适用的点集可用：变送器点集没有基准氧/污染物概念，调用即报错
-       （见 _require_emission_semantics）—— 绝不静默返回空字典。
     """
-    _require_emission_semantics("折算值计算 reference_values()")
     o2 = values[O2_FIELD_NAME]
     return {
-        column: _TO_REFERENCE_O2(values[COLUMN_TO_NAME[column]], o2)
+        column: to_reference_o2(values[COLUMN_TO_NAME[column]], o2)
         for column in ZS_TARGETS
     }
 
@@ -984,9 +866,8 @@ def transmit_reference_values(values: dict[str, float]) -> dict[str, float]:
     ⚠️ 出参键与 reference_values() 相同（TDengine 列名）；**只用于出站/日志/展示**，
     不许拿去做达标判定或统计（哨兵值一定大于限值）。
     """
-    _require_emission_semantics("折算值传输编码 transmit_reference_values()")
     return {
-        column: _TO_TRANSMIT_VALUE(value)
+        column: to_transmit_value(value)
         for column, value in reference_values(values).items()
     }
 
@@ -1007,9 +888,8 @@ def record_reference(
     "协议编码"和"判据"两处 —— 既有"公式只算一次"，也避免判定拿到哨兵值。
     """
     references = reference_values(values) if math_references is None else math_references
-    _require_emission_semantics("折算值快照 record_reference()")
     snapshot = {
-        column: _TO_TRANSMIT_VALUE(value) for column, value in references.items()
+        column: to_transmit_value(value) for column, value in references.items()
     }
     LAST_REFERENCE["values"] = snapshot
     LAST_REFERENCE["ts"] = ts
@@ -1104,13 +984,6 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
     writer: TdWriter = userdata["writer"]
     spool: IngestSpool = userdata["spool"]
     if writer.write(ts, values):
-        # ⭐ 排放限值语义不适用的点集（变送器）：**到此为止**。
-        #   不算折算值（没有基准氧/污染物）、不记哨兵快照、不判超标、不写任何告警表 ——
-        #   入库这条主链路照常，附加动作整体不存在（而不是"算出来再丢掉"）。
-        if not EMISSION_LIMIT_APPLICABLE:
-            LOGGER.debug("已入库（本点集不参与排放判定）: %s %s",
-                         ts, " ".join(f"{k}={v}" for k, v in values.items()))
-            return
         # 折算值全链路只在这里算一次：数学层（nan 语义）留给判定，协议层（哨兵值）留给出站
         math_references = reference_values(values)
         references = record_reference(ts, values, math_references)
@@ -1253,24 +1126,6 @@ def main() -> None:
         TOPIC, CHILD_TABLE, TD_PLANT, TD_DEVICE,
     )
 
-    # 0c. ⭐ 能力守卫：**排放限值语义不适用的点集**（如温湿度变送器）不走折算/告警。
-    #     ⚠️ 判据只有一个：契约自己声明的 `EMISSION_LIMIT_APPLICABLE`
-    #        （points_transmitter.py 里显式写 False 并给了理由），本模块**不再列第二份名单**。
-    #     ⚠️ 关掉的不是"开关"而是"语义"：温湿度没有排放限值，折算/超标判定对它没有意义，
-    #        拿契约的占位 limit 去判只会把"超量程"误判成"超标"（见 points_transmitter 顶部）。
-    #        所以这里把 enable/hourly_enable 一起落成 False —— 不产生事件行、也不出小时结论。
-    alarm_config: Final[AlarmConfig] = (
-        ALARM_CONFIG
-        if EMISSION_LIMIT_APPLICABLE
-        else replace(ALARM_CONFIG, enable=False, hourly_enable=False)
-    )
-    if not EMISSION_LIMIT_APPLICABLE:
-        LOGGER.warning(
-            "点位集 %s 不参与排放限值判定（EMISSION_LIMIT_APPLICABLE=False）："
-            "本实例只入库，**不算折算值、不判超标、不出小时结论、不写任何告警表**",
-            POINT_SET_ENV,
-        )
-
     # 1. 初始化 TDengine（失败不退出：收到数据时会自动重连重试）
     writer = TdWriter()
     if not writer.connect():
@@ -1301,8 +1156,8 @@ def main() -> None:
     alarm_writer = AlarmWriter(ALARM_TABLES)
     if not alarm_writer.connect():
         LOGGER.error("首次连接告警表失败，将在需要写入时自动重试")
-    judge = AlarmJudge(alarm_config)
-    if alarm_config.enable:
+    judge = AlarmJudge(ALARM_CONFIG)
+    if ALARM_CONFIG.enable:
         if alarm_writer.ready:
             restore_judge_state(judge, alarm_writer, ALARM_TABLES)
         else:
@@ -1313,32 +1168,30 @@ def main() -> None:
         LOGGER.info(
             "告警判据已启用: 判折算值；滑窗 %d 条里 >= %d 条越限触发；"
             "连续 %d 条 <= 限值×%.2f 结束；小时覆盖率门限 %.2f（低于则判数据不足）",
-            alarm_config.window_samples, alarm_config.min_over_samples,
-            alarm_config.recover_samples, alarm_config.recover_ratio,
-            alarm_config.coverage_min,
+            ALARM_CONFIG.window_samples, ALARM_CONFIG.min_over_samples,
+            ALARM_CONFIG.recover_samples, ALARM_CONFIG.recover_ratio,
+            ALARM_CONFIG.coverage_min,
         )
-    elif EMISSION_LIMIT_APPLICABLE:
+    else:
         LOGGER.warning("ALARM_ENABLE=0：本次不判超标（只入库、只算折算值）")
 
     # 1c. 小时结算线程（独立连接，daemon，异常不影响订阅）
-    #     ⚠️ 条件里带 `alarm_config.hourly_enable` 而不是常量 ALARM_CONFIG：
-    #        变送器模式下它已被能力守卫落成 False ⇒ 这一整段不存在（不出小时结论）。
-    if alarm_config.hourly_enable and alarm_config.enable:
+    if ALARM_CONFIG.hourly_enable and ALARM_CONFIG.enable:
         settlement_writer = AlarmWriter(ALARM_TABLES)
         threading.Thread(
             target=hourly_settlement_loop,
             args=(
                 settlement_writer, ALARM_TABLES, judge,
-                alarm_config.hourly_backfill_hours, ALARM_SETTLE_DELAY_SECONDS,
+                ALARM_CONFIG.hourly_backfill_hours, ALARM_SETTLE_DELAY_SECONDS,
             ),
             name="alarm-hourly-settlement",
             daemon=True,
         ).start()
         LOGGER.info(
             "小时结算已启用: 每小时整点后 %.0fs 结算上一小时，启动补结算 %d 个小时",
-            ALARM_SETTLE_DELAY_SECONDS, alarm_config.hourly_backfill_hours,
+            ALARM_SETTLE_DELAY_SECONDS, ALARM_CONFIG.hourly_backfill_hours,
         )
-    elif EMISSION_LIMIT_APPLICABLE and not alarm_config.hourly_enable:
+    elif not ALARM_CONFIG.hourly_enable:
         LOGGER.info("ALARM_HOURLY_ENABLE=0：本次不跑小时结算")
 
     # 2. 连 MQTT（用 userdata 把写入器传给回调）

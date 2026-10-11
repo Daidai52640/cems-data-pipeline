@@ -126,9 +126,7 @@
 from __future__ import annotations
 
 import math
-import os
 import struct
-import sys
 from typing import Final, NamedTuple
 
 
@@ -528,57 +526,4 @@ def over_limit(name: str, value: float) -> bool:
     """
     limit = LIMITS[name]
     return value > limit
-
-
-# ============================================================================
-# 点集选择：让网关与接入层能按配置切换"这一实例采/收哪套点位"
-# ============================================================================
-#
-# 起因（2026-10-11 真机接入）：温湿度变送器只有 **2 个**测点，而本模块是 **9 个**烟气测点。
-# 把真机硬塞进这 9 个地址会**语义错位**（湿度会被当成颗粒物），所以必须有"第二套点集"。
-#
-# ⭐ 设计取舍：**两套点集刻意保持同一套属性名**（`POINTS` / `NAMES` / `COLUMNS` /
-#    `REG_BASE` / `REG_COUNT` / `RANGES` / `LIMITS` …）。
-#    这样网关与接入层**只需要换一个"取值来源"，不必分叉代码路径** ——
-#    改动是"把 `from ... import POINTS` 换成 `active_point_set().POINTS`"，而不是复制一套逻辑。
-#
-# ⚠️ **默认 `cems`**：不设 `POINT_SET` 时返回本模块，**既有部署行为完全不变**
-#    （这是不破坏 25 项既有验收的前提）。
-#
-# ⚠️ **返回的是模块对象**（不是数据副本）：调用方直接读属性即可。
-#    用惰性 import 避免 `points_transmitter` ↔ `points` 的循环导入。
-
-#: 选择点集的环境变量名。
-POINT_SET_ENV: Final[str] = "POINT_SET"
-
-#: 支持的点集名（新增设备类型时在这里登记）。
-SUPPORTED_POINT_SETS: Final[tuple[str, ...]] = ("cems", "transmitter")
-
-
-def active_point_set(name: str | None = None):
-    """按 `POINT_SET` 环境变量返回**当前点集模块**。
-
-    | `POINT_SET` | 返回 | 说明 |
-    |---|---|---|
-    | 不设 / `cems` | 本模块 | 9 个烟气测点（默认，行为与既有完全一致） |
-    | `transmitter` | `src.common.points_transmitter` | RS485 温湿度变送器（2 个测点，int16/AB） |
-
-    Args:
-        name: 显式指定点集名（测试用）；不给则读环境变量 `POINT_SET`。
-
-    Raises:
-        ValueError: 点集名不在 `SUPPORTED_POINT_SETS` 里。
-            ⚠️ **刻意 raise 而不是回落到 cems** —— 静默回落会让"配错点集"变成一个
-            采集正常、入库正常、但**数据是另一台设备**的静默错（本项目踩过同类坑）。
-    """
-    resolved = (name if name is not None else os.getenv(POINT_SET_ENV, "cems")).strip().lower()
-    if resolved == "cems":
-        return sys.modules[__name__]
-    if resolved == "transmitter":
-        from src.common import points_transmitter  # 惰性：避免循环导入
-
-        return points_transmitter
-    raise ValueError(
-        f"未知的 {POINT_SET_ENV}={resolved!r}；只支持 {SUPPORTED_POINT_SETS}"
-    )
 
