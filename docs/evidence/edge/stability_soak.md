@@ -64,6 +64,26 @@ python scripts\measure_edge_resource_summary.py --csv docs\evidence\edge\resourc
 
 ---
 
-## 第二轮（同口径，21:45 → 23:45）
+## 第二轮（同口径，21:45 → 23:45）—— ✅ 同样零异常
 
-见 `stability_soak_2.md`（第二轮结束后补）。
+```
+=== soak2 start 21:41:56 ===
+21:56:56 | unhealthy=0 restarts=0 rows/3min=35 invalid_15m=0 critical=0
+22:11:57 | unhealthy=0 restarts=0 rows/3min=34 invalid_15m=0 critical=0
+22:26:58 | unhealthy=0 restarts=0 rows/3min=35 invalid_15m=0 critical=0
+22:41:59 | unhealthy=0 restarts=0 rows/3min=35 invalid_15m=0 critical=0
+22:57:01 | unhealthy=0 restarts=0 rows/3min=35 invalid_15m=0 critical=0
+23:12:02 | unhealthy=0 restarts=0 rows/3min=35 invalid_15m=0 critical=0
+23:27:03 | unhealthy=0 restarts=0 rows/3min=35 invalid_15m=0 critical=0
+23:42:04 | unhealthy=0 restarts=0 rows/3min=35 invalid_15m=0 critical=0
+=== soak2 end 23:42:05 ===
+```
+
+⚠️ **第二轮日志里没有 `collector_sample` 列，是个已知的观测缺陷**：那一列读的是
+`resource-24h.status.append-live.json`，而 **21:42 采证重启后**新进程把心跳写到了另一个派生文件名
+（`resource-24h.status.json`），于是那列一直显示旧值 307。
+**采证本身没有断** —— 直接看 CSV 可证：`93605 → 93902` 字节 / `931 → 934` 行（35 秒内 +3 行）。
+
+**两轮合计：4 小时逐点观测（19:41 → 23:42），零不健康、零重启、零误报、速率稳定。**
+资源侧同期窗口 **4.72 小时 / 1590 行 / 每容器 530 个采样点 / 缺采 0 / 触顶 0**。
+
