@@ -16,6 +16,13 @@
 #      每行都带 `run_id` / `sample_no`，跨段也能分开统计。
 #   ⚠️ 每行写盘后 `flush` + `os.fsync`：这台机器上进程可能被强杀，
 #      不 fsync 的话最后一段采样会静静消失（采证脚本最忌讳这个）。
+#   ⚠️⚠️ 为什么**长跑时另写一个 `--append-file`**：这份 CSV 是**入库的仓库证据**，
+#      而采证还在跑 —— 每个采样点都在追加，`git status` 就永远不会干净，
+#      评审看到的是"改了却没提交"。所以约定：**入库的是某个时刻的冻结快照**
+#      （就是 `resource-24h.csv`），**继续采的那部分写 `resource-24h.append-<run_id>.csv`**
+#      （该文件被 `.gitignore` 排除）。24 h 跑完后把两者拼起来覆盖 `resource-24h.csv`
+#      再提交一次，即可得到"一份完整、且入库时是干净的"证据。
+#      不传 `--append-file` 时行为完全照旧（只写 `--out`）。
 #
 # ⚠️ 必须**脱离 agent 会话**运行（会话一结束，挂在会话下的子进程会被一起收走）：
 #     pwsh -NoProfile -Command "Start-Process -FilePath <python> `
@@ -29,6 +36,7 @@
 #
 # 参数：
 #   --out               产出 CSV 路径（默认 docs/evidence/edge/resource-24h.csv）
+#   --append-file       额外再追加一份到该路径（给"长跑"用；见上面为什么要有它）
 #   --interval          采样间隔秒数（默认 30）
 #   --duration-hours    跑多久（默认 24；`--once` 时忽略）
 #   --containers        逗号分隔的容器名（默认边缘侧三个）
@@ -195,6 +203,11 @@ def main() -> int:
         description="边缘侧资源占用采证（只读 docker stats，追加写 CSV）"
     )
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="产出 CSV 路径")
+    parser.add_argument(
+        "--append-file",
+        default="",
+        help="额外再追加一份到该路径（给长跑用：入库的那份保持冻结快照）",
+    )
     parser.add_argument("--interval", type=float, default=30.0, help="采样间隔秒数（默认 30）")
     parser.add_argument("--duration-hours", type=float, default=24.0, help="跑多久（默认 24 小时）")
     parser.add_argument(
@@ -216,14 +229,23 @@ def main() -> int:
     run_id = f"{now_local().strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:6]}"
     deadline = time.time() + args.duration_hours * 3600.0
 
+    targets: list[Path] = [out_path]
+    if args.append_file:
+        targets.append(Path(args.append_file))
+    handles: list[tuple[object, csv.DictWriter, Path]] = []
     try:
-        handle, writer, fresh = open_csv(out_path)
+        for target in targets:
+            handle, writer, fresh = open_csv(target)
+            handles.append((handle, writer, target))
+            print(f"[info] csv={target} fresh={fresh}", flush=True)
     except OSError as exc:
         print(f"[fatal] 产出文件不可写: {exc}", flush=True)
+        for handle, _, _ in handles:
+            handle.close()
         return 1
 
     print(f"[info] run_id={run_id}", flush=True)
-    print(f"[info] out={out_path} fresh={fresh}", flush=True)
+    print(f"[info] out={out_path}", flush=True)
     print(f"[info] containers={containers}", flush=True)
     print(
         f"[info] interval={args.interval}s duration={args.duration_hours}h once={args.once}",
@@ -243,11 +265,12 @@ def main() -> int:
                 print(f"[warn] sample {sample_no} 采样失败: {exc}", flush=True)
                 stats = {}
 
+            rows: list[dict[str, object]] = []
             for name in containers:
                 row = stats.get(name)
                 if row is None:
                     missing_hits += 1
-                    writer.writerow(
+                    rows.append(
                         {
                             "ts_local": ts.isoformat(timespec="seconds"),
                             "run_id": run_id,
@@ -261,7 +284,7 @@ def main() -> int:
                         }
                     )
                     continue
-                writer.writerow(
+                rows.append(
                     {
                         "ts_local": ts.isoformat(timespec="seconds"),
                         "run_id": run_id,
@@ -276,8 +299,12 @@ def main() -> int:
                 )
                 written += 1
 
-            handle.flush()
-            os.fsync(handle.fileno())
+            # 同一批行写进每一份目标文件（入库快照 + 长跑追加），再逐份 flush+fsync
+            for handle, writer, _ in handles:
+                writer.writerows(rows)
+                handle.flush()
+                os.fsync(handle.fileno())
+
             write_status(
                 status_path,
                 {
@@ -292,6 +319,7 @@ def main() -> int:
                     "duration_hours": args.duration_hours,
                     "containers": containers,
                     "out": str(out_path),
+                    "append_file": args.append_file or None,
                 },
             )
 
@@ -313,7 +341,8 @@ def main() -> int:
     except KeyboardInterrupt:
         print("[info] interrupted by Ctrl+C", flush=True)
     finally:
-        handle.close()
+        for handle, _, _ in handles:
+            handle.close()
 
     print(f"[done] samples={sample_no} rows={written} missing={missing_hits}", flush=True)
     if args.once and written == 0:
