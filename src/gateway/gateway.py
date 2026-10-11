@@ -8,6 +8,7 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Final, Optional
 
@@ -20,7 +21,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common.logging import setup_logging                # noqa: E402
-from src.common.points import POINTS, REG_BASE, REG_COUNT   # noqa: E402
+from src.common.points import active_point_set              # noqa: E402
+
+# ---- 点位集：按 `POINT_SET` 环境变量选取（默认 cems = 既有行为逐位不变）----
+# ⚠️ 这里**只换取值来源，不分叉代码路径**：下面的 POINTS / REG_BASE / REG_COUNT 三个名字
+#    与改造前完全一致（且默认就是 points 模块里的同一批对象），所以下游一行都不用改。
+#    两套点集刻意保持同名属性，正是为了做到这一点（见 src/common/points.py 顶部）。
+# ⚠️ 非法 `POINT_SET` 会在这里**导入期就抛 ValueError**（刻意不静默回落到 cems）：
+#    静默回落 = "采集正常、入库正常、但数据是另一台设备"的静默错。
+POINT_SET: Final[Any] = active_point_set()
+POINTS: Final[Any] = POINT_SET.POINTS
+REG_BASE: Final[int] = POINT_SET.REG_BASE
+REG_COUNT: Final[int] = POINT_SET.REG_COUNT
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
 # 所有连接参数都支持用环境变量覆盖，默认值与"本机直接运行"完全一致；
@@ -136,6 +148,19 @@ def _read_holding_registers(client: ModbusTcpClient, address: int, count: int) -
         return client.read_holding_registers(address=address, count=count, device_id=MODBUS_UNIT)
 
 
+def _registers_to_bytes(registers: Sequence[int]) -> bytes:
+    """把 Modbus 保持寄存器块拼成**线格式字节块**（每个寄存器 2 字节，高字节在前）。
+
+    ⚠️ 为什么必须有这一步：寄存器是 16 位**无符号**容器，而真实线格式可能是有符号的。
+       温湿度变送器的温度是 `int16` —— 直接拿寄存器值当数（6543）会算出 654.3 degC，
+       而正确值是 -9.7 degC（同一串字节 `FF 9F`）。符号性与字节序的解释**只有一处实现**
+       （`points.decode_register`），所以这里只负责"还原字节"，不自己解释数值。
+    ⚠️ pymodbus 的 `registers` 已经是"每个元素一个 16 位寄存器"（大端容器），
+       与 `points.WIRE_BYTE_ORDER` 的 AB/BA 语义对齐，所以按高字节在前展开是正确的还原。
+    """
+    return b"".join(bytes([(reg >> 8) & 0xFF, reg & 0xFF]) for reg in registers)
+
+
 def read_device(client: ModbusTcpClient) -> Optional[dict[str, float]]:
     """读设备全部测点寄存器并换算成真实值，返回 {测点名: 数值}；失败返回 None（不抛异常）。"""
     try:
@@ -149,12 +174,29 @@ def read_device(client: ModbusTcpClient) -> Optional[dict[str, float]]:
         return None
 
     try:
+        if len(response.registers) < REG_COUNT:
+            # 短应答（少寄存器）必须显式拒绝：按缺失下标切片会静默截断/错位，
+            # 解出"看起来合法"的数 —— 这类无声错位正是本项目最在意的故障形态。
+            LOGGER.error(
+                "Modbus 返回数据不完整: 期望 %d 个寄存器，收到 %d 个",
+                REG_COUNT, len(response.registers),
+            )
+            return None
+        if hasattr(POINT_SET, "decode_points"):
+            # ⭐ 点集自带按线格式解码（dtype/endian）：把寄存器块还原成字节段交给它，
+            #    符号性/字节序的解释权归契约，网关不复制一份。
+            #    只取前 REG_COUNT 个寄存器：真机的桥在同一从站上还挂着"桥状态/累计失败数"
+            #    这两个**非测点**寄存器，契约只声明 2 个测点 → 多出来的字节不能被塞进
+            #    decode_points（它会因为长度不符抛错，而那是**正确**的口径）。
+            raw = _registers_to_bytes(response.registers[:REG_COUNT])
+            return POINT_SET.decode_points(raw)
+        # 默认（cems）：逐点按"寄存器值 ÷ 换算系数"，与改造前**逐位一致**
         # 返回的寄存器块从 REG_BASE 开始，所以下标要减去起始地址
         return {
             point.name: response.registers[point.address - REG_BASE] / point.scale
             for point in POINTS
         }
-    except (IndexError, TypeError) as exc:
+    except (IndexError, TypeError, ValueError) as exc:
         LOGGER.error("Modbus 返回数据不完整: %s", exc)
         return None
 

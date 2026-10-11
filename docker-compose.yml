@@ -387,6 +387,71 @@ services:
     depends_on: *subscriber-depends
     healthcheck: *subscriber-healthcheck
 
+  # ---------------- 3c 真机接入：RS485 温湿度变送器（默认不启动，`--profile transmitter` 开启） ----------------
+  # ⭐ 这是一台**真实设备**（不是仿真）：温湿度变送器挂在宿主 COM3 上，由宿主的
+  #    `scripts/serial_bridge.py` 转成 Modbus TCP（= 现场那台"串口服务器"）。
+  #    容器访问不到 COM 口，所以桥必须跑在 Windows 宿主上 —— 本服务用
+  #    `host.docker.internal` 指向宿主（Docker Desktop 内置的宿主别名，无需再加 extra_hosts）。
+  #
+  # ⚠️ 为什么两个服务都进 `transmitter` profile（默认不起）：
+  #    默认启动面（8 个服务）是既有验收基线；真机链路依赖**外部**的两样东西
+  #    （COM3 上的设备 + 宿主上跑着的串口桥），它们不在 compose 的管辖内。
+  #    若默认启动，没插设备 / 没起桥的机器上会凭空多两个 unhealthy 容器，
+  #    而 `docker compose up -d` 的既有行为会因此变化 —— 所以必须显式 `--profile transmitter`。
+  #
+  # ⚠️ 与 plant2 那两套的本质区别：那两个实例换的是**从站号/主题/标签**，
+  #    点位集仍是 9 点烟气；这一套换的是**点位集**（`POINT_SET=transmitter` ⇒ 2 个测点、
+  #    int16 温度、没有排放限值语义 ⇒ 不算折算、不判超标、不出小时结论）。
+  gateway-transmitter:
+    <<: *app
+    profiles: ["transmitter"]
+    container_name: cems-gateway-transmitter
+    command: python src/gateway/gateway.py
+    environment:
+      <<: *gateway-env
+      POINT_SET: transmitter                # ★ 点位集：2 个测点（AirHumidity/AirTemp，int16/AB）
+      MODBUS_HOST: host.docker.internal     # ★ 真机在宿主上（串口桥暴露的 Modbus TCP）
+      MODBUS_PORT: "5021"                   # 桥的端口（设备层仿真用 5020，这里刻意避开）
+      MODBUS_UNIT: "1"                      # 真机从站 0x01
+      MQTT_TOPIC: cems/transmitter/data     # 主题第三段是用途；厂区段 transmitter 与 TD_PLANT 一致
+      # ⚠️ client_id 必须与其它实例两两不同（同名会互相踢下线，表现为两边反复重连）
+      MQTT_CLIENT_ID: cems-gateway-transmitter
+      # ★ 缓存目录必须每实例一份：两个网关共用目录会**互相把对方的数据发出去**（见 gateway.py 配置区）
+      GATEWAY_DATA_DIR: /app/data-transmitter
+    volumes:
+      - ./data/transmitter:/app/data-transmitter
+    depends_on:
+      emqx:
+        condition: service_healthy
+      # ⚠️ 对设备层**没有任何依赖**：真机不经过 device 服务。所以这里不写 device
+      #    （写了会平白要求"仿真设备先起来"，与真机语义不符）。
+    healthcheck:
+      <<: *gateway-healthcheck
+      test: ["CMD", "python", "-c",
+             "import sys,time,pathlib;p=pathlib.Path('/app/data-transmitter/.gateway_alive');sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime<30 else 1)"]
+
+  subscriber-transmitter:
+    <<: *app
+    profiles: ["transmitter"]
+    container_name: cems-subscriber-transmitter
+    command: python src/platform/subscriber_to_td.py
+    environment:
+      <<: *subscriber-env
+      POINT_SET: transmitter                # ★ 点位集：NAMES=AirHumidity/AirTemp，无排放限值语义
+      MQTT_TOPIC: cems/transmitter/data     # 与上面的网关成对
+      MQTT_CLIENT_ID: cems-subscriber-transmitter
+      # ★ 超级表/标签都按设备分开：数据进 cems.transmitter_data，子表 transmitter_tx01
+      #   （子表名 = {TD_PLANT}_{TD_DEVICE} 小写，见 subscriber_to_td.CHILD_TABLE）
+      TD_STABLE: transmitter_data
+      TD_PLANT: transmitter                 # ≈ 主题厂区段，enforce_topic_scope 因此天然匹配
+      TD_DEVICE: tx01
+      # ★ 落盘队列目录每实例一份（与网关缓存目录同源的理由：共用会互相张冠李戴）
+      SUBSCRIBER_DATA_DIR: /app/data-transmitter/subscriber
+    volumes:
+      - ./data/transmitter:/app/data-transmitter
+    depends_on: *subscriber-depends
+    healthcheck: *subscriber-healthcheck
+
   # ---------------- 基础设施：查询缓存（展示层专用） ----------------
   # 只被 web 服务使用：缓存"已闭合时间窗"的 TDengine 聚合结果。
   # 判据与正确性边界见 src/web/cache.py 顶部；它**不是**业务数据的真源，
