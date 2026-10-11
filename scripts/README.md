@@ -1,6 +1,6 @@
 # `scripts/` 目录索引
 
-本目录是 cems-data-pipeline 的**验收 / 度量 / 演练 / 演示工装 + 共用底座**：41 个**代码文件**（36 `.py` + 5 `.ps1`）**全部平铺**，外加本索引 `README.md`
+本目录是 cems-data-pipeline 的**验收 / 度量 / 演练 / 演示工装 + 共用底座**：45 个**代码文件**（40 `.py` + 5 `.ps1`）**全部平铺**，外加本索引 `README.md`
 一个脚本一件事，产出证据落到 `docs/evidence/`，结论被 `docs/adr/` 与 `docs/` 下的指标文档引用。
 
 > 本文件是**纯索引**。脚本的功能、参数、退出码一律以脚本自身的 docstring / `--help` 为准。
@@ -88,7 +88,7 @@
 | `verify_sim_reproducible.py` | 验收自检 3/3：可复现性——同种子同时间参数必须逐值一致（含跨进程、不同 `PYTHONHASHSEED`、换种子必须变、缺省种子确定）。 | 无参数。起独立子进程跑 `sim_trace_dump.py` 比对。退出码 `0`/`1`。 |
 | `verify_sim_spike_exceedance.py` | 验收自检 5/5：污染物偶发尖峰与"折算值超标"口径（触发概率、尖峰顶过折算限值、折算 vs 标干差异、`SIM_SPIKE_PROB` 可控）。 | 无参数，无需 Docker。退出码 `0`/`1`。 |
 
-## 二、度量类（7 个）
+## 二、度量类（9 个）
 
 只量数字、不判通过；原始数据落 `docs/evidence/`，引用口径与对应 ADR / 指标文档互相印证。
 
@@ -97,18 +97,21 @@
 | `measure_cache_invalidation.py` | 实测"数据更新后缓存多久刷新"：向一个未来空分钟注入 1 行哨兵，测完删除。 | `--timeout 120`、`--poll-interval 0.2`、`--sentinel-second 5`、`--out`。 |
 | `measure_clock_consistency.py` | 跨容器 / 宿主机时钟一致性测量：容器间一致性、宿主机偏移时间序列、NTP 外部基准三部分。 | `--rounds 12`、`--round-gap 3.0`、`--seconds 60`、`--interval 1.0`、`--out`。 |
 | `measure_completeness.py` | 数据完整率测量：实际入库条数 / 理论应有条数，含断档检测与窗口自动选取。 | `--since`、`--until now`、`--interval 5.0`（名义 `POLL_INTERVAL`）、`--gap-factor 3.0`、`--auto`、`--tag`。 |
+| `measure_edge_resources.py` | ⭐ **边缘侧资源占用采证（长跑）**：每 30 秒记一次 `docker stats --no-stream`，**只记边缘侧容器**（`cems-device` / `cems-gateway` / `cems-gateway-plant2`），**追加**写 `docs/evidence/edge/resource-24h.csv`（每行带 `run_id`/`sample_no`，每行 fsync）。 | `--interval 30`、`--duration-hours 24`、`--containers a,b`、`--once`（自检）、`--out`、`--status-file`（心跳 json，用于核对"它是不是还在采"）。⚠️ **必须脱离 agent 会话跑**（`Start-Process -WindowStyle Hidden`）。只读。 |
+| `measure_edge_resource_summary.py` | 边缘侧采证的**汇总**：读上面的 CSV，逐容器算 CPU/内存 min/avg/max、**是否触顶**、缺采点数，落 `resource-summary.json`。 | `--csv`、`--out`、`--ceiling-ratio 0.40`（内存触顶判据占上限比例）、`--cpu-ceiling 100`、`--json-only`。只读。 |
 | `measure_latency.py` | 测量端到端延迟（设备读数时间戳 → TDengine 可查），输出逐条原始数据 CSV。 | `--minutes 30`、`--poll 0.25`、`--limit 600`、`--recompute <csv>` 只重算不测、`--tag`。 |
 | `measure_nginx_redis.py` | 测量 nginx 反代开销 + Redis 缓存前后对比，输出原始 JSON。 | `--phase both\|routes\|ab`、`--overhead-count 12`、`--tag`。A/B 需重启容器切换开关，故分两段跑。 |
 | `measure_report_coverage.py` | 用**实测**周期分布与逐窗口条数分布标定报表覆盖率门限（给出覆盖率天花板与干净窗口下限），不拍脑袋定阈值。 | `--threshold 0.75`、`--device device1`、`--tag`、`--no-write`。只读；只按单台设备标定。 |
 | `measure_resend_success.py` | 补传成功率演练：停 emqx → 恢复 → 按"该补条数"对账。 | `--outage 180`（断开秒数）、`--drain-timeout 420`、`--tag resend`、`--out`。 |
 
-## 三、灾备 / 演练类（4 个）
+## 三、灾备 / 演练类（6 个）
 
 制造故障或真恢复一次，记录 RTO 与保真度；`_td_ops.py` 是它们的共用底座。
 
 | 文件 | 一句话用途 | 关键参数 / 用法 |
 |---|---|---|
 | `backup_tdengine.py` | TDengine `cems` 库全量逻辑备份（taosdump）+ 清单 + 校验 + 保留期清理，可选卷级 tar 与时间窗差量。 | `--tier hourly\|daily\|monthly\|manual`、`--since/--until`（差量）、`--physical`、`--prune`、`--prune-after`、`--list`、`--keep-*`、`--threads 4`。 |
+| `drill_edge_autonomy.py` | ⭐ **边缘侧自治演练**：`linkcut` = 停 broker 60 s（模拟边缘与云失联）→ 恢复 → 按"该补条数"逐条对账；`crash` = `docker kill cems-gateway` → 观察自愈 → 显式恢复 → 验数据连续。 | `--mode linkcut\|crash`、`--outage 60`、`--auto-wait 45`、`--drain-timeout 300`、`--container`、`--tag`、`--device`、`--dry-run`。⚠️ 会短暂打断北向；退出码 `2` = 演练完成但对账不通过（原始输出仍落盘）。原始输出落 `docs/evidence/edge/`。 |
 | `drill_timezone_misconfig.py` | 时区错误演练（网关 `TZ=UTC`）：起一对一次性实例，记录墙上时钟偏移、入库 ts 与覆盖率/新鲜度判据的反应，并与正确时区对照。 | `--seconds`、`--tag tz_utc_run1`、`--keep-going`。隔离标签 `plant=tzdrill`；跑完 `docker rm -f` + `DROP TABLE` 复核。 |
 | `restore_drill_dual_device.py` | 双设备恢复演练：逐设备对账 + RTO。 | `--backup <目录含 manifest.json>`、`--container`、`--threads`、`--timeout`、`--tag`、`--keep-going`。 |
 | `restore_drill_tdengine.py` | TDengine 恢复演练：真恢复一次到独立环境 + 记录 RTO + 分段校验保真度。 | `--mode instance\|rename\|physical\|summary`、`--backup`（默认取最新）、`--backup-root`、`--keep-going`。 |
@@ -144,18 +147,18 @@
 
 ## 自查
 
-**代码文件总数 41**（36 `.py` + 5 `.ps1`）—— ⚠️ **不含本索引 `README.md` 自己**；
-因此 `Get-ChildItem scripts -File` 会输出 **42**（41 + 本索引），两者差 1 是正常的，不是漏登记。
+**代码文件总数 45**（40 `.py` + 5 `.ps1`）—— ⚠️ **不含本索引 `README.md` 自己**；
+因此 `Get-ChildItem scripts -File` 会输出 **46**（45 + 本索引），两者差 1 是正常的，不是漏登记。
 每个**代码文件**在全文中**恰好登记一次**：
 
 | 分组 | 个数 |
 |---|---|
 | 一、验收类（含子进程工具 `sim_trace_dump.py`） | 17 |
-| 二、度量类 | 7 |
-| 三、灾备 / 演练类 | 4 |
+| 二、度量类（本轮 +2：`measure_edge_resources.py` / `measure_edge_resource_summary.py`） | 9 |
+| 三、灾备 / 演练类（本轮 +1：`drill_edge_autonomy.py`） | 6 |
 | 四、演示类 | 2 |
 | 五、工具 / 库 / 编排 | 11 |
-| **合计** | **41** |
+| **合计** | **45** |
 
 组内按文件名排序（codepoint 序，`_` 开头者排在最前）；每个条目的一句话用途均取自脚本 docstring
 或 argparse `help`，未臆测。

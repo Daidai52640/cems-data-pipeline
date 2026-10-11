@@ -1,0 +1,55 @@
+# 边缘侧自治演练 - mode=crash
+# tag=20261011T185122 device=device1 container=cems-gateway
+# started_at=2026-10-11 18:51:22
+
+=== [0] 前置：cems-gateway 当前状态 ===
+  cems-gateway: status=exited health=unhealthy started_at=2026-10-11T10:44:51.794615267Z
+  基线 [device1]: 库内 26255 条，MAX(ts)=2026-10-11 18:45:47
+
+=== [1] 崩溃：docker kill cems-gateway（SIGKILL，不给优雅退出机会）===
+  前置：cems-gateway 不在跑（exited），先拉起来再崩...
+  前置完成: status=running health=healthy
+  已 kill @ 2026-10-11 18:51:28 → status=exited health=unhealthy
+  +    3s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +    6s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +    9s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   12s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   16s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   19s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   22s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   25s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   28s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   31s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   34s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   37s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   40s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   43s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  +   46s status=exited    health=unhealthy started_at=2026-10-11T10:51:22.24550426Z
+  等待 45 s 的自动重启结果: 未自动重启
+
+=== [1b] 显式恢复：docker compose up -d gateway ===
+  显式恢复: healthy=True 用时 7.1 s，StartedAt=2026-10-11T10:52:15.481053431Z
+  恢复结论: 由「docker compose up -d」恢复，总停机 53.2 s，RestartCount=0，恢复后 mem_limit=536870912 B
+
+=== [2] 数据是否继续入库（连续两次 COUNT 必须递增）===
+  COUNT(*) = 26259 @ 2026-10-11 18:52:22
+  COUNT(*) = 26261 @ 2026-10-11 18:52:34
+
+=== [3] 时间戳连续性（断档 > 3×POLL_INTERVAL 才列出）===
+  窗口内 6 条：2026-10-11 18:51:22 .. 2026-10-11 18:52:31
+  最大间隔 48 s（POLL_INTERVAL=5 s）
+  · 停机期间断档   48 s : 2026-10-11 18:51:27 → 2026-10-11 18:52:15（崩溃的直接后果，非自愈问题）
+  库内 26255 → 26261（+6），MAX(ts) 2026-10-11 18:45:47 → 2026-10-11 18:52:31
+  判定: {"saw_down": true, "recovered": true, "data_continues": true, "no_gap_after_recovery": true}
+
+[finally] 10 个容器状态:
+  emqx                   running  healthy   2026-10-11T10:39:50.260460526Z
+  tdengine               running  healthy   2026-10-11T10:11:39.095105632Z
+  cems-device            running  healthy   2026-10-11T10:26:21.586176877Z
+  cems-gateway           running  healthy   2026-10-11T10:52:15.481053431Z
+  cems-gateway-plant2    running  healthy   2026-10-11T10:26:22.375387912Z
+  cems-subscriber        running  healthy   2026-10-11T10:11:50.748810026Z
+  cems-subscriber-plant2 running  healthy   2026-10-11T10:11:50.870306937Z
+  cems-redis             running  healthy   2026-10-11T10:11:39.2530338Z
+  cems-nginx             running  healthy   2026-10-11T10:11:55.560228244Z
+  cems-web               running  healthy   2026-10-11T10:14:21.142549411Z

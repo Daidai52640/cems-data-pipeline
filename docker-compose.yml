@@ -32,6 +32,29 @@ name: cems
 # 四个 Python 服务共用同一镜像和网络配置，用 YAML 锚点复用。
 # 注意：整个 compose 里只有 device 声明 build —— 四个服务用的是同一个镜像，
 #       若每个服务都写 build，compose 会并发构建同一个镜像名而报 AlreadyExists。
+# ---- 边缘节点资源约束（"边缘计算"部署形态的硬证据）----
+# 为什么要有这一段：本链路的**边缘侧**是 device（数采）+ gateway（网关，本地清洗/缓存/补传）。
+# 项目定位是"工业数据采集 + 边缘计算"，但此前全仓库没有任何资源上限 —— 那等于宣称跑在
+# 一台不受限的机器上，与"边缘盒子"这个部署形态自相矛盾。这里给边缘侧两（三）个服务封顶。
+# ⚠️ 为什么**不是**只写 `deploy.resources.limits`：那是 swarm 口径的写法，在
+#    `docker compose`（非 swarm）下"能不能生效"随 compose 版本变，属于要实测的项。
+#    本机实测（Docker 29.7.2 / Compose v5.5.1，2026-10-11）**两种写法都生效**，
+#    落到 HostConfig 的值逐位相同（见 docs/runbooks/边缘侧部署与资源约束.md 的实测输出）。
+#    仍然**两种都写**：service 级的 `mem_limit` / `cpus` 是 compose 的原生字段、语义最确定；
+#    `deploy.resources.limits` 让这份编排在 swarm/其它编排器下也带着同样的约束，
+#    不会因为"换了个入口"就悄悄变成无上限。
+# 取值理由：每容器 512 MiB / 1 vCPU —— 量级对应一台 2 核 2 GB 的边缘盒子能给单服务留的额度。
+#   本机实测边缘侧三容器常驻 CPU 峰值 < 8%（均值 < 1%）、内存 22~27 MiB（见同文档的资源采证小节），
+#   512m/1.0 是**有余量**的顶，不是贴着用。
+x-edge-limits: &edge-limits
+  mem_limit: 512m
+  cpus: 1.0
+  deploy:
+    resources:
+      limits:
+        memory: 512m
+        cpus: "1.0"
+
 x-app: &app
   image: cems-pipeline:latest
   # 这个镜像只在本机构建、不在任何 registry 上，
@@ -279,7 +302,7 @@ services:
 
   # ---------------- 1 设备层：Modbus 仿真设备 ----------------
   device:
-    <<: *app
+    <<: [*app, *edge-limits]      # ★ 边缘侧：数采，受资源约束（见文件头 x-edge-limits）
     container_name: cems-device
     build: .                       # 全项目唯一的构建入口，产出 cems-pipeline:latest
     command: python src/device/modbus_server.py
@@ -335,7 +358,7 @@ services:
   # ---------------- 2 网关层：轮询设备 → 发 MQTT ----------------
   # 第一套实例（现状）：从站 1 → 主题 cems/plant1/data → 缓存目录 ./data
   gateway:
-    <<: *app
+    <<: [*app, *edge-limits]      # ★ 边缘侧：网关，受资源约束（见文件头 x-edge-limits）
     container_name: cems-gateway
     command: python src/gateway/gateway.py
     environment:
@@ -364,7 +387,7 @@ services:
   #   1) .env 里设 SLAVE_IDS=1,2   —— 让设备层真的提供从站 2（否则本实例读不到数据）
   #   2) docker compose --profile plant2 up -d
   gateway2:
-    <<: *app
+    <<: [*app, *edge-limits]      # ★ 边缘侧：第二台设备的网关，同样受约束
     profiles: ["plant2"]
     container_name: cems-gateway-plant2
     command: python src/gateway/gateway.py

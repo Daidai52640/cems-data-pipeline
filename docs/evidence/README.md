@@ -14,6 +14,7 @@
 | `cache/` | 8 | nginx + redis 缓存与一次真实数据错位的留档 | `nginx_redis_run1.json`、`cache_invalidation_drill.json`、`atomic_handover_probe.json`、`_incident_20261001_timestamp_shift_repair.py`、`_show_ab.py` |
 | `backup/` | 17 | 备份自检标定 + **2026-10-03 双设备复验批次** | `backup_selfcheck_scope_*.json`（`scripts/verify_backup_selfcheck_scope.py` 的产出落点）、`dual_device_restore_drill_*`（双设备 RTO 复验 n=3）、`tdengine_restore_drill_*_dual_*`（改名/物理/整表级复验）、`tz_misconfig_drill_*`（时区演练）、`verify_sim_*_tzfix/diurnal_*`（时区修复后的仿真复验）、`emqx_status_watch_*.csv`（§10.6 broker 状态采样） |
 | `coverage/` | 1 | 报表覆盖率标定 | `report_coverage_calibration.json` |
+| `edge/` | 见目录内 | **边缘侧部署形态证据**（2026-10-11 新增） | `resource-24h.csv`（每 30 s 一次的边缘侧容器资源采样，**长跑追加**）、`resource-summary.json`（汇总）、`edge_autonomy_linkcut_*.{txt,json}`（断链自治原始输出 + 逐条对账）、`edge_autonomy_crash_*.{txt,json}`（崩溃自愈）、`edge_linkcut_queue_snapshot_*.txt`（断链期间落盘队列原文） |
 | `logs/` | 3 | 网关日志导出与演练运行日志 | `_gateway_log_dump.txt`、`resend_drill*_run.log` |
 
 > 加上本 `README.md`，本目录共 141 个条目。

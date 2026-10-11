@@ -1,0 +1,46 @@
+# 边缘侧自治演练 - mode=linkcut
+# tag=20261011T183650 device=device1 container=cems-gateway
+# started_at=2026-10-11 18:36:50
+
+
+=== [0] 前置：10 个容器状态 + broker 客户端表 ===
+  emqx                   running  healthy   2026-10-11T10:11:38.910619992Z
+  tdengine               running  healthy   2026-10-11T10:11:39.095105632Z
+  cems-device            running  healthy   2026-10-11T10:26:21.586176877Z
+  cems-gateway           running  healthy   2026-10-11T10:26:22.272291387Z
+  cems-gateway-plant2    running  healthy   2026-10-11T10:26:22.375387912Z
+  cems-subscriber        running  healthy   2026-10-11T10:11:50.748810026Z
+  cems-subscriber-plant2 running  healthy   2026-10-11T10:11:50.870306937Z
+  cems-redis             running  healthy   2026-10-11T10:11:39.2530338Z
+  cems-nginx             running  healthy   2026-10-11T10:11:55.560228244Z
+  cems-web               running  healthy   2026-10-11T10:14:21.142549411Z
+  --- emqx ctl clients list（网关两实例）---
+  Client(cems-gateway-plant1, username=undefined, peername=172.18.0.7:34089, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791714382538, connected_at=1791714382538)
+  Client(cems-gateway-plant2, username=undefined, peername=172.18.0.8:60591, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791714382659, connected_at=1791714382659)
+  基线 [device1]: 库内 26186 条，MAX(ts)=2026-10-11 18:36:47，落盘队列 0 行
+
+=== [1] 断开北向：docker stop emqx（边缘与云之间唯一的北向出口）===
+  已停 @ 2026-10-11 18:36:54 → emqx ['exited', 'unhealthy', '2026-10-11T10:11:38.910619992Z']
+  设备侧不受影响：Modbus 走容器内网，与 broker 无关（下面每轮都会核）
+  +   17s 落盘队列     508 B /   4 行 / 去重   4 条 | 网关心跳 age=1.7s（本地采集循环仍在转）
+  +   32s 落盘队列     888 B /   7 行 / 去重   7 条 | 网关心跳 age=1.6s（本地采集循环仍在转）
+  +   47s 落盘队列    1269 B /  10 行 / 去重  10 条 | 网关心跳 age=1.6s（本地采集循环仍在转）
+  +   60s 落盘队列    1523 B /  12 行 / 去重  12 条 | 网关心跳 age=4.2s（本地采集循环仍在转）
+  快照 @ 2026-10-11 18:37:52: 文件 12 行 / 去重 12 条报文
+  队列快照落盘: edge_linkcut_queue_snapshot_.txt
+  该补条数 N = 12（快照里 ≤ 基线的 0 条不计入）
+!! 异常: TypeError('can only concatenate str (not "NoneType") to str')
+[finally] emqx 未在跑，正在恢复…
+[finally] emqx: status=running health=starting
+
+[finally] 10 个容器状态:
+  emqx                   running  starting  2026-10-11T10:37:52.33405599Z
+  tdengine               running  healthy   2026-10-11T10:11:39.095105632Z
+  cems-device            running  healthy   2026-10-11T10:26:21.586176877Z
+  cems-gateway           running  healthy   2026-10-11T10:26:22.272291387Z
+  cems-gateway-plant2    running  healthy   2026-10-11T10:26:22.375387912Z
+  cems-subscriber        running  unhealthy 2026-10-11T10:11:50.748810026Z
+  cems-subscriber-plant2 running  unhealthy 2026-10-11T10:11:50.870306937Z
+  cems-redis             running  healthy   2026-10-11T10:11:39.2530338Z
+  cems-nginx             running  healthy   2026-10-11T10:11:55.560228244Z
+  cems-web               running  unhealthy 2026-10-11T10:14:21.142549411Z

@@ -1,0 +1,117 @@
+{
+  "mode": "crash",
+  "tag": "20261011T184019",
+  "device": "device1",
+  "container": "cems-gateway",
+  "started_at": "2026-10-11 18:40:19",
+  "before": {
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-10-11T10:26:22.272291387Z"
+  },
+  "baseline": {
+    "at": "2026-10-11 18:40:19",
+    "rows": 26228,
+    "max_ts": "2026-10-11 18:40:18",
+    "queue_lines": 0
+  },
+  "kill": {
+    "at": "2026-10-11 18:40:19",
+    "state_after_kill": {
+      "status": "exited",
+      "health": "unhealthy"
+    }
+  },
+  "recovery": {
+    "saw_down": true,
+    "came_up_at": "2026-10-11 18:42:27",
+    "restart_seconds": 127.6,
+    "started_at_after": "2026-10-11T10:42:20.700302747Z",
+    "restart_count": "0"
+  },
+  "series": {
+    "first": "2026-10-11 18:38:23",
+    "last": "2026-10-11 18:42:36",
+    "count": 27,
+    "max_gap_seconds": 128,
+    "gaps_over_3x_poll_interval": [
+      [
+        "2026-10-11 18:40:18",
+        "2026-10-11 18:42:26",
+        128
+      ]
+    ]
+  },
+  "after": {
+    "at": "2026-10-11 18:42:39",
+    "rows": 26231,
+    "max_ts": "2026-10-11 18:42:36",
+    "db_growth": 3,
+    "queue_lines": 1,
+    "counts": [
+      26229,
+      26231
+    ],
+    "counts_increasing": true
+  },
+  "verdict": {
+    "saw_down": true,
+    "auto_restarted": true,
+    "data_continues": true,
+    "no_gap_over_15s": false
+  },
+  "exit_code": 2,
+  "final_states": {
+    "emqx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:39:50.260460526Z"
+    ],
+    "tdengine": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.095105632Z"
+    ],
+    "cems-device": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:21.586176877Z"
+    ],
+    "cems-gateway": [
+      "running",
+      "healthy",
+      "2026-10-11T10:42:20.700302747Z"
+    ],
+    "cems-gateway-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.375387912Z"
+    ],
+    "cems-subscriber": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.748810026Z"
+    ],
+    "cems-subscriber-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.870306937Z"
+    ],
+    "cems-redis": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.2530338Z"
+    ],
+    "cems-nginx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:55.560228244Z"
+    ],
+    "cems-web": [
+      "running",
+      "healthy",
+      "2026-10-11T10:14:21.142549411Z"
+    ]
+  },
+  "ended_at": "2026-10-11 18:42:40"
+}
