@@ -53,8 +53,27 @@ function Get-PythonExe {
 }
 
 function Test-PortListening([int]$Port) {
-    $conn = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
-    return [bool]$conn
+    # MUST be a direct TCP connect, NOT `Get-NetTCPConnection`.
+    # MEASURED 2026-10-11: `Get-NetTCPConnection` takes tens of seconds on this
+    # box, and this function is called up to 40 times in the wait loop below --
+    # the script hung for >4 minutes with no output.  A raw connect is ~1 ms.
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $iar = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        $ok = $iar.AsyncWaitHandle.WaitOne(300)
+        if ($ok) { $client.EndConnect($iar) }
+        return $ok
+    }
+    catch { return $false }
+    finally { $client.Close() }
+}
+
+function Get-SerialPortNames {
+    # MUST use SerialPort.GetPortNames(), NOT `Get-CimInstance Win32_PnPEntity`.
+    # Win32_PnPEntity enumerates the whole PnP tree and is a well-known slow WMI
+    # class -- MEASURED 2026-10-11: it hung this script for over 5 minutes before
+    # any progress output appeared.  GetPortNames() is instant.
+    [System.IO.Ports.SerialPort]::GetPortNames()
 }
 
 function Find-BridgeProcess {
@@ -78,10 +97,10 @@ elseif (Test-PortListening $TcpPort) {
 else {
     if (-not (Test-Path $bridgeScript)) { throw "bridge script not found: $bridgeScript" }
 
-    $comExists = [bool](Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match $ComPort })
+    $comExists = (Get-SerialPortNames) -contains $ComPort
     if (-not $comExists) {
-        Write-Host "[1/3] bridge: WARNING -- '$ComPort' not found as a device." -ForegroundColor Yellow
+        $avail = (Get-SerialPortNames) -join ', '
+        Write-Host "[1/3] bridge: WARNING -- '$ComPort' not present. Available: $avail" -ForegroundColor Yellow
         Write-Host '      The bridge will start anyway and retry forever;' -ForegroundColor Yellow
         Write-Host '      cems-device will REFUSE to start until the device answers' -ForegroundColor Yellow
         Write-Host '      (that is deliberate -- it will not publish fake data).' -ForegroundColor Yellow

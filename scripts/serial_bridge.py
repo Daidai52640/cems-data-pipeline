@@ -290,6 +290,11 @@ def main() -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
         force=True,
+        # ⚠️ **显式写 stdout**：`basicConfig` 的默认流是 `stderr`。
+        # 本桥被 `scripts/up.ps1` 以 `Start-Process -RedirectStandardOutput/Error`
+        # 拉起时，两个流分别落两个文件 —— 不写这一行，**正常读数会全跑进 .err.log**，
+        # 而 .log 是空的（实测踩过，排障时会误以为桥没输出）。
+        stream=sys.stdout,
     )
 
     bridge = Bridge(port=args.port, baud=args.baud, interval=args.interval)
