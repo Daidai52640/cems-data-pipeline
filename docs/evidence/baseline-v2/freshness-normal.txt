@@ -1,0 +1,11 @@
+GET /api/health -> HTTP 200
+{"data_age_seconds":3.225,"healthy":true,"ok":true,"reason":"fresh","rows_last_1min":12,"stale_after_seconds":15.0,"td":"up"}
+data_age_seconds=3.225 stale_after_seconds=15.0
+GET / -> HTTP 200 bytes=15055
+injected FRESHNESS_WARN=30.0
+fresh element present: True
+fresh script present : True
+fresh badge class ok  : True
+fresh badge class bad : True
+RENDERED -> class=fresh ok | data freshness: last data 3.2s ago
+GET /chart -> HTTP 200 fresh_markers=1

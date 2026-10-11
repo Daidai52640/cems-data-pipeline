@@ -118,6 +118,7 @@
 | `cache/` | 缓存相关（失效演练、原子交接探针） |
 | `backup/` | 备份自检标定（`scripts/verify_backup_selfcheck_scope.py` 的产出落点；目录自身的说明见 `evidence/backup/README.md`） |
 | `coverage/` | 覆盖率阈值标定 |
+| `baseline-v2/` | **基线 v2 冻结时的原始产物**：大屏"数据新鲜度"正常态 / 超时态的**截图 + 逐项证据文本**（`runbooks/真机接入-基线冻结v2.md` §5.2 引用） |
 
 ### 北向出口（P4/P5，代码）
 | 文件 | 内容 |
