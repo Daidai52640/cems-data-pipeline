@@ -1,6 +1,6 @@
 # `scripts/` 目录索引
 
-本目录是 cems-data-pipeline 的**验收 / 度量 / 演练 / 演示工装 + 共用底座**：39 个**代码文件**（36 `.py` + 3 `.ps1`）**全部平铺**，外加本索引 `README.md`
+本目录是 cems-data-pipeline 的**验收 / 度量 / 演练 / 演示工装 + 共用底座**：41 个**代码文件**（36 `.py` + 5 `.ps1`）**全部平铺**，外加本索引 `README.md`
 一个脚本一件事，产出证据落到 `docs/evidence/`，结论被 `docs/adr/` 与 `docs/` 下的指标文档引用。
 
 > 本文件是**纯索引**。脚本的功能、参数、退出码一律以脚本自身的 docstring / `--help` 为准。
@@ -122,7 +122,7 @@
 | `hj212_loopback_demo.py` | 最小 P4 演示：真数据 → 组 HJ212 包（ANSI CRC16，可选 SM4）→ **真实 TCP socket** → 本脚本内起的上位机分帧解码并回 `CN=9014` 应答。 | `--encrypt`（SM4 数据区）、`--from-db`（取 TDengine 最新一行，否则用内置样例）、`--resend`（写 `RF=1`）。 |
 | `northbound_demo.py` | 最小 P5 演示：一份采样同时走 `Hj212Adapter`(TCP) 与 `HttpJsonAdapter`(HTTP) 两个出口，都被独立解码，证明"加出口 = 加一个类，上层不改"。 | `--from-db`、`--encrypt`。接收端由本脚本提供（本地回环）。 |
 
-## 五、工具 / 库 / 编排（9 个）
+## 五、工具 / 库 / 编排（11 个）
 
 不单独产生业务结论，被其他脚本 import 或调用；`_` 前缀表示"内部共用"。
 
@@ -133,17 +133,19 @@
 | `_loadtest_run.ps1` | 并发压测编排：起 N 个一次性接入实例（独立 client_id / 独立子表 `<plant>_lt<i>`）+ 调 `loadgen_devices.py` + 按固定间隔抓 `docker stats` 快照。 | `-Devices N -Duration S -Tag <tag>`（必填）、`-Interval 1.0`、`-ParallelPublishers 16`、`-OutDir docs/evidence/perf`。跑完**不自动清理**，用 `loadgen_devices.py --cleanup` 单独做。 |
 | `_probe_mqtt_session.py` | 只做一次 MQTT 连接/订阅/发布的最小探针，用于定位 broker 是否在"新客户端接入"时出问题。 | 无参数：连 `emqx:1883`、订专属主题、发 3 条、等 5 秒退出。不写库、不建表。 |
 | `_td_ops.py` | TDengine 备份/恢复演练的共用底座：一切 SQL 走容器内 `taos` CLI，时间边界统一取纪元毫秒，卷名从 `docker inspect` 读。 | 被 `backup_tdengine.py`、`restore_drill_*.py`、`drill_timezone_misconfig.py`、`verify_backup_selfcheck_scope.py`、`measure_report_coverage.py` import（`from scripts._td_ops import ...`）。**只读**，无任何写库语句。 |
+| `down.ps1` | ⭐ **停全栈**：先杀掉**宿主上的 RS485 桥**，再 `docker compose down`。⚠️ 匹配条件必须是「**镜像名 `python*` + 命令行含 `serial_bridge.py`**」**两者同时满足** —— 实测桥从 agent/shell 启动时，命令行含 `serial_bridge.py` 的进程有 **3 个**（DSH runner / pwsh / 真正的 python），只按命令行匹配会**误杀调用方**。 | `-StopBridgeOnly`、`-StopContainersOnly`、`-KeepContainers`、`-PurgeVolumes`。⚠️ `down` **默认保留卷**（TDengine 数据不丢） |
 | `export_images.ps1` | 把本项目全部镜像导出成可搬运的 tar 包（+ sha256），用于"给一台没网的干净机器让它跑起来"。 | `-Out dist`、`-DryRun`、`-SkipBuild`、`-Split`。⚠️ **一律按 tag 导出，绝不按 digest**：按 digest 导出的 tar `RepoTags=null`，`docker load` 后镜像无名，离线机上 `compose up` 直接失败。 |
 | `import_images.ps1` | 在**干净 / 离线机器**上导入 `export_images.ps1` 产出的镜像包。 | `-From D:\dist`（必填）、`-WhatIf`。核对 5 个预期镜像（emqx 6.3.0 / tdengine 3.3.6.13 / redis 7.4.11-alpine / nginx 1.31.6-alpine / cems-pipeline:latest）。 |
 | `loadgen_devices.py` | 负载发生器：模拟 N 台设备并发向 EMQX 上送，测吞吐/延迟，并可逐条对账入库是否丢数。 | `--devices N`、`--interval 5`、`--duration 60`、`--ingest-channels k`、`--no-verify`、`--cleanup`、`--dry-run`；`--listen-topic/--listen-out/--listen-seconds` 可只当旁听器量某条链路实际发布条数。 |
 | `serial_bridge.py` | ⭐ **RS485（Modbus RTU）→ Modbus TCP 桥**：把 COM 口上的**真机**（温湿度变送器）暴露成 TCP 从站，扮演现场那台"**串口服务器**"。**必须跑在 Windows 宿主上** —— Docker 容器访问不到宿主 COM 口（`MODBUS_HOST=host.docker.internal` 可让容器读到它）。 | `--port COM3`、`--tcp-port 5021`（避开设备层 5020）、`--interval 1.0`、`--baud 4800`。对外 4 个保持寄存器：`0`=湿度×10、`1`=温度×10(**int16**)、⭐ `2`=桥状态（`0` 新鲜 / `1` 陈旧）、`3`=累计读失败次数。⚠️ **读失败时保留上次好值并把状态位置 1**，故意不重复真机"读错地址沉默返回 0"那个毛病（见 `docs/runbooks/真机接入.md` S4 发现 1）。 |
+| `up.ps1` | ⭐ **一条命令起全栈**：先把 **RS485 桥拉成宿主上的独立进程**（`Start-Process` 脱离本 shell，**不会随 agent 会话一起死**），等 `:5021` 可连之后，再 `docker compose --profile plant2 up -d`。⚠️ **桥为什么不进容器**（本机实测 2026-10-11）：WSL2 里 `/dev/ttyUSB*` 不存在、容器里连 `/dev/ttyS*` 都没有，**且 WSL2 内核没有 ch341 模块** —— 光装 `usbipd-win` 也不够，得自编译内核。 | `-ComPort COM3`、`-TcpPort 5021`、`-NoBuild`、`-SkipBridge`。⭐ **刻意不做开机自启**：设备没插时不该有东西在跑 |
 
 ---
 
 ## 自查
 
-**代码文件总数 39**（36 `.py` + 3 `.ps1`）—— ⚠️ **不含本索引 `README.md` 自己**；
-因此 `Get-ChildItem scripts -File` 会输出 **40**（39 + 本索引），两者差 1 是正常的，不是漏登记。
+**代码文件总数 41**（36 `.py` + 5 `.ps1`）—— ⚠️ **不含本索引 `README.md` 自己**；
+因此 `Get-ChildItem scripts -File` 会输出 **42**（41 + 本索引），两者差 1 是正常的，不是漏登记。
 每个**代码文件**在全文中**恰好登记一次**：
 
 | 分组 | 个数 |
@@ -152,8 +154,8 @@
 | 二、度量类 | 7 |
 | 三、灾备 / 演练类 | 4 |
 | 四、演示类 | 2 |
-| 五、工具 / 库 / 编排 | 9 |
-| **合计** | **39** |
+| 五、工具 / 库 / 编排 | 11 |
+| **合计** | **41** |
 
 组内按文件名排序（codepoint 序，`_` 开头者排在最前）；每个条目的一句话用途均取自脚本 docstring
 或 argparse `help`，未臆测。
