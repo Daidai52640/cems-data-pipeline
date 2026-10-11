@@ -1,6 +1,6 @@
 # `scripts/` 目录索引
 
-本目录是 cems-data-pipeline 的**验收 / 度量 / 演练 / 演示工装 + 共用底座**：38 个文件**全部平铺**，
+本目录是 cems-data-pipeline 的**验收 / 度量 / 演练 / 演示工装 + 共用底座**：39 个文件**全部平铺**，
 一个脚本一件事，产出证据落到 `docs/evidence/`，结论被 `docs/adr/` 与 `docs/` 下的指标文档引用。
 
 > 本文件是**纯索引**。脚本的功能、参数、退出码一律以脚本自身的 docstring / `--help` 为准。
@@ -122,7 +122,7 @@
 | `hj212_loopback_demo.py` | 最小 P4 演示：真数据 → 组 HJ212 包（ANSI CRC16，可选 SM4）→ **真实 TCP socket** → 本脚本内起的上位机分帧解码并回 `CN=9014` 应答。 | `--encrypt`（SM4 数据区）、`--from-db`（取 TDengine 最新一行，否则用内置样例）、`--resend`（写 `RF=1`）。 |
 | `northbound_demo.py` | 最小 P5 演示：一份采样同时走 `Hj212Adapter`(TCP) 与 `HttpJsonAdapter`(HTTP) 两个出口，都被独立解码，证明"加出口 = 加一个类，上层不改"。 | `--from-db`、`--encrypt`。接收端由本脚本提供（本地回环）。 |
 
-## 五、工具 / 库 / 编排（8 个）
+## 五、工具 / 库 / 编排（9 个）
 
 不单独产生业务结论，被其他脚本 import 或调用；`_` 前缀表示"内部共用"。
 
@@ -136,12 +136,13 @@
 | `export_images.ps1` | 把本项目全部镜像导出成可搬运的 tar 包（+ sha256），用于"给一台没网的干净机器让它跑起来"。 | `-Out dist`、`-DryRun`、`-SkipBuild`、`-Split`。⚠️ **一律按 tag 导出，绝不按 digest**：按 digest 导出的 tar `RepoTags=null`，`docker load` 后镜像无名，离线机上 `compose up` 直接失败。 |
 | `import_images.ps1` | 在**干净 / 离线机器**上导入 `export_images.ps1` 产出的镜像包。 | `-From D:\dist`（必填）、`-WhatIf`。核对 5 个预期镜像（emqx 6.3.0 / tdengine 3.3.6.13 / redis 7.4.11-alpine / nginx 1.31.6-alpine / cems-pipeline:latest）。 |
 | `loadgen_devices.py` | 负载发生器：模拟 N 台设备并发向 EMQX 上送，测吞吐/延迟，并可逐条对账入库是否丢数。 | `--devices N`、`--interval 5`、`--duration 60`、`--ingest-channels k`、`--no-verify`、`--cleanup`、`--dry-run`；`--listen-topic/--listen-out/--listen-seconds` 可只当旁听器量某条链路实际发布条数。 |
+| `serial_bridge.py` | ⭐ **RS485（Modbus RTU）→ Modbus TCP 桥**：把 COM 口上的**真机**（温湿度变送器）暴露成 TCP 从站，扮演现场那台"**串口服务器**"。**必须跑在 Windows 宿主上** —— Docker 容器访问不到宿主 COM 口（`MODBUS_HOST=host.docker.internal` 可让容器读到它）。 | `--port COM3`、`--tcp-port 5021`（避开设备层 5020）、`--interval 1.0`、`--baud 4800`。对外 4 个保持寄存器：`0`=湿度×10、`1`=温度×10(**int16**)、⭐ `2`=桥状态（`0` 新鲜 / `1` 陈旧）、`3`=累计读失败次数。⚠️ **读失败时保留上次好值并把状态位置 1**，故意不重复真机"读错地址沉默返回 0"那个毛病（见 `docs/runbooks/真机接入.md` S4 发现 1）。 |
 
 ---
 
 ## 自查
 
-文件总数 **38**（35 `.py` + 3 `.ps1`），与 `Get-ChildItem scripts -File` 的输出逐一对齐，
+文件总数 **39**（36 `.py` + 3 `.ps1`），与 `Get-ChildItem scripts -File` 的输出逐一对齐，
 每个文件在全文中**恰好登记一次**：
 
 | 分组 | 个数 |
@@ -150,8 +151,8 @@
 | 二、度量类 | 7 |
 | 三、灾备 / 演练类 | 4 |
 | 四、演示类 | 2 |
-| 五、工具 / 库 / 编排 | 8 |
-| **合计** | **38** |
+| 五、工具 / 库 / 编排 | 9 |
+| **合计** | **39** |
 
 组内按文件名排序（codepoint 序，`_` 开头者排在最前）；每个条目的一句话用途均取自脚本 docstring
 或 argparse `help`，未臆测。
