@@ -129,10 +129,20 @@ REAL_DEVICE_UNIT: Final[int] = int(os.getenv("REAL_DEVICE_UNIT", "1"))
 REAL_DEVICE_SLAVE: Final[int] = int(os.getenv("REAL_DEVICE_SLAVE", str(SLAVE_ID)))
 #: 覆盖哪两个测点（地址取自 `src/common/points.py`：Temp=6、Humidity=7）
 REAL_DEVICE_POINTS: Final[tuple[str, ...]] = ("Temp", "Humidity")
-#: 桥的寄存器布局（见 `scripts/serial_bridge.py`）：0=湿度×10、1=温度×10
+#: 桥的寄存器布局（见 `scripts/serial_bridge.py`）：0=湿度×10、1=温度×10、**2=桥状态**
 REAL_DEVICE_REG_HUMIDITY: Final[int] = 0
 REAL_DEVICE_REG_TEMPERATURE: Final[int] = 1
+#: ⭐ 桥的**状态位**（`0` 新鲜 / 非 0 陈旧）。**必须读它** ——
+#: 否则真机在运行中掉线时，桥会一直给"上次好值"，设备层照搬出去就是**静默假数据**
+#: （大屏上只表现为一条平线，没人知道真机已经死了）。
+REAL_DEVICE_REG_STATUS: Final[int] = 2
 REAL_DEVICE_POLL_INTERVAL: Final[float] = float(os.getenv("REAL_DEVICE_POLL_INTERVAL", "2.0"))
+#: 连续读失败多少次后，把**保留的旧值标记为陈旧**（≈ 秒数 = 此值 × 轮询周期）。
+#: ⭐ 必须有它：**桥自己掉线时设备层连不上桥，也就读不到桥的状态位** ——
+#: 若只依赖桥的状态位，旧值会一直带着"新鲜"标记被发出去。
+REAL_DEVICE_STALE_AFTER_FAILURES: Final[int] = int(
+    os.getenv("REAL_DEVICE_STALE_AFTER_FAILURES", "3")
+)
 
 
 def device_simulators(
@@ -273,10 +283,10 @@ class RealDeviceReader:
         self.unit = unit
         self.interval = interval
         self._lock = threading.Lock()
-        self._values: Optional[tuple[int, int]] = None
+        self._values: Optional[tuple[int, int, bool]] = None
         self._failures = 0
 
-    def _note_success(self, value: tuple[int, int]) -> None:
+    def _note_success(self, value: tuple[int, int, bool]) -> None:
         with self._lock:
             if self._failures:
                 LOGGER.warning("真机恢复读取（此前连续失败 %d 次）", self._failures)
@@ -284,17 +294,38 @@ class RealDeviceReader:
             self._values = value
 
     def _note_failure(self) -> int:
+        """记一次失败；连续失败到门限后，**把保留的旧值标记为陈旧**。
+
+        ⭐ 为什么必须这样：**桥自己掉线时，设备层连不上桥，也就读不到桥的状态位** ——
+        若只依赖状态位，`self._values` 会一直带着 `stale=False` 的旧值被当成新鲜数据发出去，
+        又变回"静默假数据"。所以"**连不上**"本身也必须升级成"**陈旧**"。
+        """
         with self._lock:
             self._failures += 1
+            if (
+                self._failures >= REAL_DEVICE_STALE_AFTER_FAILURES
+                and self._values is not None
+                and not self._values[2]
+            ):
+                self._values = (self._values[0], self._values[1], True)
+                LOGGER.error(
+                    "真机/桥连续 %d 次读不到（≥ 门限 %d）→ 保留值**标记为陈旧**，"
+                    "设备层将写越界值让接入层拒收",
+                    self._failures,
+                    REAL_DEVICE_STALE_AFTER_FAILURES,
+                )
             return self._failures
 
-    def read_once(self) -> Optional[tuple[int, int]]:
-        """读一次并**更新内部状态**；成功返回 `(湿度×10, 温度×10)`，失败返回 `None`。
+    def read_once(self) -> Optional[tuple[int, int, bool]]:
+        """读一次并**更新内部状态**；成功返回 `(湿度×10, 温度×10, 是否陈旧)`，失败返回 `None`。
 
         ⚠️ **成功时必须写入 `self._values`** —— 启动预检也走这个方法。
         若预检只"读一下"而不落状态，`main()` 通过预检之后、轮询第一次成功之前
         会有一个窗口，期间 `overlay_real_values` 拿不到值 → 设备层会对外**发布仿真温湿度**，
         而那正是我们要避免的"**静默假数据**"。所以状态更新与读取放在同一个方法里。
+
+        ⭐ **第三个元素是"陈旧"标志**，来自桥的状态寄存器（`REAL_DEVICE_REG_STATUS`）：
+        桥读不到变送器时会**保留上次好值**并置位。设备层读它，下游才不会把陈旧值当新鲜数据。
         """
         from pymodbus.client import ModbusTcpClient
 
@@ -304,14 +335,23 @@ class RealDeviceReader:
                 self._note_failure()
                 return None
             response = client.read_holding_registers(
-                address=REAL_DEVICE_REG_HUMIDITY, count=2, slave=self.unit
+                address=REAL_DEVICE_REG_HUMIDITY,
+                count=REAL_DEVICE_REG_STATUS + 1,
+                slave=self.unit,
             )
             if response.isError():
                 self._note_failure()
                 return None
+            registers = response.registers
+            # 状态位缺失（只给 2 个寄存器的老版桥）时按"新鲜"处理，保持向后兼容
+            stale = (
+                len(registers) > REAL_DEVICE_REG_STATUS
+                and int(registers[REAL_DEVICE_REG_STATUS]) != 0
+            )
             value = (
-                int(response.registers[REAL_DEVICE_REG_HUMIDITY]),
-                int(response.registers[REAL_DEVICE_REG_TEMPERATURE]),
+                int(registers[REAL_DEVICE_REG_HUMIDITY]),
+                int(registers[REAL_DEVICE_REG_TEMPERATURE]),
+                stale,
             )
         except Exception:
             self._note_failure()
@@ -324,7 +364,7 @@ class RealDeviceReader:
         self._note_success(value)
         return value
 
-    def snapshot(self) -> Optional[tuple[int, int]]:
+    def snapshot(self) -> Optional[tuple[int, int, bool]]:
         with self._lock:
             return self._values
 
@@ -339,8 +379,33 @@ class RealDeviceReader:
                     "Temp/Humidity 保持**上次好值**，不回落到仿真值",
                     failures, self.host, self.port, self.unit,
                 )
+            elif got[2]:
+                # ⭐ 桥报"陈旧"：读数还在，但**已经不是当前真值**。
+                # overlay_real_values 会据此写**越界值**让接入层拒收 —— 故障必须可见。
+                LOGGER.error(
+                    "真机读数**陈旧**（桥状态位=1）：%s:%d 从站%d —— "
+                    "桥仍在保留上次好值，但设备层写越界值让接入层拒收，不冒充新鲜数据",
+                    self.host, self.port, self.unit,
+                )
             time.sleep(self.interval)
 
+
+def _stale_raw(point_name: str) -> int:
+    """取该测点"**刚好越界一格**"的寄存器原始值（量程上限 +1 个刻度，再 × scale）。
+
+    用途：真机读数**陈旧**时写它 → 接入层按既有的"超量程"规则**拒收整条报文**，
+    **故障立刻可见**（日志出现拒收、覆盖率掉、曲线断开）。
+
+    ⚠️ **刻意不用 0**：`0` **落在量程内**，会被当成真实读数一路入库 ——
+    那正是真机教我们的坑（读错地址沉默返回 0，见 `docs/runbooks/真机接入.md` S4 发现 1）。
+    """
+    point = next(p for p in POINTS if p.name == point_name)
+    return int((point.high + 1) * point.scale)
+
+
+#: 真机陈旧时写进寄存器的**越界值**（导入期按契约算一次，不写魔数）
+STALE_TEMP_RAW: Final[int] = _stale_raw("Temp")
+STALE_HUMIDITY_RAW: Final[int] = _stale_raw("Humidity")
 
 #: 真机读取器（仅 `REAL_DEVICE_ENABLE=1` 时创建，其余情况保持 `None`）
 _REAL_READER: Optional[RealDeviceReader] = None
@@ -366,13 +431,14 @@ def overlay_real_values(values: list[int], slave_id: int) -> list[int]:
         # 启动预检保证这里基本不会发生；真到了就叫出来，**不静默**
         LOGGER.error("[从站%d] 真机尚无有效读数，Temp/Humidity 仍是仿真值", slave_id)
         return values
-    humidity_raw, temperature_raw = snap
+    humidity_raw, temperature_raw, stale = snap
     out = list(values)
     for point in POINTS:
         if point.name == "Humidity":
-            out[point.address - REG_BASE] = humidity_raw
+            # ⭐ 陈旧 ⇒ 写越界值（101 %），让接入层**拒收**，而不是冒充新鲜数据
+            out[point.address - REG_BASE] = STALE_HUMIDITY_RAW if stale else humidity_raw
         elif point.name == "Temp":
-            out[point.address - REG_BASE] = temperature_raw
+            out[point.address - REG_BASE] = STALE_TEMP_RAW if stale else temperature_raw
     return out
 
 
