@@ -28,14 +28,23 @@
   |----------|----------------|----------|------|------|
   | `0x0000` | 湿度           | uint16   | ÷10  | %RH |
   | `0x0001` | 温度           | **int16**| ÷10  | degC（补码） |
-  | `0x0002` | ⭐ **桥状态**  | uint16   | —    | `0`=新鲜，`1`=陈旧（读失败） |
+  | `0x0002` | ⭐ **桥状态**  | uint16   | —    | `0`=新鲜，`1`=陈旧 |
   | `0x0003` | 连续读失败次数 | uint16   | —    | 每次成功清零 |
 
-⭐⭐ **为什么要有 0x0002 / 0x0003 这两个寄存器**：
-实测发现这台变送器**读错地址时返回全 0 而不报异常**（见 `docs/runbooks/真机接入.md` S4 发现 1）。
-"沉默就返回 0"是**静默的假数据**。本桥**故意不重复这个错误**：
-读失败时**保留上一次的好值**，同时把 `0x0002` 置 `1` —— 让下游**能看见"这份数是陈旧的"**，
-而不是把 0 当成真实湿度。
+⭐⭐ **陈旧时 `0x0000`/`0x0001` 写的是「越界值」而不是上一次的好值**：
+`Humidity → 101.0 %`、`Temp → 301.0 degC`（**同时超出 CEMS 与变送器两套契约的量程**，导入期有自检）。
+
+**为什么这么做**：实测发现这台变送器**读错地址时返回全 0 而不报异常**
+（见 `docs/runbooks/真机接入.md` S4 发现 1）—— "沉默就返回 0"是**静默的假数据**。
+本桥**故意不重复这个错误**，而且是**两层**：
+
+1. `0x0002` 状态位 —— 给**会读它**的消费者（如设备层混流那条路）
+2. ⭐ **越界值** —— 给**不会读状态位**的消费者
+   （如 `POINT_SET=transmitter` 的网关，它只读 2 个寄存器、看不到状态位）
+
+**把"无效"做进值本身，任何消费者都无法误用。** 只置状态位是不够的 —— 那只是把洞留给下一个人。
+
+⚠️ **刻意不用 0**：`0` 落在两套契约的所有量程内，会被当成真实读数入库。
 
 ============================ 用法（在 Windows 宿主上跑）============================
     python scripts/serial_bridge.py --port COM3
@@ -95,6 +104,49 @@ BRIDGE_REG_TOTAL: Final[int] = 4
 
 STATUS_FRESH: Final[int] = 0
 STATUS_STALE: Final[int] = 1
+
+#: ⭐ **陈旧时对外写的越界值**。必须**同时**超出两套契约的量程：
+#:   CEMS（`src/common/points.py`）      `Temp [0, 300]` / `Humidity [0, 100]`
+#:   变送器（`src/common/points_transmitter.py`）`AirTemp [-40, 125]` / `AirHumidity [0, 100]`
+#: `301.0 degC` 同时超出两者；`101.0 %` 同时超出两者。
+#:
+#: **为什么不能只置状态位**：下游未必读它 ——
+#:   路径 A（设备层混流）读了状态位，**路径 B（`POINT_SET=transmitter`）的网关只读 2 个寄存器、看不到状态位**。
+#:   把"无效"做进**值本身**，任何消费者都无法误用。
+#:
+#: ⚠️ **为什么不用 0**：`0` **落在上述所有量程内**，会被当成真实读数一路入库 ——
+#:   那正是真机教我们的坑（读错地址沉默返回 0，见 `docs/runbooks/真机接入.md` S4 发现 1）。
+STALE_HUMIDITY_RAW: Final[int] = 1010    # 101.0 %
+STALE_TEMPERATURE_RAW: Final[int] = 3010  # 301.0 degC
+
+
+def _check_stale_sentinels() -> None:
+    """导入期自检：越界值必须**同时**超出 CEMS 与变送器两套契约的量程。
+
+    ⚠️ 这一条不能省：若哪天有人把 `Temp` 量程放宽到 310，`301.0` 就不再越界 ——
+    这个"无效标记"会被当成合法读数一路入库，**又是一个静默假数据**，而且极难发现。
+    """
+    from src.common import points_transmitter
+    from src.common.points import POINTS as CEMS_POINTS
+
+    cases = (
+        ("Humidity", STALE_HUMIDITY_RAW, "AirHumidity"),
+        ("Temp", STALE_TEMPERATURE_RAW, "AirTemp"),
+    )
+    for cems_name, raw, tx_name in cases:
+        value = raw / SCALE
+        cems_point = next(p for p in CEMS_POINTS if p.name == cems_name)
+        tx_point = next(p for p in points_transmitter.POINTS if p.name == tx_name)
+        for label, point in (("CEMS", cems_point), ("transmitter", tx_point)):
+            if point.low <= value <= point.high:
+                raise ValueError(
+                    f"越界哨兵失效：{cems_name}={value} 落在 {label} 契约 "
+                    f"'{point.name}' 的量程 [{point.low}, {point.high}] 内 —— "
+                    f"它会被当成合法读数入库。请调大 STALE_*_RAW。"
+                )
+
+
+_check_stale_sentinels()
 
 
 def _split_words(raw: int) -> bytes:
@@ -191,12 +243,19 @@ class Bridge:
 
     # -------------------------------------------------- TCP 侧
     def snapshot(self) -> list[int]:
+        """对外快照。⭐ **陈旧时不返回旧值，改返回越界值** —— 让下游无法误用（见模块顶部说明）。"""
         with self._lock:
-            stale = STATUS_STALE if (self._failures > 0 or not self._have_value) else STATUS_FRESH
+            stale = self._failures > 0 or not self._have_value
+            if stale:
+                humidity_raw = STALE_HUMIDITY_RAW
+                temperature_raw = STALE_TEMPERATURE_RAW
+            else:
+                humidity_raw = self._last_humidity
+                temperature_raw = self._last_temperature
             return [
-                self._last_humidity,
-                self._last_temperature,
-                stale,
+                humidity_raw,
+                temperature_raw,
+                STATUS_STALE if stale else STATUS_FRESH,
                 min(self._total_failures, 0xFFFF),
             ]
 
