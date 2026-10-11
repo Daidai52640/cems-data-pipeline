@@ -276,6 +276,21 @@ services:
       # 折算值超标由展示/告警层用 points.to_reference_o2() 现算，库里不存折算列。
       SIM_SPIKE_PROB: ${SIM_SPIKE_PROB:-0.004}
       SIM_SPIKE_ENABLE: ${SIM_SPIKE_ENABLE:-1}
+      # ---- 真机接入（可选，**默认关闭**）：把 2 个寄存器改由 RS485 温湿度变送器供给 ----
+      # 真机挂在 **Windows 宿主的 COM3** 上；容器访问不到宿主 COM 口，所以由宿主上的
+      # `scripts/serial_bridge.py` 把它转成 Modbus TCP（扮演现场那台"**串口服务器**"）。
+      # ⭐ 开启后：地址 6(`Temp`) / 7(`Humidity`) 来自真机，其余 7 个仍是仿真 ——
+      #    网关 / 接入层 / 库表 / 大屏 **全都不用改**（它们看到的仍然是一个 9 寄存器的从站）。
+      #    现场对应形态：CEMS 里的**数采仪**就是把多路仪表聚合成一个寄存器块。
+      # ⚠️ **语义边界**：真机测的是**环境**温湿度，而这两列在环保口径上是**烟气**参数 ——
+      #    本开关只用于**数据链路演示**，不作环保口径依据。见 `docs/runbooks/真机接入.md`。
+      # ⚠️ 开启后若桥不可达，设备层会**拒绝启动**（宁可起不来，也不对外发布假数据）。
+      REAL_DEVICE_ENABLE: ${REAL_DEVICE_ENABLE:-0}
+      REAL_DEVICE_HOST: ${REAL_DEVICE_HOST:-host.docker.internal}
+      REAL_DEVICE_PORT: ${REAL_DEVICE_PORT:-5021}
+      REAL_DEVICE_UNIT: ${REAL_DEVICE_UNIT:-1}
+      REAL_DEVICE_SLAVE: ${REAL_DEVICE_SLAVE:-1}
+      REAL_DEVICE_POLL_INTERVAL: ${REAL_DEVICE_POLL_INTERVAL:-2.0}
     ports:
       - "${BIND_ADDR:-127.0.0.1}:5020:5020"      # 方便用 Modbus 调试工具直接看寄存器
     healthcheck:
