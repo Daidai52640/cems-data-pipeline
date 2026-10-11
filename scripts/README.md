@@ -143,6 +143,9 @@
 | `serial_bridge.py` | ⭐ **RS485（Modbus RTU）→ Modbus TCP 桥**：把 COM 口上的**真机**（温湿度变送器）暴露成 TCP 从站，扮演现场那台"**串口服务器**"。**必须跑在 Windows 宿主上** —— Docker 容器访问不到宿主 COM 口（`MODBUS_HOST=host.docker.internal` 可让容器读到它）。 | `--port COM3`、`--tcp-port 5021`（避开设备层 5020）、`--interval 1.0`、`--baud 4800`。对外 4 个保持寄存器：`0`=湿度×10、`1`=温度×10(**int16**)、⭐ `2`=桥状态（`0` 新鲜 / `1` 陈旧）、`3`=累计读失败次数。⚠️ **读失败时保留上次好值并把状态位置 1**，故意不重复真机"读错地址沉默返回 0"那个毛病（见 `docs/runbooks/真机接入.md` S4 发现 1）。 |
 | `up.ps1` | ⭐ **一条命令起全栈**：先把 **RS485 桥拉成宿主上的独立进程**（`Start-Process` 脱离本 shell，**不会随 agent 会话一起死**），等 `:5021` 可连之后，再 `docker compose --profile plant2 up -d`。⚠️ **桥为什么不进容器**（本机实测 2026-10-11）：WSL2 里 `/dev/ttyUSB*` 不存在、容器里连 `/dev/ttyS*` 都没有，**且 WSL2 内核没有 ch341 模块** —— 光装 `usbipd-win` 也不够，得自编译内核。 | `-ComPort COM3`、`-TcpPort 5021`、`-NoBuild`、`-SkipBridge`。⭐ **刻意不做开机自启**：设备没插时不该有东西在跑 |
 | ⭐ `wrapup_run.ps1` | **长跑收尾**：① 收割资源证据（对追加段跑 `measure_edge_resource_summary.py`）② 停采证进程 ③ `compose down`（**保留卷**）④ 停宿主串口桥 ⑤ 核验三项归零（容器数 / 残留桥进程 / `:5021` 是否还在听）。⚠️ **`-HarvestOnly` 只收割、什么都不停** —— 这条曾经写反过（"只看证据"把长跑采证一起杀了），现已把停机步骤全部挪到该分支之后。 | `-HarvestOnly`（安全模式）、`-EvidenceDir`。⚠️ 与 `down.ps1` 的区别：这个**多一步"先收割"**，适合长跑结束时的固定动作 |
+| ⭐ `morning_wrapup.ps1` | **无人值守早间收尾**（供 `morning_timer.ps1` 调用）：收割 → 把追加段**归档**进入库的 `resource-24h.csv` → 停采证 → `git commit/push` → `compose down`（保留卷）→ 停桥 → 核验 → **写 `data\morning_report.txt`**。⭐ **任何一步失败都不阻断后面**（每步独立 try），退出码恒 0。 | `-SkipStop`（不碰容器/桥/采证，安全试跑）、`-SkipPush`。⚠️ 同一个坑踩了两次：**停机步骤必须在 `-SkipStop` 判断之内**（见文件内注释） |
+| ⭐ `morning_timer.ps1` | **脱离会话的定时器**：睡到指定时刻再调 `morning_wrapup.ps1`，**每分钟写一次心跳** `data\morning_timer.json`（`state`/`remaining_s`）供核对。 | `-At 07:55`。⚠️ **为什么不用 Windows 计划任务**：本机 `Register-ScheduledTask` 与 `schtasks` **都返回"拒绝访问"**（会话内无提权）。⚠️ **代价如实说**：脱离会话的进程**不抗重启**，计划任务抗 —— 若中途重启，需手工跑 `morning_wrapup.ps1` |
+| `register_morning_task.ps1` | 计划任务的**注册/查询/移除**（`-Show` / `-Remove`）。⚠️ **本机实测注册失败（拒绝访问）**，仅在**提权会话**下可用；`morning_timer.ps1` 是它的免权限替代。保留它是因为"抗重启"这条只有计划任务能做到。 | 无参=注册；`-Show`、`-Remove`、`-At`、`-TaskName` |
 
 ---
 
@@ -162,7 +165,7 @@
 | **合计** | **44** |
 
 > ⚠️ 上一版这张表里"三、灾备 / 演练类"写的 6 与表内实际 5 行对不上（当时逐行数一遍才发现）——
-> 本轮已按**逐行数**的结果改正：**45 个代码文件与 45 行登记一一对应**（可核对：`Get-ChildItem scripts -File` 输出 **46 = 45 + 本索引**）。
+> 本轮已按**逐行数**的结果改正：**48 个代码文件与 48 行登记一一对应**（可核对：`Get-ChildItem scripts -File` 输出 **49 = 48 + 本索引**）。
 
 组内按文件名排序（codepoint 序，`_` 开头者排在最前）；每个条目的一句话用途均取自脚本 docstring
 或 argparse `help`，未臆测。
