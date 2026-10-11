@@ -10,3 +10,7 @@
 # 见 docs/runbooks/边缘侧部署与资源约束.md 的"资源采证"一节。
 *.append-*.csv
 *.status.append-live.json
+
+# 进度心跳文件（不是证据）：采证进程每 30 s 覆写一次，跟踪它会让工作区永远不干净。
+# ⚠️ 冻结快照对应的那份 status 已随提交留在历史里；长跑结束后如需归档，连同 CSV 一起重新提交一次。
+resource-24h.status.json
