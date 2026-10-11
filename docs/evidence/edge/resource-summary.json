@@ -1,27 +1,28 @@
 {
-  "input_rows": 2271,
+  "input_rows": 2277,
   "first_ts": "2026-10-11T18:58:44+08:00",
-  "last_ts": "2026-10-12T01:43:30+08:00",
+  "last_ts": "2026-10-12T01:44:15+08:00",
   "runs": [
     "20261011T185844-852b72",
-    "20261011T214302-0d4952"
+    "20261011T214302-0d4952",
+    "20261012T014343-c62036"
   ],
   "ceiling_ratio": 0.9,
   "cpu_ceiling_percent": 100.0,
   "containers": {
     "cems-device": {
-      "samples": 757,
+      "samples": 759,
       "missing_samples": 0,
       "mem_limit_bytes": 134217728.0,
       "mem_limit_human": "128.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 1.358,
+        "avg": 1.355,
         "max": 10.95
       },
       "mem_bytes": {
         "min": 23058186.0,
-        "avg": 26363042.453,
+        "avg": 26362636.957,
         "max": 41607495.0
       },
       "mem_human": {
@@ -39,18 +40,18 @@
       "mem_max_ratio_of_limit": 0.31
     },
     "cems-gateway": {
-      "samples": 757,
+      "samples": 759,
       "missing_samples": 0,
       "mem_limit_bytes": 134217728.0,
       "mem_limit_human": "128.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.609,
+        "avg": 0.608,
         "max": 10.18
       },
       "mem_bytes": {
         "min": 0.0,
-        "avg": 26127493.758,
+        "avg": 26126949.107,
         "max": 39405486.0
       },
       "mem_human": {
@@ -68,18 +69,18 @@
       "mem_max_ratio_of_limit": 0.2936
     },
     "cems-gateway-plant2": {
-      "samples": 757,
+      "samples": 759,
       "missing_samples": 0,
       "mem_limit_bytes": 134217728.0,
       "mem_limit_human": "128.0MiB",
       "cpu_percent": {
         "min": 0.0,
-        "avg": 0.462,
+        "avg": 0.461,
         "max": 10.01
       },
       "mem_bytes": {
         "min": 25302138.0,
-        "avg": 26173883.207,
+        "avg": 26174791.253,
         "max": 35735470.0
       },
       "mem_human": {
@@ -97,6 +98,6 @@
       "mem_max_ratio_of_limit": 0.2662
     }
   },
-  "span_hours": 6.746,
+  "span_hours": 6.759,
   "csv": "docs\\evidence\\edge\\resource-24h.append-live.csv"
 }

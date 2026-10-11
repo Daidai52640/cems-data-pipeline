@@ -54,14 +54,20 @@ try {
 } catch { Say "    [ERROR] $($_.Exception.Message)" }
 
 # ---------------------------------------------------------------- 3) 停采证
-Say '[3/6] stop the collector process'
-try {
-    $c = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -match 'measure_edge_resources' }
-    if ($c) {
-        foreach ($p in $c) { Say "    stopping pid=$($p.ProcessId)"; Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
-    } else { Say '    not running (ok)' }
-} catch { Say "    [ERROR] $($_.Exception.Message)" }
+# ⚠️ 这一步**必须在 -SkipStop 判断之内** —— 曾经放在外面，结果"安全试跑"把正在跑的采证杀了。
+#    （同一个坑在 wrapup_run.ps1 里已经踩过一次，这里是第二次；所以两处都写了这句注释。）
+if ($SkipStop) {
+    Say '[3/6] [SkipStop] collector left running'
+} else {
+    Say '[3/6] stop the collector process'
+    try {
+        $c = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -match 'measure_edge_resources' }
+        if ($c) {
+            foreach ($p in $c) { Say "    stopping pid=$($p.ProcessId)"; Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
+        } else { Say '    not running (ok)' }
+    } catch { Say "    [ERROR] $($_.Exception.Message)" }
+}
 
 # ---------------------------------------------------------------- 4) 提交推送
 Say '[4/6] commit + push evidence'
