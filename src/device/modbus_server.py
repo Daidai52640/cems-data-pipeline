@@ -113,7 +113,8 @@ SLAVE_PHASE_OFFSET: Final[float] = float(os.getenv("SLAVE_PHASE_OFFSET", "10800"
 #
 # 读不到真机时绝不回落到仿真值 —— 那正是本项目刚从真机上学到的"静默假数据"
 # （真机读错地址会沉默返回 0，见 docs/runbooks/真机接入.md S4 发现 1）。
-# 本层的做法：启动预检（读不到就拒绝启动）+ 运行期保留上次好值并记 ERROR。
+# 本层的做法：读不到就写越界值让下游拒收，启动时与运行期用同一条规则。
+# 启动时读不到桥不拒绝启动，只降级（见 main()）；桥上线后自动恢复。
 REAL_DEVICE_ENABLE: Final[bool] = os.getenv("REAL_DEVICE_ENABLE", "0").strip().lower() in (
     "1",
     "true",
@@ -369,10 +370,13 @@ class RealDeviceReader:
             if got is None:
                 with self._lock:
                     failures = self._failures
+                # 注意措辞：失败不等于"在用上次好值"。若从来没读到过（如启动时桥就不在），
+                # overlay_real_values 写的是越界值。有旧值时才叫"保留旧值"。
+                has_prev = self.snapshot() is not None
                 LOGGER.error(
-                    "读真机失败（连续第 %d 次）：%s:%d 从站%d —— "
-                    "Temp/Humidity 保持**上次好值**，不回落到仿真值",
+                    "读真机失败（连续第 %d 次）：%s:%d 从站%d —— %s，不回落到仿真值",
                     failures, self.host, self.port, self.unit,
+                    "Temp/Humidity 保留上次好值" if has_prev else "Temp/Humidity 无有效读数，写越界值让接入层拒收",
                 )
             elif got[2]:
                 # 桥报"陈旧"：读数还在，但已经不是当前真值。
@@ -423,9 +427,22 @@ def overlay_real_values(values: list[int], slave_id: int) -> list[int]:
         return values
     snap = _REAL_READER.snapshot()
     if snap is None:
-        # 启动预检保证这里基本不会发生；真到了就叫出来，不静默
-        LOGGER.error("[从站%d] 真机尚无有效读数，Temp/Humidity 仍是仿真值", slave_id)
-        return values
+        # 从没成功读到过（启动时桥就不在，或桥刚起来还没轮询到）。
+        # 这种情况必须和"陈旧"一样写越界值 —— 寄存器里此刻躺着的是仿真读数，
+        # 直接 return values 就把仿真温湿度当成真机值发出去了，而且没人看得出来。
+        # 见 docs/runbooks/真机接入.md 的"降级启动"一节。
+        out = list(values)
+        for point in POINTS:
+            if point.name == "Humidity":
+                out[point.address - REG_BASE] = STALE_HUMIDITY_RAW
+            elif point.name == "Temp":
+                out[point.address - REG_BASE] = STALE_TEMP_RAW
+        LOGGER.error(
+            "[从站%d] 真机尚无有效读数（桥不可达或未轮询到）—— "
+            "Temp/Humidity 写越界值让接入层拒收，不把仿真值冒充真机值",
+            slave_id,
+        )
+        return out
     humidity_raw, temperature_raw, stale = snap
     out = list(values)
     for point in POINTS:
@@ -484,33 +501,45 @@ def main() -> None:
     simulators = device_simulators(SLAVE_IDS, BASE_SEED, SLAVE_PHASE_OFFSET)
     context = build_server_context(SLAVE_IDS)
 
-    # ---- 真机接入（可选）：启动预检 + 后台轮询 ----
+    # ---- 真机接入（可选）：挂上读取器 + 后台轮询 ----
+    #
+    # 启动时读不到桥不再拒绝启动，改为降级启动。理由：
+    #   运行期的规则本来就是"读不到就写越界值，让接入层拒收"，启动时却用了一条更严的规则
+    #   （直接 SystemExit）。同一个问题两套规则，而且硬退出的代价是整个设备层起不来 ——
+    #   部署到没有真机的机器上时，整条链路会因为一个可选外设而全灭。
+    #   降级启动的可见性反而更好：日志有 CRITICAL、库里有断档、覆盖率会掉、事件表有留痕；
+    #   硬退出则只有一个"起不来"，看不出是哪一层的事。
+    #
+    # 降级态发出的仍然是越界值（overlay_real_values 里处理），不是仿真值 ——
+    # 坚持"宁可少数据，也不要假数据"，只是把"小数据"的表达方式从"不启动"改成"如实报告"。
     global _REAL_READER  # noqa: PLW0603 - 模块级单例，供 overlay_real_values 读取
     if REAL_DEVICE_ENABLE:
         reader = RealDeviceReader(
             REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT, REAL_DEVICE_POLL_INTERVAL
         )
+        # 先挂上再读：否则读失败时 _REAL_READER 仍是 None，
+        # overlay_real_values 会走"未启用"分支，把仿真值原样发出去。
+        _REAL_READER = reader
         first = reader.read_once()
         if first is None:
-            # 刻意不回落到仿真值：那样大屏会显示假数据、且没人看得出来。
-            # 与网关既有的"读不到本从站就拒绝启动"是同一套纪律。
             LOGGER.critical(
-                "REAL_DEVICE_ENABLE=1 但读不到真机（%s:%d 从站%d）—— 拒绝启动。\n"
+                "REAL_DEVICE_ENABLE=1 但读不到真机（%s:%d 从站%d）—— 降级启动："
+                "Temp/Humidity 将持续写越界值、被接入层拒收，其余 7 个测点不受影响；"
+                "桥上线后会自动恢复正常，不需要重启容器。\n"
                 "  排查顺序：① 宿主上 scripts/serial_bridge.py 是否在跑；"
                 "② REAL_DEVICE_HOST/PORT 是否指对（容器里应是 host.docker.internal）；"
                 "③ 变送器供电与 A/B 接线；④ 桥的 5021 端口是否在监听。\n"
                 "  刻意不回落仿真值 —— 那会让大屏显示假数据而无人察觉。",
                 REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT,
             )
-            raise SystemExit(1)
-        _REAL_READER = reader
+        else:
+            temp_display = first[1] - 65536 if first[1] > 32767 else first[1]
+            LOGGER.info(
+                "真机接入已启用：%s:%d 从站%d → 覆盖从站%d 的 %s（首次读数 湿度%.1f%%RH / 温度%.1f degC）",
+                REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT, REAL_DEVICE_SLAVE,
+                "/".join(REAL_DEVICE_POINTS), first[0] / SCALE, temp_display / SCALE,
+            )
         threading.Thread(target=reader.poll_forever, name="real-device-poller", daemon=True).start()
-        temp_display = first[1] - 65536 if first[1] > 32767 else first[1]
-        LOGGER.info(
-            "真机接入已启用：%s:%d 从站%d → 覆盖从站%d 的 %s（首次读数 湿度%.1f%%RH / 温度%.1f degC）",
-            REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT, REAL_DEVICE_SLAVE,
-            "/".join(REAL_DEVICE_POINTS), first[0] / SCALE, temp_display / SCALE,
-        )
         LOGGER.warning(
             "语义边界：Temp/Humidity 两列装的是环境温湿度，"
             "不是烟气参数；本部署只用于数据链路演示，不作环保口径依据。"
