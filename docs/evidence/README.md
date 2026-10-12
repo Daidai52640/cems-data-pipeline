@@ -5,19 +5,27 @@
 
 ## 目录与归档判据
 
-共 140 份（2026-10-03 清点），分布如下：
+共 **157 份入库**（2026-10-12 清点；⚠️ 本地另有 3 份被 `.gitignore` 排除的采证运行产物，故文件系统上会看到 160 份），分布如下：
 
 | 子目录 | 份数 | 放什么 | 判据（按文件名 + 内容双重确认） |
 |---|---|---|---|
 | `perf/` | 68 | 端到端延迟、数据完整率、容器时钟一致性、吞吐/背压、插入基准 | `latency_*`、`completeness_*`、`clock_consistency.json`、`loadgen_*`（初版 `_n<N>_` 与复测 `_acc_n<N>_` 各一组）、`backpressure_*`（含 `bp02s-30` / `slowdrain` 跟进实验）、`raw_insert_bench.json` |
-| `drill/` | 42 | 补传 / 恢复 / 时区演练的逐次台账与汇总 | `resend_*`（对账台账 + 缓存快照，含 before/after）、`gateway_resend_*`（滞后与占比）、`tdengine_restore_drill_*`（单设备逐次 + 汇总）、`emqx_restart_*`（1A/1B 对账，**含 `_run{1,2,3}_logs_*.txt` 原始日志导出**）、`dual_device_*`、`gateway_preflight_*` |
+| `drill/` | 43 | 补传 / 恢复 / 时区演练的逐次台账与汇总 | `resend_*`（对账台账 + 缓存快照，含 before/after）、`gateway_resend_*`（滞后与占比）、`tdengine_restore_drill_*`（单设备逐次 + 汇总）、`emqx_restart_*`（1A/1B 对账，**含 `_run{1,2,3}_logs_*.txt` 原始日志导出**）、`dual_device_*`、`gateway_preflight_*` |
 | `cache/` | 8 | nginx + redis 缓存与一次真实数据错位的留档 | `nginx_redis_run1.json`、`cache_invalidation_drill.json`、`atomic_handover_probe.json`、`_incident_20261001_timestamp_shift_repair.py`、`_show_ab.py` |
-| `backup/` | 17 | 备份自检标定 + **2026-10-03 双设备复验批次** | `backup_selfcheck_scope_*.json`（`scripts/verify_backup_selfcheck_scope.py` 的产出落点）、`dual_device_restore_drill_*`（双设备 RTO 复验 n=3）、`tdengine_restore_drill_*_dual_*`（改名/物理/整表级复验）、`tz_misconfig_drill_*`（时区演练）、`verify_sim_*_tzfix/diurnal_*`（时区修复后的仿真复验）、`emqx_status_watch_*.csv`（§10.6 broker 状态采样） |
+| `backup/` | 16 | 备份自检标定 + **2026-10-03 双设备复验批次** | `backup_selfcheck_scope_*.json`（`scripts/verify_backup_selfcheck_scope.py` 的产出落点）、`dual_device_restore_drill_*`（双设备 RTO 复验 n=3）、`tdengine_restore_drill_*_dual_*`（改名/物理/整表级复验）、`tz_misconfig_drill_*`（时区演练）、`verify_sim_*_tzfix/diurnal_*`（时区修复后的仿真复验）、`emqx_status_watch_*.csv`（§10.6 broker 状态采样） |
+| ⭐ `acceptance/` | 1 | **甲方口径验收的机器产出** | `acceptance_min.json`（`scripts/acceptance_min.py` 的落点；2026-10-12 前此目录**整目录漏登**，见下） |
+| ⭐ `baseline-v2/` | 4 | **基线 v2 冻结时的原始产物** | 大屏"数据新鲜度"正常态 / 超时态截图 + 逐项证据文本（`runbooks/真机接入-基线冻结v2.md` §5.2 引用） |
 | `coverage/` | 1 | 报表覆盖率标定 | `report_coverage_calibration.json` |
-| `edge/` | 见目录内 | **边缘侧部署形态证据**（2026-10-11 新增） | `resource-24h.csv`（每 30 s 一次的边缘侧容器资源采样，**长跑追加**）、`resource-summary.json`（汇总）、`edge_autonomy_linkcut_*.{txt,json}`（断链自治原始输出 + 逐条对账）、`edge_autonomy_crash_*.{txt,json}`（崩溃自愈）、`edge_linkcut_queue_snapshot_*.txt`（断链期间落盘队列原文） |
+| ⭐ `edge/` | 13 | **边缘侧部署形态证据**（2026-10-11 新增；⚠️ 本地另有 6 份运行产物） | `resource-24h.csv`（**跨夜 12.93 小时**的容器资源采样，每 30 s 一点）、`resource-summary.json`（汇总）、`stability_soak.md`（稳定性长跑结论）、`edge_autonomy_linkcut_*.{txt,json}`（断链自治原始输出 + 逐条对账）、`edge_autonomy_crash_*.{txt,json}`（崩溃自愈）、`edge_linkcut_queue_snapshot_*.txt`（断链期间落盘队列原文） |
 | `logs/` | 3 | 网关日志导出与演练运行日志 | `_gateway_log_dump.txt`、`resend_drill*_run.log` |
 
-> 加上本 `README.md`，本目录共 141 个条目。
+> 加上本 `README.md`，本目录共 **158** 个入库条目。
+
+> ⚠️ **2026-10-12 修正**：上一版写"共 140 份（2026-10-03 清点）"—— 那个数字**当时是对的**，
+> 但此后新增了 `edge/`(13)、`baseline-v2/`(4)、`acceptance/`(1)，`drill/` 也 +1，
+> 而 `backup/` 实为 16（原写 17）、`edge/` 原写"见目录内"未计数。
+> ⭐ **教训**：**目录清单里的份数是会烂的数字** —— 增删文件时没人会想起来改它。
+> 以后新增子目录时，**必须同时改这一张表**（`docs/README.md` 的索引校验**查不出**这类"数字过期"）。
 
 ## ⚠️ 关于"运行时日志到底留不留"
 
