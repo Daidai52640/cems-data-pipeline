@@ -5,7 +5,7 @@
 
 1. 一切 SQL 走容器内的 `taos` CLI，不走 taosAdapter REST。
    理由：REST 返回的 `ts` 是 UTC ISO 字符串（本项目在
-   `docs/工程完整度-nginx与redis.md` §8.2 第 10 条记录过由此造成的一次真实数据错位）。
+   `docs/adr/0004-引入nginx与redis缓存.md` §8.2 第 10 条记录过由此造成的一次真实数据错位）。
    容器内 CLI 直接按容器 TZ 展示，而本模块更进一步：所有时间边界与分段键都用
    `CAST(... AS BIGINT)` 取"纪元毫秒"，两端比较的是同一个无量纲整数，
    时区、容器时钟漂移都不会混进结果（时钟漂移见 `docs/reference/容器时钟漂移.md`）。
