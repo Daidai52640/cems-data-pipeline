@@ -21,3 +21,6 @@ data/*
 
 # archify 图的工作目录（中间产物；定稿的图与源规格在 docs/diagrams/）
 .archify/
+
+# archify 行号重映射的中间产物（一次性）
+.refmap.tmp
