@@ -1,0 +1,15 @@
+{
+  "measured_at": "2026-10-02 22:31:00",
+  "tool": "taosAdapter REST /rest/sql, host 127.0.0.1:6041, 单连接",
+  "note": "仅测存储层写入能力；不经 MQTT、不经接入层。两次独立运行，取较慢的一次作为可引用口径",
+  "per_row_insert": {
+    "runs": [
+      { "rows": 200, "seconds": 1.20, "rows_per_second": 166.8, "ms_per_row": 6.0 },
+      { "rows": 200, "seconds": 0.85, "rows_per_second": 235.5, "ms_per_row": 4.2 }
+    ],
+    "conservative_rows_per_second": 166.8,
+    "conservative_ms_per_row": 6.0
+  },
+  "batch_insert_100": { "runs_rows_per_second": [38473, 64468] },
+  "batch_insert_1000": { "runs_rows_per_second": [171567, 177432] }
+}

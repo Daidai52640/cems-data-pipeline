@@ -1,0 +1,96 @@
+# 边缘侧自治演练 - mode=crash
+# tag=20261011T184019 device=device1 container=cems-gateway
+# started_at=2026-10-11 18:40:19
+
+=== [0] 前置：cems-gateway 当前状态 ===
+  cems-gateway: status=running health=healthy started_at=2026-10-11T10:26:22.272291387Z
+  基线 [device1]: 库内 26228 条，MAX(ts)=2026-10-11 18:40:18
+
+=== [1] 崩溃：docker kill cems-gateway（SIGKILL，不给优雅退出机会）===
+  已 kill @ 2026-10-11 18:40:19 → status=exited health=unhealthy
+  +    2s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +    4s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +    6s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +    9s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   11s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   13s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   15s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   17s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   19s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   21s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   23s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   25s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   27s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   29s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   31s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   33s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   35s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   37s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   39s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   41s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   43s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   45s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   48s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   50s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   52s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   54s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   56s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   58s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   60s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   62s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   64s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   66s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   68s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   70s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   72s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   74s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   76s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   78s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   80s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   82s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   84s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   87s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   89s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   91s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   93s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   95s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   97s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +   99s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  101s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  103s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  105s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  107s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  109s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  111s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  113s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  115s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  117s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  119s status=exited    health=unhealthy started_at=2026-10-11T10:26:22.272291387Z
+  +  121s status=running   health=starting  started_at=2026-10-11T10:42:20.700302747Z
+  +  124s status=running   health=starting  started_at=2026-10-11T10:42:20.700302747Z
+  +  126s status=running   health=starting  started_at=2026-10-11T10:42:20.700302747Z
+  +  128s status=running   health=healthy   started_at=2026-10-11T10:42:20.700302747Z
+  自愈: saw_down=True 恢复到 healthy 用时 127.6 s，StartedAt=2026-10-11T10:42:20.700302747Z，RestartCount=0
+
+=== [2] 数据是否继续入库（连续两次 COUNT 必须递增）===
+  COUNT(*) = 26229 @ 2026-10-11 18:42:27
+  COUNT(*) = 26231 @ 2026-10-11 18:42:39
+
+=== [3] 时间戳连续性（断档 > 3×POLL_INTERVAL 才列出）===
+  窗口内 27 条：2026-10-11 18:38:23 .. 2026-10-11 18:42:36
+  最大间隔 128 s（POLL_INTERVAL=5 s）
+  ⚠️ 断档  128 s : 2026-10-11 18:40:18 → 2026-10-11 18:42:26
+  库内 26228 → 26231（+3），MAX(ts) 2026-10-11 18:40:18 → 2026-10-11 18:42:36
+  判定: {"saw_down": true, "auto_restarted": true, "data_continues": true, "no_gap_over_15s": false}
+
+[finally] 10 个容器状态:
+  emqx                   running  healthy   2026-10-11T10:39:50.260460526Z
+  tdengine               running  healthy   2026-10-11T10:11:39.095105632Z
+  cems-device            running  healthy   2026-10-11T10:26:21.586176877Z
+  cems-gateway           running  healthy   2026-10-11T10:42:20.700302747Z
+  cems-gateway-plant2    running  healthy   2026-10-11T10:26:22.375387912Z
+  cems-subscriber        running  healthy   2026-10-11T10:11:50.748810026Z
+  cems-subscriber-plant2 running  healthy   2026-10-11T10:11:50.870306937Z
+  cems-redis             running  healthy   2026-10-11T10:11:39.2530338Z
+  cems-nginx             running  healthy   2026-10-11T10:11:55.560228244Z
+  cems-web               running  healthy   2026-10-11T10:14:21.142549411Z

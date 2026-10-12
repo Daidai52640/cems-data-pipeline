@@ -1,0 +1,81 @@
+{
+  "drill": "timezone-misconfig",
+  "injected": {
+    "service": "gateway",
+    "env": "TZ=UTC"
+  },
+  "control": {
+    "subscriber_tz": "Asia/Shanghai",
+    "tdengine_tz": "Asia/Shanghai",
+    "host_tz": "Asia/Shanghai (+08:00)"
+  },
+  "topic": "cems/tzdrill/data",
+  "plant": "tzdrill",
+  "child_table": "tzdrill_device1",
+  "run_seconds": 75.0,
+  "started_at": "2026-10-03 00:36:44",
+  "host_clock_at_start": "2026-10-03 00:36:45",
+  "gateway_preflight_ok": false,
+  "gateway_clock": "2026-10-02 16:37:46 UTC +0000",
+  "subscriber_clock": "2026-10-03 00:37:46 CST +0800",
+  "child_table_ready": true,
+  "rows_written": 20,
+  "ts_min": "2026-10-02 16:36:45.000",
+  "ts_max": "2026-10-02 16:38:21.000",
+  "host_clock_at_measure": "2026-10-03 00:39:02",
+  "newest_stored_local": "2026-10-02 16:38:21",
+  "oldest_stored_local": "2026-10-02 16:36:45",
+  "skew_seconds": -28841.27,
+  "skew_hours": -8.011,
+  "health_drill_tag": {
+    "http_status": 503,
+    "body": {
+      "data_age_seconds": null,
+      "healthy": false,
+      "ok": false,
+      "reason": "no_rows_last_1min",
+      "rows_last_1min": 0,
+      "stale_after_seconds": 15.0,
+      "td": "up"
+    },
+    "threshold_seconds": 15.0,
+    "code_path": "src/web/web_dashboard.py::api_health（同一份生产代码）",
+    "device_scope": "tzdrill/device1"
+  },
+  "health_production_tag": {
+    "http_status": 503,
+    "body": {
+      "data_age_seconds": 38.779,
+      "healthy": false,
+      "ok": false,
+      "reason": "stale_data",
+      "rows_last_1min": 5,
+      "stale_after_seconds": 15.0,
+      "td": "up"
+    },
+    "device_scope": "plant1/device1"
+  },
+  "criterion_detail": {
+    "rule_1": "最近 1 分钟内条数（rows_last_1min）必须 > 0",
+    "rows_last_1min_drill_tag": 0,
+    "rule_2": "最近一条样本距今必须 ≤ 15.0 s",
+    "data_age_seconds_drill_tag": 28841.27,
+    "verdict": "stale_data/no_rows_last_1min → 判不健康"
+  },
+  "gateway_log_tail": "",
+  "subscriber_log_tail": "",
+  "cache_leftover": [
+    ".gateway_alive",
+    "cache.jsonl"
+  ],
+  "ok": true,
+  "cleanup": {
+    "containers": [],
+    "child_table_dropped": true,
+    "cache_files": [
+      ".gateway_alive",
+      "cache.jsonl"
+    ]
+  },
+  "finished_at": "2026-10-03 00:39:05"
+}

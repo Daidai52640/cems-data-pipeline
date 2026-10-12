@@ -1,0 +1,129 @@
+{
+  "mode": "crash",
+  "tag": "20261011T185122",
+  "device": "device1",
+  "container": "cems-gateway",
+  "started_at": "2026-10-11 18:51:22",
+  "before": {
+    "status": "exited",
+    "health": "unhealthy",
+    "started_at": "2026-10-11T10:44:51.794615267Z"
+  },
+  "baseline": {
+    "at": "2026-10-11 18:51:22",
+    "rows": 26255,
+    "max_ts": "2026-10-11 18:45:47",
+    "queue_lines": 0
+  },
+  "kill": {
+    "at": "2026-10-11 18:51:28",
+    "state_after_kill": {
+      "status": "exited",
+      "health": "unhealthy"
+    }
+  },
+  "recovery": {
+    "saw_down": true,
+    "auto_restarted": false,
+    "auto_wait_seconds": 45.0,
+    "came_up_at": "2026-10-11 18:52:21",
+    "restart_seconds": 53.2,
+    "recovered_by": "docker compose up -d",
+    "started_at_after": "2026-10-11T10:52:15.481053431Z",
+    "restart_count": "0",
+    "mem_limit_after_recovery_bytes": "536870912"
+  },
+  "series": {
+    "first": "2026-10-11 18:51:22",
+    "last": "2026-10-11 18:52:31",
+    "count": 6,
+    "max_gap_seconds": 48,
+    "gaps_over_3x_poll_interval": [
+      [
+        "2026-10-11 18:51:27",
+        "2026-10-11 18:52:15",
+        48
+      ]
+    ],
+    "gaps_during_outage": [
+      [
+        "2026-10-11 18:51:27",
+        "2026-10-11 18:52:15",
+        48
+      ]
+    ],
+    "gaps_after_recovery_over_15s": []
+  },
+  "after": {
+    "at": "2026-10-11 18:52:34",
+    "rows": 26261,
+    "max_ts": "2026-10-11 18:52:31",
+    "db_growth": 6,
+    "queue_lines": 0,
+    "counts": [
+      26259,
+      26261
+    ],
+    "counts_increasing": true
+  },
+  "verdict": {
+    "saw_down": true,
+    "recovered": true,
+    "data_continues": true,
+    "no_gap_after_recovery": true
+  },
+  "exit_code": 0,
+  "final_states": {
+    "emqx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:39:50.260460526Z"
+    ],
+    "tdengine": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.095105632Z"
+    ],
+    "cems-device": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:21.586176877Z"
+    ],
+    "cems-gateway": [
+      "running",
+      "healthy",
+      "2026-10-11T10:52:15.481053431Z"
+    ],
+    "cems-gateway-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.375387912Z"
+    ],
+    "cems-subscriber": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.748810026Z"
+    ],
+    "cems-subscriber-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.870306937Z"
+    ],
+    "cems-redis": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.2530338Z"
+    ],
+    "cems-nginx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:55.560228244Z"
+    ],
+    "cems-web": [
+      "running",
+      "healthy",
+      "2026-10-11T10:14:21.142549411Z"
+    ]
+  },
+  "ended_at": "2026-10-11 18:52:34"
+}

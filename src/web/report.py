@@ -15,7 +15,7 @@
 看报表的人根本不知道那里缺数。本模块的处置是**把缺的窗口补出来并标记**，
 绝不用 0 或推算值掩盖：窗口的测点值仍然是 null，只是多了一个"这一窗覆盖了多少"的结论。
 
-口径（照 `docs/告警判据设计.md` §3.4，不另创）：
+口径（照 `docs/adr/0002-告警判据选型.md` §3.4，不另创）：
     覆盖率 = 该窗口实际条数 / 该窗口应有条数
     应有条数 = 窗口秒数 / 采集周期（`POLL_INTERVAL`，默认 5.0 s ⇒ 每分钟 12 条；
                进行中/未到期的窗口另算，见下）
@@ -23,7 +23,7 @@
     ⚠️ insufficient **绝不等于达标**，它表示"这一窗的数据不足以判定"。
 
 ⚠️ 为什么门限必须远低于 100%（实测数据，见 `scripts/measure_report_coverage.py` 的输出）：
-    真实采集周期是 **5.146 s**（`docs/性能与可靠性指标.md` §2.1：104.2 min 实测 1216 条，
+    真实采集周期是 **5.146 s**（`docs/reference/性能与可靠性指标.md` §2.1：104.2 min 实测 1216 条，
     名义 720 条/h vs 实测约 700 条/h）。实测在线段相邻间隔均值 **5.154 s**，于是
     覆盖率天花板 = 名义/实测 = 5.0/5.154 = **97.0%**（与那份文档 §6.4 的"名义完整率 97.22%"同一件事）。
     再叠加秒级截断，1 分钟窗口实际只会拿到 11 或 12 条：683 个"干净窗口"（不与任何断档相交、
@@ -45,7 +45,7 @@
     因此"还没到期"既不虚高也不压低整体覆盖率。没有任何应到数据时 `overall` 给 null（0/0 不是 0）。
 
 ⚠️ 与告警层口径的差别（不掩盖）：本模块的 coverage 是**到达条数**口径（COUNT(*)），
-    回答"数据有没有到齐"；`docs/告警判据设计.md` §3.4 小时结算的 coverage 是**有效样本**口径
+    回答"数据有没有到齐"；`docs/adr/0002-告警判据选型.md` §3.4 小时结算的 coverage 是**有效样本**口径
     （折算值非 nan，即 `o2 < 21`），回答"数据能不能用来判定排放"。两者分子不同，
     报表层不重复做有效性判定（那是告警层的职责），因此两者**不可互相替代**。
 ====================================================================================
@@ -107,12 +107,12 @@ COVERAGE_DIGITS: Final[int] = 4   # 覆盖率保留几位小数（1/12 = 0.0833�
 # ---- 覆盖率 / 样本不足（缺数要标出来，不许当达标） ----
 # 采集周期：与网关的 POLL_INTERVAL 必须一致（docker-compose 里 gateway 固定 5.0）。
 # 它是覆盖率分母的**唯一来源**：应有条数 = 窗口秒数 / POLL_INTERVAL。
-# ⚠️ 这个值是**名义**周期。实测真实周期 5.154 s（docs/性能与可靠性指标.md §2.1），
+# ⚠️ 这个值是**名义**周期。实测真实周期 5.154 s（docs/reference/性能与可靠性指标.md §2.1），
 #    所以覆盖率天然到不了 100%（天花板 = 5.0/5.154 = 97.0%），门限必须按这个现实定（见模块头部说明）。
 _raw_interval: Final[float] = float(os.getenv("POLL_INTERVAL", "5.0"))
 POLL_INTERVAL_SECONDS: Final[float] = _raw_interval if _raw_interval > 0 else 5.0
 
-# 覆盖率门限（0~1）。默认 0.75 = docs/告警判据设计.md §3.4 的 ALARM_COVERAGE_MIN，
+# 覆盖率门限（0~1）。默认 0.75 = docs/adr/0002-告警判据选型.md §3.4 的 ALARM_COVERAGE_MIN，
 # 与告警层同口径同取值；本层只做"到齐了没有"，不替代告警层的有效性判定。
 REPORT_COVERAGE_MIN: Final[float] = float(os.getenv("REPORT_COVERAGE_MIN", "0.75"))
 
@@ -122,7 +122,7 @@ REPORT_COVERAGE_MIN: Final[float] = float(os.getenv("REPORT_COVERAGE_MIN", "0.75
 REPORT_GAP_MAX: Final[int] = int(os.getenv("REPORT_GAP_MAX", "200"))
 
 # 在途样本宽限（秒）：只作用于"进行中"的窗口（日报表当前这个小时、月报表今天这一天）。
-# 网关补传慢路径实测最大滞后 32.1 s（docs/性能与可靠性指标.md §4.2），这里取 60 s = 1.9 倍余量
+# 网关补传慢路径实测最大滞后 32.1 s（docs/reference/性能与可靠性指标.md §4.2），这里取 60 s = 1.9 倍余量
 # —— 与展示层缓存边界 CACHE_MARGIN_SECONDS 同一依据、同一取值（那边防的是"迟到行落进已闭合窗口"，
 # 这边防的是"刚过 10 秒就说这一小时缺数"）。已结束的窗口**不设宽限**：
 # 门限 0.75 本身留了 25% 余量，1 分钟里 1 条在途行只占 1/12，翻不动判定。
@@ -137,10 +137,8 @@ REPORT_INFLIGHT_GRACE_SECONDS: Final[float] = float(
 CACHE_ENABLED: Final[bool] = cache.CACHE_FLAG
 
 # ---- 日志 ----
-LOG_LEVEL: Final[int] = logging.INFO
-LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
-
+# ⚠️ 级别/格式/时间格式的**唯一真源**是 src/common/logging.py，本模块不复制那三个常量
+#    （历史上这里抄过一份逐字相同的 `LOG_LEVEL`/`LOG_FORMAT`/`LOG_DATEFMT`，从未被引用，已删）。
 LOGGER: Final[logging.Logger] = logging.getLogger("web.report")
 
 
@@ -235,6 +233,7 @@ def query_aggregate(
     *,
     fill_null: bool = False,
     kind: str = "aggregate",
+    scope: str = "",
 ) -> list[tuple[Any, ...]]:
     """按窗口聚合求均值；聚合在 TDengine 侧用 INTERVAL + AVG 完成，不把原始点拉回 Python。
 
@@ -245,11 +244,23 @@ def query_aggregate(
 
     缓存：`kind` 进缓存键（分钟报表/日报表/曲线各自独立），
     是否真的命中由 cache.query_cached 按"窗口是否已闭合"决定。
+
+    ★ **设备维度**既进缓存键、也进 SQL 的 tag 过滤：
+      - 进缓存键：同一时间窗对不同设备是不同的数据，键里少了它，第二台设备查同一时间窗
+        就会命中第一台的条目（见 src/web/cache.py 模块头第 6 条）。
+      - 进 SQL：`cems_data` 是多设备共用的超级表（TAG = plant/device），**不过滤就会把
+        两台设备的样本一起 AVG** —— 出的是"混合曲线"，比缓存串数据更隐蔽。
+      两个取值都从 `cache.device_tag_parts()` 引用（唯一真源，且带 tag 白名单校验：
+      非法 `TD_PLANT`/`TD_DEVICE` 在导入期就拒绝启动，见 src/common/sql_safety.py）。
     """
     avg_columns = ", ".join(f"AVG({column})" for column in COLUMNS)
+    # 请求级设备维度（空 = 本实例配置的那台，单设备部署行为不变）
+    plant, device = cache.scope_split(scope)
+    scope = scope or cache.DEVICE_SCOPE
     sql = (
         f"SELECT _wstart, {avg_columns}, COUNT(*) FROM {TD_DB}.{TD_STABLE} "
         f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts < '{end.strftime(TS_FORMAT)}' "
+        f"AND plant = '{plant}' AND device = '{device}' "
         f"INTERVAL({window})"
     )
     if fill_null:
@@ -260,7 +271,7 @@ def query_aggregate(
     return _execute_cached(
         f"{sql} ORDER BY _wstart ASC",
         where=f"aggregate/{kind}",
-        context=cache.prepare(kind, window, start, end),
+        context=cache.prepare(kind, window, start, end, device=scope),
     )
 
 
@@ -292,6 +303,9 @@ def _execute_cached(
 
     `context is None` 是**有语义的**：调用方明确表示"这次查询不能缓存"（例如覆盖当前秒的原始点），
     这种查询连"试着读缓存"都不做。
+
+    设备维度不需要在这里单独传参：它已经由 `cache.prepare` 放进了 `context["device"]` 并烘焙进
+    `context["key"]`，所以下游 `cache.query_cached` 的读写都只发生在同一台设备的命名空间里。
     """
     if context is None or not CACHE_ENABLED:
         return _execute(sql)
@@ -357,7 +371,7 @@ def points_on_grid(rows: list[tuple[Any, ...]], grid: list[datetime]) -> list[di
 def expected_samples(window_seconds: float) -> int:
     """窗口内"应有条数" = 窗口秒数 ÷ 采集周期（默认 5 s ⇒ 1 分钟 12 条、1 小时 720 条）。
 
-    ⚠️ 这是**名义**分母（与 docs/告警判据设计.md §3.4 的 720 条/h 同口径）。
+    ⚠️ 这是**名义**分母（与 docs/adr/0002-告警判据选型.md §3.4 的 720 条/h 同口径）。
     实测真实周期 5.146 s，所以正常窗口的覆盖率是 91.7%~97.2% 而不是 100%，
     门限的取值论证见模块头部。
     """
@@ -520,18 +534,23 @@ def clamp_to_now(end: datetime, now: datetime) -> datetime:
     return end
 
 
-def query_raw(start: datetime, end: datetime, limit: int) -> list[tuple[Any, ...]]:
+def query_raw(start: datetime, end: datetime, limit: int, scope: str = "") -> list[tuple[Any, ...]]:
     """原始点查询（曲线的短区间用）：不聚合，直接取原始行。
 
     列名来自测点契约白名单，时间来自已解析的 datetime，没有任何原始输入拼接进 SQL。
 
     ⚠️ **明确不缓存**：原始点区间按定义可能覆盖"当前秒"（短区间默认就含当下），
     缓存它等于把当前数据冻住。这里直接调 `_execute`，连读缓存都不做。
+
+    ★ **按 plant/device tag 过滤**：超级表是多设备共用的，不过滤会把两台设备的原始点
+    混成一条曲线（与 `query_aggregate` 同一理由）。取值同源于 `cache.device_tag_parts()`。
     """
     columns = ", ".join(("ts", *COLUMNS))
+    plant, device = cache.scope_split(scope)
     sql = (
         f"SELECT {columns} FROM {TD_DB}.{TD_STABLE} "
         f"WHERE ts >= '{start.strftime(TS_FORMAT)}' AND ts <= '{end.strftime(TS_FORMAT)}' "
+        f"AND plant = '{plant}' AND device = '{device}' "
         f"ORDER BY ts ASC LIMIT {limit}"
     )
     return _execute(sql)
@@ -547,6 +566,7 @@ def aggregate_series(
     pad_grid: bool,
     max_points: Optional[int] = None,
     kind: str = "aggregate",
+    scope: str = "",
 ) -> dict[str, Any]:
     """把一段区间聚合成均值序列 —— 报表页、Excel 导出、曲线三处共用这一份口径。
 
@@ -561,7 +581,7 @@ def aggregate_series(
         return envelope(unit, aligned_start, aligned_end, [], window=window)
     check_span(aligned_start, aligned_end, window, label, max_points)
 
-    rows = query_aggregate(aligned_start, aligned_end, unit, fill_null=pad_grid, kind=kind)
+    rows = query_aggregate(aligned_start, aligned_end, unit, fill_null=pad_grid, kind=kind, scope=scope)
     if pad_grid:
         count = int((aligned_end - aligned_start) / window)
         grid = [aligned_start + index * window for index in range(count)]
@@ -577,7 +597,7 @@ def aggregate_series(
 
 # ==================== 4. 四类报表 ====================
 
-def minute_report(start_text: Optional[str], end_text: Optional[str]) -> dict[str, Any]:
+def minute_report(start_text: Optional[str], end_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """分钟报表：默认最近 1 小时，按分钟聚合（只统计完整分钟窗口）。
 
     ⚠️ 这里**必须**补网格（`pad_grid=True`）：原先不补，整分钟无数据的窗口会被
@@ -590,11 +610,11 @@ def minute_report(start_text: Optional[str], end_text: Optional[str]) -> dict[st
     end = clamp_to_now(parse_time(end_text, "end", now), now)
     return aggregate_series(
         start, end, UNIT_MINUTE, WINDOW_MINUTE, label="分钟报表", pad_grid=True,
-        kind="minute",
+        kind="minute", scope=scope,
     )
 
 
-def day_report(date_text: Optional[str]) -> dict[str, Any]:
+def day_report(date_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """日报表：默认今天，按小时聚合，固定 24 个整点。
 
     ⚠️ "今天"的报表里，晚于当前时刻的整点还没到期：它们以 n=0 出现在网格里，
@@ -607,11 +627,11 @@ def day_report(date_text: Optional[str]) -> dict[str, Any]:
     # 用半开区间 [当天 00:00, 次日 00:00)，否则跨到次日会产生第 25 个窗口
     return aggregate_series(
         first, next_day, UNIT_HOUR, WINDOW_HOUR, label="日报表", pad_grid=True,
-        kind="day",
+        kind="day", scope=scope,
     )
 
 
-def month_report(year_text: Optional[str], month_text: Optional[str]) -> dict[str, Any]:
+def month_report(year_text: Optional[str], month_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """月报表：默认当月，按天聚合；按当月实际天数补齐 28/30/31（闰年 2 月 29）。
 
     同日报表：当月还没到的日期 `pending=true`（`expected=0`）、不算缺口，但仍带 coverage 出现；
@@ -625,11 +645,11 @@ def month_report(year_text: Optional[str], month_text: Optional[str]) -> dict[st
     next_month = first + timedelta(days=days)
     return aggregate_series(
         first, next_month, UNIT_DAY, WINDOW_DAY, label="月报表", pad_grid=True,
-        kind="month",
+        kind="month", scope=scope,
     )
 
 
-def custom_report(start_text: Optional[str], end_text: Optional[str]) -> dict[str, Any]:
+def custom_report(start_text: Optional[str], end_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """自由报表：默认最近 24 小时，按小时聚合，可跨天/跨月。
 
     按小时网格补齐：整段无数据时也返回完整网格（值 null）而不是空数组，
@@ -644,5 +664,41 @@ def custom_report(start_text: Optional[str], end_text: Optional[str]) -> dict[st
         )
     return aggregate_series(
         start, end, UNIT_HOUR, WINDOW_HOUR, label="自由报表", pad_grid=True,
-        kind="custom",
+        kind="custom", scope=scope,
+    )
+
+#: 区间报表可选的粒度：分钟 / 小时 / 日。键同时是对外的 unit 取值。
+RANGE_UNITS: Final[dict[str, timedelta]] = {
+    UNIT_MINUTE: WINDOW_MINUTE, UNIT_HOUR: WINDOW_HOUR, UNIT_DAY: WINDOW_DAY,
+}
+
+
+def range_report(
+    start_text: Optional[str], end_text: Optional[str], unit: str = UNIT_HOUR, scope: str = "",
+) -> dict[str, Any]:
+    """区间报表：在给定区间上按指定粒度聚合（分钟 / 小时 / 日）。
+
+    为什么单开一个：页面上的粒度页签（分钟 / 小时 / 日）驱动的其实是**同一张表**，
+    只是窗口不同；原来的四个入口各自绑死了"默认区间"（分钟=最近 1 h、日=今天、月=当月），
+    页面上改了起止时间就没法跟着变。这里把「区间」与「粒度」解耦。
+
+    口径与其它报表完全共用 `aggregate_series`（对齐窗口边界、库侧 INTERVAL+AVG、缺窗口补网格），
+    不另写一套 SQL。
+    """
+    if unit not in RANGE_UNITS:
+        raise ReportParamError(
+            f"unit 应为 {'/'.join(RANGE_UNITS)} 之一，收到 {unit!r}"
+        )
+    now = datetime.now()
+    start = parse_time(start_text, "start", now - WINDOW_DAY)
+    end = clamp_to_now(parse_time(end_text, "end", now), now)
+    if start >= end:
+        raise ReportParamError("start 必须早于 end")
+    if end - start > timedelta(days=CUSTOM_MAX_DAYS):
+        raise ReportParamError(
+            f"区间最多查询 {CUSTOM_MAX_DAYS} 天，当前跨度 {(end - start).days} 天"
+        )
+    return aggregate_series(
+        start, end, unit, RANGE_UNITS[unit], label="区间报表", pad_grid=True,
+        kind="range", scope=scope,
     )

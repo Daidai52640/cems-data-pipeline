@@ -1,0 +1,16 @@
+# ---- 边缘侧资源采证：长跑追加段不入库 ----
+# `resource-24h.csv` 是**入库的冻结快照**（某个时刻截下来的完整证据）；
+# 采证脚本还在跑时，把后续采样追加到 `resource-24h.append-<run_id>.csv`，该文件**不入库** ——
+# 否则每个采样点都改一次被 git 跟踪的文件，`git status` 永远不会干净（评审看到的是"改了没提交"）。
+# 24 h 跑完后把 append 段并入 resource-24h.csv、提交一次，即可得到完整且提交时干净的那份。
+# ⚠️ 模式**不带目录前缀**：`.gitignore` 里的模式是相对**本文件所在目录**解释的，
+#    写成 `docs/evidence/edge/*.append-*.csv` 会变成 `docs/evidence/edge/docs/evidence/edge/...`
+#    从而永不命中（实测踩过）。
+# 心跳文件同理：长跑那份叫 `resource-24h.status.append-live.json`，也不入库。
+# 见 docs/runbooks/边缘侧部署与资源约束.md 的"资源采证"一节。
+*.append-*.csv
+*.status.append-live.json
+
+# 进度心跳文件（不是证据）：采证进程每 30 s 覆写一次，跟踪它会让工作区永远不干净。
+# ⚠️ 冻结快照对应的那份 status 已随提交留在历史里；长跑结束后如需归档，连同 CSV 一起重新提交一次。
+resource-24h.status.json

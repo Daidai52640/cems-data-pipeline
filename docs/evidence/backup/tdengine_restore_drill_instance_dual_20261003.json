@@ -1,0 +1,185 @@
+{
+  "mode": "instance",
+  "backup_kind": "taosdump-logical-full",
+  "backup_dir": "F:\\cems-backup\\manual\\cems_full_20261003_002857",
+  "backup_stamp": "20261003_002857",
+  "backup_dump": {
+    "reported_rows": 19100,
+    "self_check": "rows_out_of_range",
+    "expected_window_rows": null,
+    "output_tail": " 7 from cems_data.trace_runaed2389d\nINFO: connection 0x293322f0 is dumping out schema: 8 from cems_data.trace_run3aaed301\nINFO: connection 0x293322f0 is dumping out schema: 9 from cems_data.trace_run33cb95d8\nINFO: connection 0x293322f0 is dumping out schema: 10 from cems_data.trace_runa511b018\nINFO: connection 0x293322f0 is dumping out schema: 11 from cems_data.trace_rune3ba28ad\nINFO: connection 0x293322f0 is dumping out schema: 12 from cems_data.trace_run213ddc95\nINFO: connection 0x293322f0 is dumping out schema: 13 from cems_data.trace_run00dc0d83\nINFO: connection 0x293322f0 is dumping out schema: 14 from cems_data.trace_run74122ff6\nINFO: connection 0x293322f0 is dumping out schema: 15 from cems_data.trace_run448222ec\nINFO: connection 0x293322f0 is dumping out schema: 16 from cems_data.trace_run0f3272f0\nINFO: connection 0x293322f0 is dumping out schema: 17 from cems_data.trace_runf7d9772f\nINFO: connection 0x293322f0 is dumping out schema: 18 from cems_data.trace_run898f48a2\nINFO: connection 0x293322f0 is dumping out schema: 19 from cems_data.plant1_device1\nINFO: create 4 thread(s) to export data ...\n.INFO: cems.cems_data [7/19] write avro 100% of plant2_device2\n.INFO: cems.cems_data [19/19] write avro 100% of plant1_device1\nINFO: super table (cems_data) dump 19 child data ok. close taos connections...\nend time: 2026-10-03 00:28:59\n\n\u001b[32mOK: Database: cems exists\n\u001b[0m\u001b[32mOK: total 60 table(s) of stable: cems_hourly_verdict schema dumped.\n\u001b[0m\u001b[33mWARN: generateSubDirName() LN6359, /tmp/cems-backup-20261003_002857/taosdump.3581917079084/data0-60971042 exists.\n\u001b[0m\u001b[32mOK: total 70 table(s) of stable: cems_alarm_event schema dumped.\n\u001b[0m\u001b[32mOK: total 70 table(s) of stable: cems_alarm_push schema dumped.\n\u001b[0m\u001b[32mOK: total 19 table(s) of stable: cems_data schema dumped.\n\u001b[0m\u001b[33mWARN: generateSubDirName() LN6359, /tmp/cems-backup-20261003_002857/taosdump.3581917079084/data0-4A638C69 exists.\n\u001b[0m\u001b[32mOK: Database cems dumped\n\u001b[0m\u001b[32mOK: 19100 row(s) dumped out!\n\u001b[0m"
+  },
+  "backup_window": {
+    "mode": "full",
+    "requested_lo_ms": null,
+    "requested_hi_ms": null,
+    "requested_lo": null,
+    "requested_hi": null,
+    "pre_count": 18570,
+    "post_count": 18570,
+    "pre_min_ms": 1790785691000,
+    "pre_max_ms": 1790958537000,
+    "post_min_ms": 1790785691000,
+    "post_max_ms": 1790958541000,
+    "pre_min": "2026-10-01 00:28:11",
+    "pre_max": "2026-10-03 00:28:57",
+    "post_min": "2026-10-01 00:28:11",
+    "post_max": "2026-10-03 00:29:01"
+  },
+  "started_at": "2026-10-03 00:30:59",
+  "verification": {
+    "window_ms": [
+      1790785691000,
+      1790958537000
+    ],
+    "window_local": [
+      "2026-10-01 00:28:11",
+      "2026-10-03 00:28:57"
+    ],
+    "count": {
+      "src": 18570,
+      "dst": 18570,
+      "ok": true
+    },
+    "restored_bounds": {
+      "min_ms": 1790785691000,
+      "max_ms": 1790958537000,
+      "min": "2026-10-01 00:28:11",
+      "max": "2026-10-03 00:28:57"
+    },
+    "segments_1h": {
+      "unit": "1h",
+      "ok": true,
+      "n_windows_src": 26,
+      "n_windows_dst": 26,
+      "total_rows_src": 18570,
+      "total_rows_dst": 18570,
+      "matched": 26,
+      "windows_only_in_src": [],
+      "windows_only_in_dst": [],
+      "windows_with_count_diff": [],
+      "windows_with_sum_diff": [],
+      "windows_with_bounds_diff": [],
+      "samples": []
+    },
+    "segments_1d": {
+      "unit": "1d",
+      "ok": true,
+      "n_windows_src": 3,
+      "n_windows_dst": 3,
+      "total_rows_src": 18570,
+      "total_rows_dst": 18570,
+      "matched": 3,
+      "windows_only_in_src": [],
+      "windows_only_in_dst": [],
+      "windows_with_count_diff": [],
+      "windows_with_sum_diff": [],
+      "windows_with_bounds_diff": [],
+      "samples": []
+    },
+    "db_properties": {
+      "src": {
+        "name": "cems",
+        "vgroups": "2",
+        "replica": "1",
+        "duration": "30d",
+        "keep": "365d,365d,365d",
+        "minrows": "100",
+        "maxrows": "4096",
+        "comp": "2",
+        "precision": "ms",
+        "strict": "on",
+        "wal_level": "1"
+      },
+      "dst": {
+        "name": "cems",
+        "vgroups": "2",
+        "replica": "1",
+        "duration": "30d",
+        "keep": "365d,365d,365d",
+        "minrows": "100",
+        "maxrows": "4096",
+        "comp": "2",
+        "precision": "ms",
+        "strict": "on",
+        "wal_level": "1"
+      },
+      "expected_diff": [],
+      "diff": {},
+      "ok": true,
+      "vgroup_note": "若差异只有 vgroups，属正常：taosdump 的 dbs.sql 不含 VGROUPS，恢复时按目标实例默认值建库；条数与分段不受影响。",
+      "vgroup_diff": false
+    },
+    "schema": {
+      "ok": true,
+      "src_cols": 12,
+      "dst_cols": 12
+    },
+    "tags": {
+      "ok": true,
+      "src": [
+        [
+          "plant1",
+          "device1"
+        ],
+        [
+          "plant2",
+          "device2"
+        ]
+      ],
+      "dst": [
+        [
+          "plant1",
+          "device1"
+        ],
+        [
+          "plant2",
+          "device2"
+        ]
+      ]
+    },
+    "ok": true
+  },
+  "rto": {
+    "definition": "RTO = t_seg − t0，即从发出「开始恢复」到「数据可查且条数与分段校验通过」",
+    "clock": "time.perf_counter()（宿主机单调时钟，不受容器时钟漂移影响）",
+    "RTO_seconds": 10.689,
+    "t_up_ready_s": 1.038,
+    "t_copy_done_s": 4.416,
+    "t_data_restored_s": 6.049,
+    "t_count_verified_s": 6.987,
+    "breakdown": {
+      "目标环境就绪": 1.038,
+      "实例 DDL 预热": 2.652,
+      "备份传入目标": 0.726,
+      "数据导入落盘": 1.633,
+      "校验": 4.64
+    }
+  },
+  "cleanup": null,
+  "ok": true,
+  "warmup": {
+    "ok": true,
+    "attempts": 3,
+    "seconds": 2.652,
+    "attempt_log": [
+      {
+        "attempt": 1,
+        "seconds": 0.309,
+        "ok": false
+      },
+      {
+        "attempt": 2,
+        "seconds": 0.312,
+        "ok": false
+      },
+      {
+        "attempt": 3,
+        "seconds": 1.73,
+        "ok": true
+      }
+    ]
+  },
+  "restore_output_tail": "3581917079396.2.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [2] 35 row(s) of file(cems.3581917079378.36.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [0] 65 row(s) of file(cems.3581917079386.1.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [2] 8 row(s) of file(cems.3581917079195.28.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [1] 6 row(s) of file(cems.3581917079102.30.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [0] 8 row(s) of file(cems.3581917079099.0.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [3] 6 row(s) of file(cems.3581917079124.2.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [1] 8 row(s) of file(cems.3581917079113.1.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: [0] 6 row(s) of file(cems.3581917079205.29.avro) be successfully dumped in!\n\u001b[0m\u001b[32mOK: 19100 row(s) dumped in!\n\u001b[0m",
+  "finished_at": "2026-10-03 00:31:10"
+}

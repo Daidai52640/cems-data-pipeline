@@ -3,7 +3,7 @@
 
 为什么需要这个脚本（要回答的问题）：
 报表覆盖率 = 窗口实际条数 / 窗口应有条数，而"应有条数"按**名义**采集周期 `POLL_INTERVAL=5.0 s`
-算（每分钟 12 条）。但实测真实周期是 5.146 s 左右（`docs/性能与可靠性指标.md` §2.1），
+算（每分钟 12 条）。但实测真实周期是 5.146 s 左右（`docs/reference/性能与可靠性指标.md` §2.1），
 所以**覆盖率天然到不了 100%**：分母按名义周期算，分子按真实节奏给。
 于是"门限设多少"不能拍脑袋 —— 设高了会把正常数据全标成"样本不足"，
 设低了会把真断档放过去。本脚本把两个分布量出来，给出：
@@ -14,11 +14,20 @@
 口径与 `scripts/measure_completeness.py` 保持一致（同一套断档判据），便于两个数字互相引用：
   断档判据 = max(3 × 中位间隔, 中位间隔 + 10 s)；窗口"跨断档"= 该窗口区间与任一断档区间相交。
 
+★ 设备维度（多设备共用超级表）：`cems_data` 的 TAG 是 `(plant, device)`，混读会把两台设备的行
+  加在同一个窗口里（实测同一分钟 24 行 = device1 12 + device2 12）。这不是"数字偏大"那么轻：
+  覆盖率算的是 `min(1.0, 窗口条数 / 名义条数)`，**混读时一台设备的采样丢失会被另一台填平** ——
+  实测 2026-10-02 21:04 那一分钟：混读 12 行（覆盖率 1.0，"正常"），而 device2 自己只有 2 行
+  （覆盖率 0.17，已经是故障）。用它标定覆盖率门限，标出来的是"两台加起来够不够"，
+  门限会被抬高到掩盖单台故障的位置。所以本脚本**只按单台设备标定**，`--device` 默认 device1
+  （与 web 展示层的 `TD_PLANT`/`TD_DEVICE`、接入层的 `TD_DEVICE` 同一取值来源）。
+
 只读：全部 SQL 都是 SELECT，不写库、不改缓存、不动服务。
 原始数据落到 `docs/evidence/coverage/report_coverage_<tag>.json`（测法 + 原始分布 + 结论）。
 
 用法：
     python scripts/measure_report_coverage.py
+    python scripts/measure_report_coverage.py --device device2
     python scripts/measure_report_coverage.py --threshold 0.9 --tag try_090
 """
 
@@ -32,15 +41,30 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Final
 
+# ⚠️ Windows 控制台默认代码页是 GBK，而下面的报告里用了 ⚠/⇒ 这类字符 ——
+#    输出被重定向/被捕获时（`python ... > log`、`... | Select-Object`）会抛
+#    `UnicodeEncodeError: 'gbk' codec can't encode character`，**在能报结论之前就崩**。
+#    这里显式把 stdout/stderr 重配成 UTF-8，errors="replace" 兜底，绝不因为编码再崩。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, OSError):        # 极老解释器 / 不可重配的流
+        pass
+
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts import _td_ops as ops   # noqa: E402
+from scripts._device_scope import (   # noqa: E402
+    add_device_argument,
+    device_predicate,
+    resolve_device,
+)
 
 # 与 src/web/report.py 的默认口径保持一致
 POLL_INTERVAL_NOMINAL: Final[float] = 5.0      # 名义采集周期（网关 POLL_INTERVAL）
-DEFAULT_THRESHOLD: Final[float] = 0.75         # 候选门限 = docs/告警判据设计.md §3.4 的 ALARM_COVERAGE_MIN
+DEFAULT_THRESHOLD: Final[float] = 0.75         # 候选门限 = docs/adr/0002-告警判据选型.md §3.4 的 ALARM_COVERAGE_MIN
 WINDOW_SECONDS: Final[dict[str, int]] = {"1m": 60, "1h": 3600, "1d": 86400}
 
 
@@ -58,12 +82,54 @@ def histogram(values: list[int], bucket: int | None = None) -> dict[str, int]:
     return {str(key): counter[key] for key in sorted(counter)}
 
 
-def window_counts(container: str, db: str, stable: str, unit: str) -> list[tuple[int, int]]:
-    """按 `unit` 分段，返回 [(窗口起始 epoch ms, 窗口内条数)]。"""
+def where_clause(predicate: str) -> str:
+    """把裸条件拼成 ` WHERE ...`；没有条件时返回空串（全表口径，仅调试用）。"""
+    return f" WHERE {predicate}" if predicate else ""
+
+
+# ---- 带设备过滤的取数（本地实现，不改 scripts/_td_ops.py 的既有口径） ----
+# `ops.count_rows` / `ops.ts_bounds` 没有 tag 参数，而不想在这里改动它们的签名，
+# 所以复用 ops 的同一批底层函数（taos_sql / taos_scalar，仍是容器内 taos CLI、仍是
+# 纪元毫秒比较）加一层设备谓词，取数口径与 ops 的版本逐字一致。
+#
+# ⚠️ 为什么不给它们直接加参数：那两个函数被备份/恢复演练脚本共用，改签名会波及别处。
+def scoped_count(container: str, db: str, stable: str, predicate: str) -> int:
+    """按设备过滤后的总条数（等价 ops.count_rows，多一个 tag 谓词）。"""
+    sql = f"SELECT COUNT(*) FROM {db}.{stable}{where_clause(predicate)};"
+    return int(ops.taos_scalar(container, sql))
+
+
+def scoped_bounds(container: str, db: str, stable: str, predicate: str) -> tuple[int, int]:
+    """按设备过滤后的首末时间戳（纪元毫秒）；不用 MAX(ts)/MIN(ts)，理由同 ops.ts_bounds。"""
+    where = where_clause(predicate)
+    min_ms = int(ops.taos_scalar(
+        container, f"SELECT CAST(ts AS BIGINT) FROM {db}.{stable}{where} ORDER BY ts ASC LIMIT 1;"))
+    max_ms = int(ops.taos_scalar(
+        container, f"SELECT CAST(ts AS BIGINT) FROM {db}.{stable}{where} ORDER BY ts DESC LIMIT 1;"))
+    return min_ms, max_ms
+
+
+def scoped_timestamps(container: str, db: str, stable: str, predicate: str) -> list[int]:
+    """按设备过滤后的全部时间戳（升序，纪元毫秒）；相邻间隔分布与断档判据都基于它。"""
+    sql = (
+        f"SELECT CAST(ts AS BIGINT) FROM {db}.{stable}{where_clause(predicate)} "
+        f"ORDER BY ts ASC;"
+    )
+    return [int(row[0]) for row in ops.taos_sql(container, sql)]
+
+
+def window_counts(
+    container: str, db: str, stable: str, unit: str, predicate: str = ""
+) -> list[tuple[int, int]]:
+    """按 `unit` 分段，返回 [(窗口起始 epoch ms, 窗口内条数)]。
+
+    ⚠️ 设备谓词必须出现在 INTERVAL 之前：多设备下同一窗口会同时收到两台设备的行
+    （实测 24 = 12 + 12），窗口条数直接翻倍。
+    """
     rows = ops.taos_sql(
         container,
         f"SELECT CAST(_wstart AS BIGINT) AS w, COUNT(*) AS n "
-        f"FROM {db}.{stable} INTERVAL({unit});",
+        f"FROM {db}.{stable}{where_clause(predicate)} INTERVAL({unit});",
     )
     return [(int(row[0]), int(row[1])) for row in rows]
 
@@ -127,20 +193,30 @@ def main() -> int:
     parser.add_argument("--db", default=ops.TD_DB_DEFAULT)
     parser.add_argument("--stable", default=ops.TD_STABLE_DEFAULT)
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
-                        help="候选门限（默认 0.75，与 docs/告警判据设计.md §3.4 同值）")
+                        help="候选门限（默认 0.75，与 docs/adr/0002-告警判据选型.md §3.4 同值）")
     parser.add_argument("--tag", default="calibration", help="输出文件名后缀")
     parser.add_argument("--out-dir", default=str(PROJECT_ROOT / "docs" / "evidence" / "coverage"))
     parser.add_argument("--no-write", action="store_true", help="只打印，不落盘")
+    add_device_argument(
+        parser,
+        help_text="按设备 TAG 标定覆盖率（默认 device1，与展示层/接入层的 TD_DEVICE 一致）。"
+        "多设备部署下必须一台一台标：混读会把两台设备的条数加在一起，掩盖单台采样丢失",
+    )
     args = parser.parse_args()
 
     ops.ensure_utf8_stdout()
-    ops.log(f"读取 {args.db}.{args.stable}（容器 {args.container}）")
+    # 设备名做白名单校验后才拼进 SQL（规则见 scripts/_device_scope.device_predicate）
+    scope = resolve_device(args.device)
+    predicate = device_predicate(scope)
+    ops.log(f"读取 {args.db}.{args.stable}（容器 {args.container}）设备过滤：{predicate}")
 
-    # ---- 取数：全部时间戳（只读） ----
-    lo_ms, hi_ms = ops.ts_bounds(args.container, args.db, args.stable)
-    total_rows = ops.count_rows(args.container, args.db, args.stable)
-    raw_ts = [int(row[0]) for row in ops.taos_sql(
-        args.container, f"SELECT CAST(ts AS BIGINT) FROM {args.db}.{args.stable} ORDER BY ts ASC;")]
+    # ---- 取数：全部时间戳（只读，按设备过滤） ----
+    raw_ts = scoped_timestamps(args.container, args.db, args.stable, predicate)
+    if not raw_ts:
+        ops.log(f"设备 {scope} 在 {args.db}.{args.stable} 里没有任何行，无法标定（换个 --device？）")
+        return 1
+    lo_ms, hi_ms = scoped_bounds(args.container, args.db, args.stable, predicate)
+    total_rows = scoped_count(args.container, args.db, args.stable, predicate)
 
     # ---- 断档判据（与 scripts/measure_completeness.py 同口径） ----
     all_gaps_ms = sorted(b - a for a, b in zip(raw_ts, raw_ts[1:]))
@@ -155,7 +231,8 @@ def main() -> int:
 
     per_unit = {
         unit: analyse_unit(
-            unit, window_counts(args.container, args.db, args.stable, unit), gaps, lo_ms, hi_ms)
+            unit, window_counts(args.container, args.db, args.stable, unit, predicate),
+            gaps, lo_ms, hi_ms)
         for unit in ("1m", "1h", "1d")
     }
 
@@ -185,12 +262,14 @@ def main() -> int:
         "method": {
             "coverage_definition": "窗口实际条数 / 窗口应有条数",
             "expected_definition": "窗口秒数 / POLL_INTERVAL（名义周期，默认 5.0 s）",
+            "device_scope": f"只统计 cems_data 里 {predicate} 的行（多设备下混读会把两台设备的条数相加）",
             "gap_threshold_ms": int(gap_threshold_ms),
             "gap_threshold_rule": "max(3 × 中位间隔, 中位间隔 + 10 s)，与 scripts/measure_completeness.py 同口径",
             "clean_window": "窗口区间与任何断档区间都不相交，且窗口完整落在数据范围内（排除首末不完整窗口）",
             "note": "覆盖率按名义周期算分母，实测周期 5.146 s ⇒ 天花板 < 100%，门限必须留出余量",
         },
-        "source": {"container": args.container, "db": args.db, "stable": args.stable},
+        "source": {"container": args.container, "db": args.db, "stable": args.stable,
+                   "device": scope},
         "data_range": {
             "first_ts": ops.ts_ms_to_str(lo_ms),
             "last_ts": ops.ts_ms_to_str(hi_ms),
@@ -213,7 +292,8 @@ def main() -> int:
     }
 
     print()
-    print("=== 覆盖率门限标定（实测） ===")
+    print("=== 覆盖率门限标定（实测，单设备口径） ===")
+    print(f"设备范围 : {predicate}（多设备部署必须一台一台标：混读会把两台相加、掩盖单台丢采样）")
     print(f"数据范围 : {payload['data_range']['first_ts']} ~ {payload['data_range']['last_ts']}"
           f"（{payload['data_range']['span_hours']} h，{total_rows} 条，断档 {len(gaps)} 处）")
     print(f"相邻间隔 : P50={percentile(online, 0.50):.3f}s P95={percentile(online, 0.95):.3f}s "

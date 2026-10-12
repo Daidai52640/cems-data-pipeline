@@ -19,6 +19,7 @@ PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.common.logging import setup_logging                # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
@@ -54,7 +55,35 @@ MODBUS_RETRY_INTERVAL: Final[float] = float(os.getenv("MODBUS_RETRY_INTERVAL", "
 # 两个写者各写各的文件，靠"原子改名"交接，不存在整文件回写抹掉对方数据的情况。
 # 旧版在途文件叫 cache.jsonl.sending（固定名）；上一轮遗留的 .sending 仍会被读进来补发
 # （见 _read_segment_lines），保证版本升级不会把盘上已缓存的数据漏掉。
-DATA_DIR: Final[Path] = PROJECT_ROOT / "data"
+#
+# ★ 缓存目录必须**每实例一份**（多设备部署的关键约束）：
+#   网关上所有缓存/续传状态都落在 DATA_DIR 里的固定文件名上（cache.jsonl、
+#   inflight-<seq>.jsonl、.gateway_alive）。两个网关实例若共用同一个目录，
+#   后果不是"慢一点"，而是**两个实例互相把对方的数据发出去**：
+#     - 段号由目录内文件推导（_next_segment_path），A 实例会接着 B 实例的段号写；
+#     - 补传是"整目录接手"（_take_over_pending 扫 glob），A 会把 B 缓存的报文
+#       发到 A 自己的主题上 → 数据张冠李戴，且两边都以为发成功了；
+#     - `.gateway_alive` 心跳互相覆盖，healthcheck 判断的不再是本实例的采集循环。
+#   所以第二台设备必须给独立的 GATEWAY_DATA_DIR（compose 里挂在各自的卷上）。
+GATEWAY_DATA_DIR_ENV: Final[str] = os.getenv("GATEWAY_DATA_DIR", "").strip()
+
+
+def resolve_data_dir(raw: str) -> Path:
+    """把 GATEWAY_DATA_DIR 解析成绝对路径；空值回落历史默认值 PROJECT_ROOT/data。
+
+    - 未设置 → `PROJECT_ROOT/data`，与改造前**逐字节一致**（单设备现状不变）
+    - 绝对路径 → 原样使用（容器里的推荐写法，如 `/app/data-plant2`）
+    - 相对路径 → 相对**项目根**解析（不是 CWD）：容器里 PROJECT_ROOT 就是 /app，
+      所以 `data/plant2` 与 `/app/data/plant2` 指向同一处，本机运行与容器运行
+      不会因为启动目录不同而分叉。
+    """
+    if not raw:
+        return PROJECT_ROOT / "data"
+    candidate = Path(raw).expanduser()
+    return candidate if candidate.is_absolute() else (PROJECT_ROOT / candidate)
+
+
+DATA_DIR: Final[Path] = resolve_data_dir(GATEWAY_DATA_DIR_ENV)
 CACHE_FILE: Final[Path] = DATA_DIR / "cache.jsonl"
 SENDING_FILE: Final[Path] = DATA_DIR / "cache.jsonl.sending"   # 旧版固定名（只读兼容，不再写入）
 HEARTBEAT_FILE: Final[Path] = DATA_DIR / ".gateway_alive"   # 供容器 healthcheck 判断循环是否还在转
@@ -87,23 +116,14 @@ RESEND_WINDOW: Final[int] = int(os.getenv("RESEND_WINDOW", "100"))
 RESEND_RETRY_INTERVAL: Final[float] = float(os.getenv("RESEND_RETRY_INTERVAL", "30.0"))
 
 # ---- 日志 ----
-LOG_LEVEL: Final[int] = logging.INFO
-LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
-
+# 级别/格式/时间格式统一在 src/common/logging.py（唯一真源）；
+# 这里只留本进程的 LOGGER —— 4 个进程的日志靠 getLogger 的名字区分来源。
 LOGGER: Final[logging.Logger] = logging.getLogger("gateway")
 
 
 # ==================== 2. 日志 ====================
-
-def setup_logging() -> None:
-    """初始化日志：控制台输出，级别由 LOG_LEVEL 统一控制。"""
-    logging.basicConfig(
-        level=LOG_LEVEL,
-        format=LOG_FORMAT,
-        datefmt=LOG_DATEFMT,
-        force=True,
-    )
+# setup_logging() 已提取到 src/common/logging.py，4 个入口共用同一份实现。
+# 注意本文件仍然保留调用点（main 里调用 setup_logging()），签名与行为不变。
 
 
 # ==================== 3. 设备读取 ====================
@@ -164,6 +184,47 @@ def connect_modbus() -> Optional[ModbusTcpClient]:
         LOGGER.error("Modbus 连接异常: %s", exc)
     close_modbus(client)
     return None
+
+
+def verify_unit_readable(client: ModbusTcpClient) -> bool:
+    """启动期预检：本实例配置的从站**真的能被读到**吗？读不到就拒绝启动。
+
+    ★ 为什么需要这道预检（2026-10-03 加）：
+      设备层是"一个 TCP 服务端、多个从站"（`SLAVE_IDS=1,2`），而每个网关实例按
+      `MODBUS_UNIT` 各读一个从站。**两个开关是分开的**：`SLAVE_IDS` 在使用方 `.env`，
+      `--profile plant2` 在命令行。只开后者时，设备层只建了从站 1，而 plant2 网关
+      去读从站 2 —— 此时**一条数据也读不到**（修复前更糟：会静默拿到从站 1 的数据，
+      于是两台曲线逐值相等、容器全 healthy、无任何报错）。
+
+      "连得上 TCP" ≠ "读得到本从站的数据"：`client.connect()` 只证明端口通。
+      所以这里必须**真读一次寄存器**，把"配置错"变成**启动即失败**（容器红），
+      而不是"容器健康但永远不出数、只能去日志里挖"。
+
+    返回 True 表示预检通过；False 表示本从站读不到（调用方据此拒绝启动）。
+    """
+    reason = ""
+    try:
+        response = _read_holding_registers(client, REG_BASE, REG_COUNT)
+        if response is None or response.isError():
+            reason = f"无响应/返回异常码（{response}）"
+    except Exception as exc:                       # noqa: BLE001 —— 预检要兜住一切读失败
+        # 实测（pymodbus 3.6.9）：读未登记的从站会在这里以 "Unable to decode request"
+        # 之类的解码异常冒出来（服务端对未登记从站不作答），所以两个分支必须给同一套提示
+        reason = f"读取抛异常（{type(exc).__name__}: {exc}）"
+
+    if reason:
+        LOGGER.critical(
+            "启动预检失败: 读 Modbus 从站%d %s。"
+            "⚠️ 最可能的原因：本实例的 MODBUS_UNIT=%d 不在设备层的 SLAVE_IDS 里 —— "
+            "设备层只对**已登记**的从站提供数据。多设备是**两个开关**："
+            "① 使用方 .env 里 SLAVE_IDS 要包含 %d（如 SLAVE_IDS=1,2）并重建 device 容器；"
+            "② 起第二套实例要带 --profile plant2。只开②不开①就会命中这条。"
+            "（本实例拒绝启动，而不是空跑或拿别的从站的数据。设备层是 %s:%d）",
+            MODBUS_UNIT, reason, MODBUS_UNIT, MODBUS_UNIT, MODBUS_HOST, MODBUS_PORT,
+        )
+        return False
+    LOGGER.info("启动预检通过: 从站%d 可读（%d 个寄存器）", MODBUS_UNIT, REG_COUNT)
+    return True
 
 
 # ==================== 4. 断网续传（★ 核心逻辑，勿改动） ====================
@@ -603,10 +664,15 @@ def main() -> None:
     setup_logging()
     check_data_dir_writable()     # 断网缓存目录不可写要立刻喊出来，别等丢数据才发现
     LOGGER.info(
-        "网关启动: 设备 %s:%d → MQTT %s:%d 主题 %s (QoS=%d)",
-        MODBUS_HOST, MODBUS_PORT, MQTT_HOST, MQTT_PORT, MQTT_TOPIC, MQTT_QOS,
+        "网关启动: 设备 %s:%d 从站%d → MQTT %s:%d 主题 %s (QoS=%d) client_id=%s",
+        MODBUS_HOST, MODBUS_PORT, MODBUS_UNIT, MQTT_HOST, MQTT_PORT, MQTT_TOPIC, MQTT_QOS,
+        MQTT_CLIENT_ID,
     )
-    LOGGER.info("断网续传已启用，缓存文件: %s", CACHE_FILE)
+    # 多实例部署时这一行是排查"缓存串味"的第一现场：它必须每实例一份、互不相同
+    LOGGER.info(
+        "断网续传已启用，缓存目录: %s（GATEWAY_DATA_DIR=%s）",
+        DATA_DIR, GATEWAY_DATA_DIR_ENV or "未设置，用默认 PROJECT_ROOT/data",
+    )
 
     # ---- 连 MQTT：connect_async + loop_start，broker 暂时不可用也会后台自动重连 ----
     mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=MQTT_CLIENT_ID)
@@ -621,6 +687,14 @@ def main() -> None:
     # ---- 连 Modbus：连不上不退出进程，进主循环后持续重试 ----
     modbus_client = connect_modbus()
 
+    # ---- 启动预检：本实例的从站必须真的读得到，否则拒绝启动 ----
+    # ⚠️ 与"连不上设备"的处置**故意不同**：连不上（设备还没起）是暂时状态，值得重试；
+    #    而"连上了但读不到本从站"是**配置错**（MODBUS_UNIT 不在设备层 SLAVE_IDS 里），
+    #    重试一万次也不会好，只会让容器一直 healthy 却永远不出数（只能去日志里挖）。
+    if modbus_client is not None and not verify_unit_readable(modbus_client):
+        close_modbus(modbus_client)
+        raise SystemExit(1)
+
     count = 0
     try:
         while True:
@@ -630,7 +704,7 @@ def main() -> None:
             # 必须在这里取：下面的 trigger_if_due 只是启动一个补传线程，它不该反过来
             # 把本轮数据挤进队列。否则会形成闭环：触发 → 本轮入队 → 队列非空 →
             # 下一个节流周期又是"触发的同时入队" → 队列永远有一行、每 6 条就有 1 条
-            # 走"缓存 30 秒再补传"的慢路径（成因见 docs/网关补传慢路径分析.md）。
+            # 走"缓存 30 秒再补传"的慢路径（成因见 docs/adr/0003-补传入队判定修正.md）。
             resend_in_flight = RESEND_WORKER.running
 
             # 补传重试放在循环最开头：它只跟 broker 有关，不该被设备侧故障挡住。

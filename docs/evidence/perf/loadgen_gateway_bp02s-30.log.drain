@@ -1,0 +1,7 @@
+2026-10-02 21:55:53 [INFO] gateway: 网关启动: 设备 device:5020 从站1 → MQTT emqx:1883 主题 cems/loadtest/gw/device5/data (QoS=1) client_id=cems-loadgen-gw-bp02s-30
+2026-10-02 21:55:53 [INFO] gateway: 断网续传已启用，缓存目录: /app/data-loadgen（GATEWAY_DATA_DIR=/app/data-loadgen）
+2026-10-02 21:55:53 [INFO] gateway: Modbus 已连接: device:5020 从站1
+2026-10-02 21:55:53 [INFO] gateway: MQTT 已连接: emqx:1883
+2026-10-02 21:55:53 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-02 21:55:53 Flow=33946.0 Dust=4.15 SO2=20.0 NOx=48.0 O2=6.4 Velocity=12.9 Temp=199.1 Humidity=46.7 Pressure=97.8 Flag=N
+2026-10-02 21:55:53 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-02 21:55:53 [INFO] gateway: [补传完成] broker 已确认 1 条

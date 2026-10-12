@@ -1,0 +1,54 @@
+{
+  "checked_at": "2026-10-03 00:32:12",
+  "backup_dir": "F:\\cems-backup\\manual\\cems_full_20261003_002857",
+  "manifest_self_check": "rows_out_of_range",
+  "reported_rows": 19100,
+  "aligned_instant": {
+    "post_count": 18570,
+    "post_max": "2026-10-03 00:29:01",
+    "post_max_ms": 1790958541000
+  },
+  "stable_counts_now": {
+    "cems_hourly_verdict": 42,
+    "cems_alarm_event": 247,
+    "cems_alarm_push": 247,
+    "cems_data": 18640
+  },
+  "sum_of_all_stables_now": 19176,
+  "check_1_integrity": {
+    "rule": "reported_rows == 主表 dump 前条数 + Σ(其余 stable 在 dump 后同一时刻的条数)",
+    "main_table": "cems_data",
+    "main_table_at_dump": 18570,
+    "other_stables_same_instant": {
+      "cems_hourly_verdict": {
+        "now": 42,
+        "at_post_ts": 42,
+        "growth_after_post": 0
+      },
+      "cems_alarm_event": {
+        "now": 247,
+        "at_post_ts": 244,
+        "growth_after_post": 3
+      },
+      "cems_alarm_push": {
+        "now": 247,
+        "at_post_ts": 244,
+        "growth_after_post": 3
+      }
+    },
+    "reconstructed_total": 19100,
+    "diff": 0,
+    "note": "重建与 reported 的差（个位数）来自 dump 期间告警/小时结算的并发写入：taosdump 自报数是导出过程中实际写出的行数，而主表项用的是『dump 前』快照，两者不在同一瞬间。",
+    "ok": true
+  },
+  "check_2_main_table_window": {
+    "rule": "pre_count ≤ cems_data COUNT(*) ≤ post_count（在线备份窗口内）",
+    "pre_count": 18570,
+    "post_count": 18570,
+    "cems_data_now": 18640,
+    "cems_data_now_minus_pre": 70,
+    "note": "复核在备份之后，主表已继续增长，所以只核『≥ pre』；备份脚本当时判的是 pre ≤ dumped ≤ post。",
+    "ok": true
+  },
+  "ok": true
+}

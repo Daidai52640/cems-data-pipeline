@@ -1,0 +1,10 @@
+emqx,43.34%,532.1MiB / 15.53GiB,3.35%
+cems-subscriber-plant2,0.00%,26.48MiB / 15.53GiB,0.17%
+cems-subscriber,0.00%,27.23MiB / 15.53GiB,0.17%
+cems-gateway-plant2,0.01%,24.89MiB / 15.53GiB,0.16%
+cems-gateway,0.01%,24.97MiB / 15.53GiB,0.16%
+cems-device,3.53%,35.89MiB / 15.53GiB,0.23%
+cems-web,0.01%,42.57MiB / 15.53GiB,0.27%
+cems-nginx,0.00%,17.75MiB / 15.53GiB,0.11%
+cems-redis,0.24%,4.855MiB / 15.53GiB,0.03%
+tdengine,2.66%,443.5MiB / 15.53GiB,2.79%

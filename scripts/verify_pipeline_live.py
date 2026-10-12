@@ -44,6 +44,8 @@ TD_USER: str = os.getenv("TD_USER", "root")
 TD_PASS: str = os.getenv("TD_PASS", "taosdata")
 TD_DB: str = os.getenv("TD_DB", "cems")
 TD_STABLE: str = os.getenv("TD_STABLE", "cems_data")
+#: 设备 TAG。默认与接入层一致（device1）；`--device` 或 env `TD_DEVICE` 可覆盖。
+TD_DEVICE: str = os.getenv("TD_DEVICE", "device1")
 
 EXPECTED_INTERVAL: float = 5.0        # 网关 POLL_INTERVAL
 INTERVAL_TOLERANCE: float = 1.5       # 允许 ±1.5s（网络/调度抖动）
@@ -84,18 +86,25 @@ def query(sql: str) -> dict[str, Any]:
 
 
 def fetch_rows(
-    minutes: int, since: Optional[datetime]
+    minutes: int, since: Optional[datetime], device: Optional[str] = None
 ) -> tuple[list[str], list[list[Any]]]:
     """取最近 minutes 分钟的入库记录，按时间升序；since 非空时只保留其后的行。
+
+    ⚠️ **必须按设备 TAG 过滤**：数据表是"一台设备一条子表、共用一个超级表"的多设备模型，
+    库里同时会有 device1/device2 两条曲线。不过滤的话本脚本会把两台设备的行混在一起，
+    A（节奏）/ C（跳变）两项都会因为"两条曲线交替出现"而误判失败
+    （实测：混读 max|Δflow| ≈ 量程 11.4%，按设备分开只有 0.39% / 0.43%）。
 
     ⚠️ since 必须由**本脚本**过滤，不能写进 SQL：
     TDengine 对 `WHERE ts >= NOW - 5m AND ts >= '2026-09-30 16:52:05'` 这种
     双时间谓词会**静默忽略字面量那个**（实测返回的仍是全窗口数据），
     所以把筛选放在 Python 里做，结果可控。
     """
+    scope = device if device else TD_DEVICE
     sql = (
         f"SELECT ts, {', '.join(point.column for point in POINTS)} "
-        f"FROM {TD_DB}.{TD_STABLE} WHERE ts >= NOW - {minutes}m ORDER BY ts ASC"
+        f"FROM {TD_DB}.{TD_STABLE} WHERE ts >= NOW - {minutes}m AND device = '{scope}' "
+        f"ORDER BY ts ASC"
     )
     payload = query(sql)
     columns = [meta[0] for meta in payload["column_meta"]]
@@ -231,15 +240,23 @@ def main() -> int:
         default=os.getenv("TD_SINCE", ""),
         help="只统计该时刻之后的数据（'YYYY-MM-DD HH:MM:SS'），用来掐掉改造前的旧数据",
     )
+    parser.add_argument(
+        "--device",
+        default=os.getenv("TD_DEVICE", "device1"),
+        help="按设备 TAG 过滤（默认 device1，与接入层一致）；多设备部署时必须指定，否则两条曲线会被混在一起判定",
+    )
     args = parser.parse_args()
     since = parse_since(args.since)
 
-    print(f"全链路在线检查：TDengine={TD_URL} 库={TD_DB} 表={TD_STABLE} 回看={args.minutes} 分钟")
+    print(
+        f"全链路在线检查：TDengine={TD_URL} 库={TD_DB} 表={TD_STABLE} "
+        f"设备={args.device} 回看={args.minutes} 分钟"
+    )
     if since:
         print(f"只统计 ts >= {since.isoformat()} 的数据（切掉改造前的纯随机数据）")
     else:
         print("⚠️ 未指定 --since：窗口若跨过切换时刻，会把改造前的随机数据算进来，判定会失真")
-    columns, rows = fetch_rows(args.minutes, since)
+    columns, rows = fetch_rows(args.minutes, since, device=args.device)
     print(f"查询列: {columns}")
     if not rows:
         print("库里这段时间没有数据：先确认 device/gateway/subscriber 三个容器都 healthy")

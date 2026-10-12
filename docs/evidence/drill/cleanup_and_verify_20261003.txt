@@ -1,0 +1,49 @@
+TC-E2E-002 演练收尾：清理 + 环境恢复核验
+核验时刻: 2026-10-03 00:58:25
+========================================================================
+
+[1] 清理演练探针在容器内留下的临时目录（2B 正向控制用）
+  docker exec cems-gateway rm -rf /tmp/preflight-probe  →  ok
+  复查 cems-gateway:/tmp/preflight-probe 是否存在 → GONE
+  docker exec cems-gateway-plant2 rm -rf /tmp/preflight-probe  →  ok
+  复查 cems-gateway-plant2:/tmp/preflight-probe 是否存在 → GONE
+
+[2] 缓存残留（演练要求：补传后必须排空）
+  device1: cache.jsonl=0 行, 在途段=0 行, 旧版 .sending=0 行 → pending_total=0
+  device2: cache.jsonl=0 行, 在途段=0 行, 旧版 .sending=0 行 → pending_total=0
+  合计 pending_total = 0
+
+[3] 库内有无本演练造的探针/测试数据
+  tag 含 probe/test 的行: [[0]]
+  plant='tzdrill' 的行（另一条线的时区演练，非本演练所造，不动）: [[0]]
+  库总数（信息项）: [[19615]]
+  SHOW DATABASES: [['information_schema'], ['performance_schema'], ['demo'], ['log'], ['cems']]
+
+[4] 本演练是否创建过数据库/表（应为 0 个）
+  本演练全程只执行只读 SQL（SELECT/COUNT/LAST/to_char）+ 容器停起，未执行 CREATE/INSERT/DELETE/DROP
+
+[5] 环境恢复核验：10 容器 healthy
+cems-device	Up 8 minutes (healthy)
+cems-gateway	Up 8 minutes (healthy)
+cems-gateway-plant2	Up 8 minutes (healthy)
+cems-nginx	Up 10 hours (healthy)
+cems-redis	Up 10 hours (healthy)
+cems-subscriber	Up 13 minutes (healthy)
+cems-subscriber-plant2	Up 13 minutes (healthy)
+cems-web	Up 2 hours (healthy)
+emqx	Up 5 minutes (healthy)
+tdengine	Up 10 hours (healthy)
+  非 healthy 的容器: 无
+
+[6] 两台设备正常出数（5 秒/条，最近一条在 30 秒内）
+  {'device1': {'last_ts': '2026-10-03 00:58:23', 'age_s': 4.569237}, 'device2': {'last_ts': '2026-10-03 00:58:26', 'age_s': 1.57452}}
+
+[7] 一台设备的采集节奏核验（最近 3 分钟逐分钟条数，应≈12）
+  plant1/device1: [['2026-10-03 00:55:00', 6], ['2026-10-03 00:56:00', 12], ['2026-10-03 00:57:00', 12], ['2026-10-03 00:58:00', 5]]
+  plant2/device2: [['2026-10-03 00:55:00', 6], ['2026-10-03 00:56:00', 12], ['2026-10-03 00:57:00', 12], ['2026-10-03 00:58:00', 6]]
+
+[8] 演练造成的库内永久缺口（如实列出；不清理：网关侧副本已在 broker 确认后移除，已无副本可补）
+  run1 plant1/device1 逐分钟: [['2026-10-03 00:31:00', 11], ['2026-10-03 00:36:00', 7]]   ← device1 54 条（00:31:57~00:36:24）
+       证据: docs/evidence/drill/emqx_restart_1a_reconcile_20261003_run1.json
+  run3 plant1/device1 逐分钟: [['2026-10-03 00:50:00', 8], ['2026-10-03 00:55:00', 10]]   ← device1 53 条（00:50:44~00:55:06）
+       证据: docs/evidence/drill/emqx_restart_1a_reconcile_20261003_run3.json

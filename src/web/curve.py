@@ -50,10 +50,8 @@ UNIT_LABELS: Final[dict[str, str]] = {
 }
 
 # ---- 日志 ----
-LOG_LEVEL: Final[int] = logging.INFO
-LOG_FORMAT: Final[str] = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_DATEFMT: Final[str] = "%Y-%m-%d %H:%M:%S"
-
+# ⚠️ 级别/格式/时间格式的**唯一真源**是 src/common/logging.py，本模块不复制那三个常量
+#    （历史上这里抄过一份逐字相同的 `LOG_LEVEL`/`LOG_FORMAT`/`LOG_DATEFMT`，从未被引用，已删）。
 LOGGER: Final[logging.Logger] = logging.getLogger("web.curve")
 
 
@@ -93,7 +91,7 @@ def columns_from_points(points: list[dict[str, Any]]) -> dict[str, list[Any]]:
     return payload
 
 
-def build_curve(start_text: Optional[str], end_text: Optional[str]) -> dict[str, Any]:
+def build_curve(start_text: Optional[str], end_text: Optional[str], scope: str = "") -> dict[str, Any]:
     """取一段区间的曲线数据（列式）+ 粒度元信息。
 
     参数解析、上界收窄、聚合口径全部复用 report.py，曲线路径不另写一套 SQL 口径。
@@ -111,12 +109,12 @@ def build_curve(start_text: Optional[str], end_text: Optional[str]) -> dict[str,
     if unit == UNIT_RAW:
         # 原始点区间可能覆盖"当前秒"（跨度 ≤ CURVE_RAW_MAX_HOURS 的默认区间就包含当下），
         # 明确声明不可缓存：kind=None 会让 aggregate/query_raw 走无缓存出口。
-        payload = columns_from_raw(report.query_raw(start, end, CURVE_MAX_POINTS))
+        payload = columns_from_raw(report.query_raw(start, end, CURVE_MAX_POINTS, scope))
     else:
         series = report.aggregate_series(
             start, end, unit, WINDOW_BY_UNIT[unit],
             label="曲线", pad_grid=True, max_points=CURVE_MAX_POINTS,
-            kind="curve",
+            kind="curve", scope=scope,
         )
         start, end = report.parse_time(series["start"], "start", start), \
             report.parse_time(series["end"], "end", end)

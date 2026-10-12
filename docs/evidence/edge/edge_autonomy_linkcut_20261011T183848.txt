@@ -1,0 +1,80 @@
+# 边缘侧自治演练 - mode=linkcut
+# tag=20261011T183848 device=device1 container=cems-gateway
+# started_at=2026-10-11 18:38:48
+
+
+=== [0] 前置：10 个容器状态 + broker 客户端表 ===
+  emqx                   running  healthy   2026-10-11T10:37:52.33405599Z
+  tdengine               running  healthy   2026-10-11T10:11:39.095105632Z
+  cems-device            running  healthy   2026-10-11T10:26:21.586176877Z
+  cems-gateway           running  healthy   2026-10-11T10:26:22.272291387Z
+  cems-gateway-plant2    running  healthy   2026-10-11T10:26:22.375387912Z
+  cems-subscriber        running  healthy   2026-10-11T10:11:50.748810026Z
+  cems-subscriber-plant2 running  healthy   2026-10-11T10:11:50.870306937Z
+  cems-redis             running  healthy   2026-10-11T10:11:39.2530338Z
+  cems-nginx             running  healthy   2026-10-11T10:11:55.560228244Z
+  cems-web               running  healthy   2026-10-11T10:14:21.142549411Z
+  --- emqx ctl clients list（网关两实例）---
+  Client(cems-gateway-plant1, username=undefined, peername=172.18.0.7:43721, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791715091271, connected_at=1791715091271)
+  Client(cems-gateway-plant2, username=undefined, peername=172.18.0.8:43421, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791715091270, connected_at=1791715091270)
+  基线 [device1]: 库内 26210 条，MAX(ts)=2026-10-11 18:38:48，落盘队列 0 行
+
+=== [1] 断开北向：docker stop emqx（边缘与云之间唯一的北向出口）===
+  已停 @ 2026-10-11 18:38:52 → emqx ['exited', 'unhealthy', '2026-10-11T10:37:52.33405599Z']
+  设备侧不受影响：Modbus 走容器内网，与 broker 无关（下面每轮都会核）
+  +   17s 落盘队列     381 B /   3 行 / 去重   3 条 | 网关心跳 age=4.4s（本地采集循环仍在转）
+  +   32s 落盘队列     761 B /   6 行 / 去重   6 条 | 网关心跳 age=4.3s（本地采集循环仍在转）
+  +   47s 落盘队列    1141 B /   9 行 / 去重   9 条 | 网关心跳 age=4.3s（本地采集循环仍在转）
+  +   60s 落盘队列    1522 B /  12 行 / 去重  12 条 | 网关心跳 age=1.7s（本地采集循环仍在转）
+  快照 @ 2026-10-11 18:39:50: 文件 12 行 / 去重 12 条报文
+  队列快照落盘: edge_linkcut_queue_snapshot_20261011T183848.txt
+  该补条数 N = 12（快照里 ≤ 基线的 0 条不计入）
+  --- cems-gateway 日志（断链窗口内，原始输出）---
+  2026-10-11 18:38:50 [ERROR] gateway: MQTT 连接断开 reason_code=Unspecified error，后续数据写入本地缓存
+  2026-10-11 18:38:53 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:38:53 Flow=31889.0 Dust=5.07 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+  2026-10-11 18:38:58 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:38:58 Flow=31838.0 Dust=4.96 SO2=19.9 NOx=32.2 O2=5.6 Velocity=12.1 Temp=25.2 Humidity=64.6 Pressure=97.6 Flag=N
+  2026-10-11 18:39:03 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:03 Flow=31791.0 Dust=4.88 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+  2026-10-11 18:39:08 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:08 Flow=31823.0 Dust=4.77 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+  2026-10-11 18:39:13 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:13 Flow=31662.0 Dust=4.7 SO2=19.9 NOx=32.2 O2=5.7 Velocity=11.9 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+  2026-10-11 18:39:18 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:18 Flow=31589.0 Dust=4.59 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.7 Flag=N
+  2026-10-11 18:39:23 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:23 Flow=31888.0 Dust=4.51 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+  2026-10-11 18:39:28 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:28 Flow=31763.0 Dust=4.4 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.1 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+  2026-10-11 18:39:33 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:33 Flow=31760.0 Dust=4.33 SO2=19.9 NOx=32.2 O2=5.7 Velocity=11.9 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+  2026-10-11 18:39:38 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:38 Flow=31653.0 Dust=4.22 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+  2026-10-11 18:39:43 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:43 Flow=31820.0 Dust=4.14 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.7 Flag=N
+  2026-10-11 18:39:48 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:48 Flow=31848.0 Dust=4.03 SO2=19.9 NOx=32.2 O2=5.8 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N
+
+=== [2] 恢复北向：docker start emqx ===
+  已启动 @ 2026-10-11 18:40:02，emqx healthy=True
+  broker 客户端表恢复: True（+21.0s）
+  Client(cems-gateway-plant1, username=undefined, peername=172.18.0.7:57775, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791715209310, connected_at=1791715209310)
+  Client(cems-gateway-plant2, username=undefined, peername=172.18.0.8:60285, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791715209310, connected_at=1791715209310)
+  队列排空 完成，耗时 21.0 s，残留 0 行
+
+===== 对账台账（断链自治）=====
+  断开前库内(条)                          : 26210
+  断开前 MAX(ts)                       : 2026-10-11 18:38:48
+  断开时长(s)                           : 60.0
+  理论应产生(条, 时长/5.0)                  : 12.0
+  实际积压=该补 N(条)                      : 12
+  恢复后补上 M(条)                        : 12
+  补传成功率 M/N                         : 1.0
+  快照后新产生并入库(条)                      : 5
+  库内新增(条)                           : 17
+  残留(行)                             : 0
+  恒等式 基线+N+新产生-残留==恢复后              : True
+  恢复后 MAX(ts)                       : 2026-10-11 18:40:13
+  判定: {"backlog_created": true, "no_data_loss": true, "identity_ok": true, "queue_drained": true, "reconnected": true}
+[finally] emqx: status=running health=healthy
+
+[finally] 10 个容器状态:
+  emqx                   running  healthy   2026-10-11T10:39:50.260460526Z
+  tdengine               running  healthy   2026-10-11T10:11:39.095105632Z
+  cems-device            running  healthy   2026-10-11T10:26:21.586176877Z
+  cems-gateway           running  healthy   2026-10-11T10:26:22.272291387Z
+  cems-gateway-plant2    running  healthy   2026-10-11T10:26:22.375387912Z
+  cems-subscriber        running  healthy   2026-10-11T10:11:50.748810026Z
+  cems-subscriber-plant2 running  healthy   2026-10-11T10:11:50.870306937Z
+  cems-redis             running  healthy   2026-10-11T10:11:39.2530338Z
+  cems-nginx             running  healthy   2026-10-11T10:11:55.560228244Z
+  cems-web               running  unhealthy 2026-10-11T10:14:21.142549411Z

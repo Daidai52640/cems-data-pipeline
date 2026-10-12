@@ -1,0 +1,203 @@
+{
+  "tag": "acc_n2",
+  "started_at": "2026-10-03 00:54:39",
+  "config": {
+    "devices": 2,
+    "interval_seconds": 1.0,
+    "duration_seconds": 30.0,
+    "qos": 1,
+    "topic_prefix": "cems/loadtest",
+    "topic_example": "cems/loadtest/device1/data",
+    "mqtt": "127.0.0.1:1883",
+    "publisher_client_id": "cems-loadgen-acc_n2-26288",
+    "probe_client_id": "cems-loadgen-probe-acc_n2-26288",
+    "td_db_stable": "cems.cems_data",
+    "td_plant": "loadtest",
+    "td_device_tag": "lt<i>（i=1..2）",
+    "ingest_channels": 2,
+    "channel_device_ranges": {
+      "lt1": "device 1-1（子表 loadtest_lt1）",
+      "lt2": "device 2-2（子表 loadtest_lt2）"
+    },
+    "settle_seconds": 5.0,
+    "poll_interval_seconds": 0.3,
+    "parallel_publishers": 2,
+    "seed": 20261002,
+    "probe_subscribed": true,
+    "probe_suback_rc": [
+      1,
+      1
+    ],
+    "probe_messages_received": 60,
+    "probe_keys_seen": 60,
+    "probe_key_sample": [
+      "1@2026-10-03 00:54:09",
+      "1@2026-10-03 00:54:10",
+      "1@2026-10-03 00:54:11"
+    ],
+    "ledger_key_sample": [
+      "1@2026-10-03 00:54:09",
+      "1@2026-10-03 00:54:10",
+      "2@2026-10-03 00:54:09"
+    ],
+    "ts_offset_seconds": [
+      0.0
+    ],
+    "ts_offset_note": "同一子表内多台设备共用一张表时，为避免 (子表, ts) 同秒覆盖，第 j 台的报文 ts 加了 j 秒的整数偏移（亚秒偏移无效：ts 只有秒级）；延迟口径不受影响（全部用宿主机时钟）"
+  },
+  "counts": {
+    "published_enqueued": 60,
+    "published_ok": 60,
+    "enqueue_failures": 0,
+    "ack_failures": 0,
+    "arrived_at_broker": 60,
+    "visible_in_db": 60
+  },
+  "throughput": {
+    "publish_window_seconds": 29.0,
+    "published_per_second": 2.069,
+    "visible_in_db_per_second": 2.069,
+    "nominal_per_second": 2.0,
+    "drain_seconds": 29.406,
+    "drain_complete": true,
+    "e2e_rows_per_second": 2.04,
+    "per_second_buckets": {
+      "0": 2,
+      "1": 2,
+      "2": 2,
+      "3": 2,
+      "4": 2,
+      "5": 2,
+      "6": 2,
+      "7": 2,
+      "8": 4,
+      "10": 2,
+      "11": 2,
+      "12": 2,
+      "13": 2,
+      "14": 2,
+      "15": 2,
+      "16": 2,
+      "17": 2,
+      "18": 2,
+      "19": 2,
+      "20": 2,
+      "21": 2,
+      "22": 2,
+      "23": 2,
+      "24": 2,
+      "25": 2,
+      "26": 2,
+      "27": 2,
+      "28": 2,
+      "29": 2
+    }
+  },
+  "latency_ms": {
+    "note": "全部由宿主机时钟相减（不含跨容器时钟漂移）；lat_gen = 计划发布 → 实际发布；lat_broker = 发布 → 旁听端收到；lat_store = 旁听端收到 → 库内首次可见（含 ≤poll_interval 的轮询量化）；lat_e2e = 发布 → 库内首次可见",
+    "samples_observed": 60,
+    "gen_to_publish": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0
+    },
+    "publish_to_broker": {
+      "p50": 0.0,
+      "p95": 16.0,
+      "p99": 31.0,
+      "min": 0.0,
+      "max": 31.0,
+      "mean": 2.6
+    },
+    "broker_to_db_visible": {
+      "p50": 179.5,
+      "p95": 312.0,
+      "p99": 328.0,
+      "min": 31.0,
+      "max": 328.0,
+      "mean": 177.8
+    },
+    "e2e_publish_to_db_visible": {
+      "p50": 179.5,
+      "p95": 328.0,
+      "p99": 328.0,
+      "min": 31.0,
+      "max": 328.0,
+      "mean": 180.4
+    }
+  },
+  "per_device": {
+    "lt1": {
+      "publish_topic": "cems/loadtest/device1/data",
+      "ingest_table": "loadtest_lt1",
+      "ingest_channel": 1,
+      "published": 30,
+      "arrived_at_broker": 30,
+      "visible_in_db": 30,
+      "curve_digest": "ccadc0732483",
+      "first_payload": "2026-10-03 00:54:09 Flow=19201.6 Dust=3.1 SO2=16.5 NOx=21.1 O2=4.9 Velocity=12.9 Temp=167.9 Humidity=22.3 Pressure=92.1 Flag=N"
+    },
+    "lt2": {
+      "publish_topic": "cems/loadtest/device2/data",
+      "ingest_table": "loadtest_lt2",
+      "ingest_channel": 2,
+      "published": 30,
+      "arrived_at_broker": 30,
+      "visible_in_db": 30,
+      "curve_digest": "e1b172a3320e",
+      "first_payload": "2026-10-03 00:54:09 Flow=23376.2 Dust=3.2 SO2=17.4 NOx=21.5 O2=5.0 Velocity=16.1 Temp=176.6 Humidity=50.2 Pressure=91.3 Flag=N"
+    }
+  },
+  "reconciliation": {
+    "per_device": {
+      "lt1": {
+        "published": 30,
+        "in_db_rows": 35,
+        "in_db_distinct_ts": 35,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 5,
+        "extra_examples": [
+          "2026-10-03 00:41:54",
+          "2026-10-03 00:41:55",
+          "2026-10-03 00:41:56",
+          "2026-10-03 00:41:57",
+          "2026-10-03 00:41:58"
+        ],
+        "duplicate_ts": 0
+      },
+      "lt2": {
+        "published": 30,
+        "in_db_rows": 35,
+        "in_db_distinct_ts": 35,
+        "missing": 0,
+        "missing_examples": [],
+        "extra": 5,
+        "extra_examples": [
+          "2026-10-03 00:41:54",
+          "2026-10-03 00:41:55",
+          "2026-10-03 00:41:56",
+          "2026-10-03 00:41:57",
+          "2026-10-03 00:41:58"
+        ],
+        "duplicate_ts": 0
+      }
+    },
+    "totals": {
+      "published": 60,
+      "in_db_rows": 70,
+      "missing": 0,
+      "extra": 10,
+      "duplicate_ts": 0,
+      "loss_free": true,
+      "extra_note": "extra = 库内落在本次发布 ts 集合之外的行；常见成因是上一轮运行遗留在 EMQX 持久会话队列里的数据在本次被投递（用 client_id 区分运行可避免）"
+    },
+    "window": {
+      "published_ts_min": "2026-10-03 00:54:09",
+      "published_ts_max": "2026-10-03 00:54:38"
+    }
+  }
+}

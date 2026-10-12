@@ -1,0 +1,26 @@
+{
+  "dropped": [
+    "loadtest_lt1",
+    "loadtest_lt2",
+    "loadtest_lt3",
+    "loadtest_lt4",
+Welcome to the TDengine Command Line Interface, Native Client Version:3.3.6.13 
+Copyright (c) 2025 by TDengine, all rights reserved.
+
+taos> SELECT COUNT(*) FROM cems.cems_data WHERE tbname LIKE 'loadtest%';
+       count(*)        |
+========================
+                     0 |
+Query OK, 1 row(s) in set (0.042198s)
+
+=== containers ===
+cems-device	Up 10 minutes (healthy)
+cems-gateway	Up 10 minutes (healthy)
+cems-gateway-plant2	Up 10 minutes (healthy)
+cems-nginx	Up 10 hours (healthy)
+cems-redis	Up 10 hours (healthy)
+cems-subscriber	Up 15 minutes (healthy)
+cems-subscriber-plant2	Up 15 minutes (healthy)
+cems-web	Up 2 hours (healthy)
+emqx	Up 7 minutes (healthy)
+tdengine	Up 11 hours (healthy)

@@ -1,0 +1,166 @@
+{
+  "mode": "linkcut",
+  "tag": "20261011T183650",
+  "device": "device1",
+  "container": "cems-gateway",
+  "started_at": "2026-10-11 18:36:50",
+  "states_before": {
+    "emqx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:38.910619992Z"
+    ],
+    "tdengine": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.095105632Z"
+    ],
+    "cems-device": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:21.586176877Z"
+    ],
+    "cems-gateway": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.272291387Z"
+    ],
+    "cems-gateway-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.375387912Z"
+    ],
+    "cems-subscriber": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.748810026Z"
+    ],
+    "cems-subscriber-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.870306937Z"
+    ],
+    "cems-redis": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.2530338Z"
+    ],
+    "cems-nginx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:55.560228244Z"
+    ],
+    "cems-web": [
+      "running",
+      "healthy",
+      "2026-10-11T10:14:21.142549411Z"
+    ]
+  },
+  "broker_clients_before": [
+    "Client(cems-gateway-plant1, username=undefined, peername=172.18.0.7:34089, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791714382538, connected_at=1791714382538)",
+    "Client(cems-gateway-plant2, username=undefined, peername=172.18.0.8:60591, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791714382659, connected_at=1791714382659)"
+  ],
+  "baseline": {
+    "at": "2026-10-11 18:36:52",
+    "rows": 26186,
+    "max_ts": "2026-10-11 18:36:47",
+    "queue": {
+      "files": [
+        "inflight-000001.jsonl",
+        "inflight-000002.jsonl",
+        "inflight-000003.jsonl",
+        "inflight-000004.jsonl"
+      ],
+      "bytes": 0,
+      "lines": 0,
+      "malformed_lines": 0,
+      "unique_ts": 0
+    }
+  },
+  "cut": {
+    "at": "2026-10-11 18:36:54",
+    "method": "docker stop emqx",
+    "emqx_state": [
+      "exited",
+      "unhealthy",
+      "2026-10-11T10:11:38.910619992Z"
+    ]
+  },
+  "snapshot": {
+    "files": [
+      "inflight-000001.jsonl",
+      "inflight-000002.jsonl",
+      "inflight-000003.jsonl",
+      "inflight-000004.jsonl",
+      "cache.jsonl"
+    ],
+    "bytes": 1523,
+    "lines": 12,
+    "malformed_lines": 0,
+    "unique_ts": 12,
+    "evidence_file": "edge_linkcut_queue_snapshot_.txt"
+  },
+  "reconciliation": {
+    "should_resend_N": 12,
+    "snapshot_at_or_before_baseline": 0,
+    "outage_seconds": 60.0
+  },
+  "error": "TypeError('can only concatenate str (not \"NoneType\") to str')",
+  "final_emqx_state": {
+    "status": "running",
+    "health": "starting"
+  },
+  "final_states": {
+    "emqx": [
+      "running",
+      "starting",
+      "2026-10-11T10:37:52.33405599Z"
+    ],
+    "tdengine": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.095105632Z"
+    ],
+    "cems-device": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:21.586176877Z"
+    ],
+    "cems-gateway": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.272291387Z"
+    ],
+    "cems-gateway-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.375387912Z"
+    ],
+    "cems-subscriber": [
+      "running",
+      "unhealthy",
+      "2026-10-11T10:11:50.748810026Z"
+    ],
+    "cems-subscriber-plant2": [
+      "running",
+      "unhealthy",
+      "2026-10-11T10:11:50.870306937Z"
+    ],
+    "cems-redis": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.2530338Z"
+    ],
+    "cems-nginx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:55.560228244Z"
+    ],
+    "cems-web": [
+      "running",
+      "unhealthy",
+      "2026-10-11T10:14:21.142549411Z"
+    ]
+  },
+  "ended_at": "2026-10-11 18:37:53"
+}

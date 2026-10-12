@@ -1,0 +1,237 @@
+{
+  "mode": "linkcut",
+  "tag": "20261011T183848",
+  "device": "device1",
+  "container": "cems-gateway",
+  "started_at": "2026-10-11 18:38:48",
+  "states_before": {
+    "emqx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:37:52.33405599Z"
+    ],
+    "tdengine": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.095105632Z"
+    ],
+    "cems-device": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:21.586176877Z"
+    ],
+    "cems-gateway": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.272291387Z"
+    ],
+    "cems-gateway-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.375387912Z"
+    ],
+    "cems-subscriber": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.748810026Z"
+    ],
+    "cems-subscriber-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.870306937Z"
+    ],
+    "cems-redis": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.2530338Z"
+    ],
+    "cems-nginx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:55.560228244Z"
+    ],
+    "cems-web": [
+      "running",
+      "healthy",
+      "2026-10-11T10:14:21.142549411Z"
+    ]
+  },
+  "broker_clients_before": [
+    "Client(cems-gateway-plant1, username=undefined, peername=172.18.0.7:43721, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791715091271, connected_at=1791715091271)",
+    "Client(cems-gateway-plant2, username=undefined, peername=172.18.0.8:43421, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791715091270, connected_at=1791715091270)"
+  ],
+  "baseline": {
+    "at": "2026-10-11 18:38:50",
+    "rows": 26210,
+    "max_ts": "2026-10-11 18:38:48",
+    "queue": {
+      "files": [
+        "inflight-000001.jsonl",
+        "inflight-000002.jsonl",
+        "inflight-000003.jsonl",
+        "inflight-000004.jsonl",
+        "cache.jsonl"
+      ],
+      "bytes": 0,
+      "lines": 0,
+      "malformed_lines": 0,
+      "unique_ts": 0
+    }
+  },
+  "cut": {
+    "at": "2026-10-11 18:38:52",
+    "method": "docker stop emqx",
+    "emqx_state": [
+      "exited",
+      "unhealthy",
+      "2026-10-11T10:37:52.33405599Z"
+    ]
+  },
+  "snapshot": {
+    "files": [
+      "inflight-000001.jsonl",
+      "inflight-000002.jsonl",
+      "inflight-000003.jsonl",
+      "inflight-000004.jsonl",
+      "cache.jsonl"
+    ],
+    "bytes": 1522,
+    "lines": 12,
+    "malformed_lines": 0,
+    "unique_ts": 12,
+    "evidence_file": "edge_linkcut_queue_snapshot_20261011T183848.txt"
+  },
+  "reconciliation": {
+    "should_resend_N": 12,
+    "snapshot_at_or_before_baseline": 0,
+    "outage_seconds": 60.0,
+    "delivered_M": 12,
+    "missing": 0,
+    "success_rate": 1.0,
+    "live_rows_after_recovery": 5,
+    "db_growth": 17
+  },
+  "gateway_logs_during_outage": [
+    "2026-10-11 18:38:50 [ERROR] gateway: MQTT 连接断开 reason_code=Unspecified error，后续数据写入本地缓存",
+    "2026-10-11 18:38:53 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:38:53 Flow=31889.0 Dust=5.07 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N",
+    "2026-10-11 18:38:58 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:38:58 Flow=31838.0 Dust=4.96 SO2=19.9 NOx=32.2 O2=5.6 Velocity=12.1 Temp=25.2 Humidity=64.6 Pressure=97.6 Flag=N",
+    "2026-10-11 18:39:03 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:03 Flow=31791.0 Dust=4.88 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N",
+    "2026-10-11 18:39:08 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:08 Flow=31823.0 Dust=4.77 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N",
+    "2026-10-11 18:39:13 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:13 Flow=31662.0 Dust=4.7 SO2=19.9 NOx=32.2 O2=5.7 Velocity=11.9 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N",
+    "2026-10-11 18:39:18 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:18 Flow=31589.0 Dust=4.59 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.7 Flag=N",
+    "2026-10-11 18:39:23 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:23 Flow=31888.0 Dust=4.51 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N",
+    "2026-10-11 18:39:28 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:28 Flow=31763.0 Dust=4.4 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.1 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N",
+    "2026-10-11 18:39:33 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:33 Flow=31760.0 Dust=4.33 SO2=19.9 NOx=32.2 O2=5.7 Velocity=11.9 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N",
+    "2026-10-11 18:39:38 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:38 Flow=31653.0 Dust=4.22 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N",
+    "2026-10-11 18:39:43 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:43 Flow=31820.0 Dust=4.14 SO2=19.9 NOx=32.2 O2=5.7 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.7 Flag=N",
+    "2026-10-11 18:39:48 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-11 18:39:48 Flow=31848.0 Dust=4.03 SO2=19.9 NOx=32.2 O2=5.8 Velocity=12.0 Temp=25.2 Humidity=64.5 Pressure=97.6 Flag=N"
+  ],
+  "restore": {
+    "at": "2026-10-11 18:40:02",
+    "emqx_healthy": true,
+    "emqx_state": [
+      "running",
+      "healthy",
+      "2026-10-11T10:39:50.260460526Z"
+    ]
+  },
+  "broker_reconnect": {
+    "connected": true,
+    "clients": [
+      "Client(cems-gateway-plant1, username=undefined, peername=172.18.0.7:57775, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791715209310, connected_at=1791715209310)",
+      "Client(cems-gateway-plant2, username=undefined, peername=172.18.0.8:60285, clean_start=true, keepalive=60, session_expiry_interval=0, subscriptions=0, inflight=0, awaiting_rel=0, delivered_msgs=0, enqueued_msgs=0, dropped_msgs=0, connected=true, created_at=1791715209310, connected_at=1791715209310)"
+    ],
+    "at": "2026-10-11 18:40:11",
+    "seconds_after_restart": 21.0
+  },
+  "drain": {
+    "drained": true,
+    "seconds": 21.0,
+    "leftover_lines": 0
+  },
+  "after": {
+    "at": "2026-10-11 18:40:16",
+    "rows": 26227,
+    "max_ts": "2026-10-11 18:40:13",
+    "queue_lines": 0
+  },
+  "ledger": {
+    "断开前库内(条)": 26210,
+    "断开前 MAX(ts)": "2026-10-11 18:38:48",
+    "断开时长(s)": 60.0,
+    "理论应产生(条, 时长/5.0)": 12.0,
+    "实际积压=该补 N(条)": 12,
+    "恢复后补上 M(条)": 12,
+    "补传成功率 M/N": 1.0,
+    "快照后新产生并入库(条)": 5,
+    "库内新增(条)": 17,
+    "残留(行)": 0,
+    "恒等式 基线+N+新产生-残留==恢复后": true,
+    "恢复后 MAX(ts)": "2026-10-11 18:40:13"
+  },
+  "verdict": {
+    "backlog_created": true,
+    "no_data_loss": true,
+    "identity_ok": true,
+    "queue_drained": true,
+    "reconnected": true
+  },
+  "exit_code": 0,
+  "final_emqx_state": {
+    "status": "running",
+    "health": "healthy"
+  },
+  "final_states": {
+    "emqx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:39:50.260460526Z"
+    ],
+    "tdengine": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.095105632Z"
+    ],
+    "cems-device": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:21.586176877Z"
+    ],
+    "cems-gateway": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.272291387Z"
+    ],
+    "cems-gateway-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:26:22.375387912Z"
+    ],
+    "cems-subscriber": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.748810026Z"
+    ],
+    "cems-subscriber-plant2": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:50.870306937Z"
+    ],
+    "cems-redis": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:39.2530338Z"
+    ],
+    "cems-nginx": [
+      "running",
+      "healthy",
+      "2026-10-11T10:11:55.560228244Z"
+    ],
+    "cems-web": [
+      "running",
+      "unhealthy",
+      "2026-10-11T10:14:21.142549411Z"
+    ]
+  },
+  "ended_at": "2026-10-11 18:40:16"
+}

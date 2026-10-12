@@ -1,0 +1,55 @@
+双设备（两台炉子）修复与验证实录 —— 2026-10-02
+============================================================
+
+## 背景
+多设备改造（commit ad453bd）交付后，我复验发现**两台数据完全相同**：
+device1 与 device2 在同一时间戳的 flow/so2/o2/temp 逐值相等。
+
+## 根因（实测定位）
+- 设备层日志：Modbus 仿真设备启动: 0.0.0.0:5020 从站=1（单从站 single=True）
+  → **只建了从站 1**
+- plant2 网关配置：MODBUS_UNIT=2 → **读从站 2，而它不存在**
+- device 容器 env：SLAVE_IDS=1
+- 结论：多设备改造是"两个开关"—— SLAVE_IDS=1,2 + --profile plant2，
+  当时只开了后者，所以 device2 拿到的是 device1 的镜像值（不是缺数据）。
+
+## 修复
+本地 .env（不进版本库）写入：
+    SLAVE_IDS=1,2
+    SLAVE_PHASE_OFFSET=10800
+然后：
+    docker compose up -d --force-recreate device
+    docker compose --profile plant2 up -d --force-recreate gateway gateway2 subscriber subscriber2
+
+修复后设备层日志：
+    Modbus 仿真设备启动: 0.0.0.0:5020 从站=1,2（多从站 single=False，按 unit id 分派）
+    从站1: 仿真种子=20261001 相位偏移=+0s
+    从站2: 仿真种子=20261002 相位偏移=+10800s
+
+## 验证 1：两台数据确实可分（同一时间戳并排）
+ts                   device    flow    so2    o2     temp
+2026-10-02 21:13:59  device1   35580   25.5   6.9    200.3
+2026-10-02 21:13:59  device2   29617   24.9   7.7    209.2
+2026-10-02 21:13:54  device1   35583   26.0   6.8    199.4
+2026-10-02 21:13:54  device2   29523   24.4   7.7    209.0
+
+## 验证 2：采样率（各 12 条/分钟 = 5 秒一条）
+docker exec tdengine taos -s "SELECT device, COUNT(*) FROM cems.cems_data WHERE ts >= NOW - 60s GROUP BY device;"
+    device1  12
+    device2  12
+
+## 验证 3：全链路自检（两台各自）
+    python scripts/verify_pipeline_live.py --minutes 3 --device device1   -> exit 0 全部通过
+    python scripts/verify_pipeline_live.py --minutes 8 --device device2 \
+        --since "2026-10-02 13:13:30"                                     -> exit 0 全部通过
+    （--since 按 UTC 解释；本地 21:13:30 = UTC 13:13:30）
+
+## 验证 4：唯一一次大跳变 = 修复时刻的阶跃（已定位，非持续问题）
+修复前 device2 是 device1 的镜像（flow ≈ 36K），修复后是自己的值（flow ≈ 29.5K）：
+    2026-10-02 21:12:34  跳变 6548  (35996 -> 29448)   <- 唯一一次，切换点
+    21:14 之后最大相邻跳变 = 253 = 量程 65000 的 0.389%
+所以 device2 的 C 段（跳变 ≤ 量程 5%）在切换点被记为失败；掐掉该点后 P 全过。
+
+## 配置提示（重要：这是"两个开关"）
+只跑 --profile plant2 而不设 SLAVE_IDS=1,2 -> 两台数据相同（静默错误，最难发现）。
+反过来只设 SLAVE_IDS=1,2 而不跑 profile -> 从站 2 没人读（数据少一台，容易发现）。
