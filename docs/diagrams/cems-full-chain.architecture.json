@@ -10,7 +10,7 @@
       "url": "https://github.com/Daidai52640/cems-data-pipeline.git",
       "provider": "github",
       "link_mode": "local-only",
-      "revision": "b55042a9a13c13a775ffdf9f07d99b75ae747c82"
+      "revision": "2eb9a0c9a98888ffa644781294b0140df1bd00e9"
     }
   },
   "components": [
@@ -30,13 +30,13 @@
       "sources": [
         {
           "path": "src/device/modbus_server.py",
-          "line": 94,
+          "line": 95,
           "label": "SLAVE_IDS 解析"
         },
         {
           "path": "src/device/modbus_server.py",
-          "line": 272,
-          "end_line": 318,
+          "line": 485,
+          "end_line": 563,
           "label": "main / StartTcpServer"
         },
         {
@@ -62,18 +62,18 @@
       "sources": [
         {
           "path": "src/gateway/gateway.py",
-          "line": 670,
-          "end_line": 772,
+          "line": 662,
+          "end_line": 764,
           "label": "main（读→发→缓存）"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 374,
+          "line": 366,
           "label": "publish（等 PUBACK）"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 537,
+          "line": 529,
           "label": "resend_cache 补传"
         }
       ]
@@ -94,12 +94,12 @@
       "sources": [
         {
           "path": "src/gateway/gateway.py",
-          "line": 106,
+          "line": 107,
           "label": "CACHE_MAX_BYTES 64 MB"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 466,
+          "line": 458,
           "label": "原子段文件交接"
         }
       ]
@@ -120,13 +120,13 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 302,
-          "end_line": 332,
+          "line": 379,
+          "end_line": 409,
           "label": "gateway2 服务（profile）"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 571,
+          "line": 563,
           "label": "ResendWorker（同代码）"
         }
       ]
@@ -147,12 +147,12 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 316,
+          "line": 393,
           "label": "GATEWAY_DATA_DIR 每实例一份"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 287,
+          "line": 279,
           "label": "超限丢最旧"
         }
       ]
@@ -173,8 +173,8 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 171,
-          "end_line": 180,
+          "line": 233,
+          "end_line": 242,
           "label": "离线队列 20000 / 会话 24 h / 落盘"
         }
       ]
@@ -195,12 +195,12 @@
       "sources": [
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 922,
+          "line": 1527,
           "label": "on_message（校验+入库+判告警）"
         },
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 979,
+          "line": 1617,
           "label": "main"
         },
         {
@@ -226,13 +226,12 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 350,
-          "end_line": 367,
+          "line": 427,
           "label": "subscriber2 服务（profile）"
         },
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 155,
+          "line": 205,
           "label": "enforce_topic_scope 主题↔标签自检"
         }
       ]
@@ -253,8 +252,7 @@
       "sources": [
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 348,
-          "end_line": 355,
+          "line": 756,
           "label": "建库建超级表"
         },
         {
@@ -265,7 +263,7 @@
         },
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 84,
+          "line": 132,
           "label": "KEEP 365d"
         }
       ]
@@ -313,18 +311,17 @@
       "sources": [
         {
           "path": "src/web/web_dashboard.py",
-          "line": 194,
+          "line": 212,
           "label": "/api/data 曲线"
         },
         {
           "path": "src/web/web_dashboard.py",
-          "line": 246,
+          "line": 383,
           "label": "/api/health 新鲜度 200/503"
         },
         {
           "path": "src/web/web_dashboard.py",
-          "line": 425,
-          "end_line": 426,
+          "line": 619,
           "label": "/api/report/export"
         }
       ]
@@ -345,13 +342,13 @@
       "sources": [
         {
           "path": "src/web/cache.py",
-          "line": 453,
+          "line": 451,
           "label": "_closure 只缓存闭合窗口"
         },
         {
           "path": "docker-compose.yml",
-          "line": 368,
-          "end_line": 405,
+          "line": 445,
+          "end_line": 482,
           "label": "allkeys-lru / 不持久化"
         }
       ]
@@ -382,8 +379,8 @@
         },
         {
           "path": "docker-compose.yml",
-          "line": 406,
-          "end_line": 439,
+          "line": 483,
+          "end_line": 516,
           "label": "nginx 服务"
         }
       ]
