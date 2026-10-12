@@ -1,30 +1,9 @@
 # -*- coding: utf-8 -*-
-"""出口适配层：把"一份数据、多个上报出口"抽成统一接口（ADR-0006 · P5 最小实现）。
+"""出口适配层：把"一份数据、多个上报出口"抽成统一接口（ADR-0006 · P5）。
 
-## 为什么现在才抽接口
-
-ADR-0006 §6 的原则是「**先有实现，再抽象接口**」——
-只有一个实现时抽象出来的接口一定是错的。现在 HJ212 与 HTTP 两个实现都在，
-才从它们的**共同点**里抽出这层。
-
-## 这层统一了什么（两个实现真正共有的）
-
-| 共有概念 | HJ212 | HTTP/REST |
-|---|---|---|
-| 有哪些测点、编码是什么 | `a34013` 等 | 同左（同一份 `points.py` + `factors.py`） |
-| 一条数据长什么样 | `DataTime=…;code-Rtd=v;…` | JSON body |
-| 怎么算"送达" | 等 `CN=9014` 应答 | HTTP 2xx |
-| 补传时怎么标记 | 写 `RF=1` | 自定义头/字段 |
-
-**⚠️ 不该统一什么（抽错接口的典型）**：
-- ❌ **传输方式**（TCP 长连接 vs HTTP 请求）——**不抽**，各有各的连接语义
-- ❌ **加密**（HJ212 规定 SM4；HTTP 用 TLS）——**不抽**，各协议自己的规范
-- ❌ **报文格式**——不抽，那是各协议的本质差别
-
-**→ 所以这层只统一三件事**：`build_payload(ts, values, resend)` / `send(...)` / `describe()`。
-
-边界（诚实）：**本项目没有真实对接方**。这里的 `send()` 走本机 socket/HTTP，
-证明的是"机制自洽 + 接口可扩展"，**不是"已对接某平台"**。
+只统一三件事：build_payload / send / describe。传输方式、加密、报文格式不抽——
+那是各协议的本质差别。本项目没有真实对接方，send() 走本机 socket/HTTP，
+证明的是机制自洽，不是已对接某平台。
 """
 
 from __future__ import annotations
@@ -60,7 +39,7 @@ class Sample:
 
 @runtime_checkable
 class ProtocolAdapter(Protocol):
-    """上报出口适配器：**只统一"组包 → 发送 → 描述"三件事**。"""
+    """上报出口适配器：只统一组包 → 发送 → 描述三件事。"""
 
     name: str
 
@@ -77,15 +56,9 @@ class ProtocolAdapter(Protocol):
         ...
 
 
-# --------------------------------------------------------------------------- #
-# 连接管理：心跳 / 超时重发 / 重连退避（P4 缺口补齐）
-#
-# 标准依据（HJ 212-2025 表 12，PDF 第 22 页）：
-#   心跳包 9015  用于判断网络连接在线状态
-#   通知应答 9013 回应通知命令
-# 表 1 给出超时/重发次数（按通信方式取值），本项目**全部外部化为配置项**，
-# 并给出保守默认值 —— 对接时填配置即可，无需改代码。
-# --------------------------------------------------------------------------- #
+# 连接管理：心跳 / 超时重发 / 重连退避
+# 标准依据（HJ 212-2025 表 12）：心跳包 9015 判断在线状态，通知应答 9013。
+# 表 1 的超时/重发次数按通信方式取值，本项目全部外部化为配置项。
 
 #: 心跳命令编码（现场机 → 上位机）
 CN_HEARTBEAT: Final[str] = "9015"
@@ -95,11 +68,10 @@ CN_HEARTBEAT_ACK: Final[str] = "9013"
 
 @dataclass
 class RetryPolicy:
-    """超时重发与重连退避策略（全部可配；默认值只是保守起点，不是标准规定值）。
+    """超时重发与重连退避策略（全部可配；默认值是保守起点）。
 
-    ⚠️ 标准表 1 按通信方式给超时/重发次数（ADSL/GPRS 不同），取值随现场通信条件而异，
-    因此本项目**把这几项全部外部化为配置**；`build_adapter()` 从环境变量读取，
-    对接时按目标平台给出的取值填入即可，不需改动代码。
+    标准表 1 按通信方式给超时/重发次数，取值随现场通信条件而异，
+    因此全部外部化为配置；build_adapter() 从环境变量读取。
     """
 
     ack_timeout_s: float = 5.0      # 等一次应答的超时
@@ -118,12 +90,9 @@ class RetryPolicy:
 class Hj212Connection:
     """HJ212 的 TCP 长连接：分帧读、心跳、超时重发、指数退避重连。
 
-    **为什么单列一个类**（而不是把 socket 塞进 `Hj212Adapter.send()`）：
-    P3 要把它挂到网关的**独立线程**上长期持有连接，需要「连接状态 + 重连计数 + 心跳计时」
-    这些跨调用的状态；一次性 `send()` 无法承载。
-
-    ⚠️ 本类**不做任何阻塞式重试等待**：退避等待由调用方（网关出口线程）`sleep`，
-    这样"连不上时不要拖住采集"的原则在调用方可见、可测。
+    单列一个类是因为 P3 要把它挂到网关独立线程上长期持有连接，
+    需要连接状态 + 重连计数 + 心跳计时这些跨调用的状态。
+    本类不做阻塞式重试等待：退避等待由调用方 sleep。
     """
 
     def __init__(self, *, policy: RetryPolicy | None = None,
@@ -153,7 +122,7 @@ class Hj212Connection:
             self.reconnect_attempts += 1
             return False
         self._sock = sock
-        self._framer.reset()             # ⚠️ 新连接的半包不能拼到旧连接上
+        self._framer.reset()             # 新连接的半包不能拼到旧连接上
         self.reconnect_attempts = 0
         self.last_error = ""
         self._last_heartbeat = time.monotonic()
@@ -187,9 +156,9 @@ class Hj212Connection:
             return False
 
     def recv_packets(self) -> list[str]:
-        """读一次 socket，返回这一轮拿到的**完整**报文（可能为空；半包留在分帧器里）。
+        """读一次 socket，返回这一轮拿到的完整报文（可能为空；半包留在分帧器里）。
 
-        ⚠️ 返回空列表**不等于失败**（可能只是还没有完整报文）；调用方应结合超时判断。
+        返回空列表不等于失败（可能只是还没有完整报文）；调用方应结合超时判断。
         """
         if self._sock is None:
             return []
@@ -209,7 +178,7 @@ class Hj212Connection:
         return self._framer.feed(chunk.decode("ascii", errors="replace"))
 
     def wait_ack(self, qn: str, *, cn: str = "9014") -> bool:
-        """等一条**同 QN** 的应答（标准：应答按 QN 匹配请求）。超时返回 False。"""
+        """等一条同 QN 的应答（标准：应答按 QN 匹配请求）。超时返回 False。"""
         deadline = time.monotonic() + self.policy.ack_timeout_s
         while time.monotonic() < deadline:
             for raw in self.recv_packets():
@@ -222,9 +191,9 @@ class Hj212Connection:
         return False
 
     def send_with_retry(self, payload: str, qn: str, *, cn: str = "9014") -> bool:
-        """发一条并等应答；失败按 `send_retries` 重发。返回是否最终送达。
+        """发一条并等应答；失败按 send_retries 重发。返回是否最终送达。
 
-        ⚠️ 重发**不改变报文内容**（QN 相同）——接收端可按 (QN, 命令) 幂等去重。
+        重发不改变报文内容（QN 相同）——接收端可按 (QN, 命令) 幂等去重。
         """
         for _ in range(max(1, self.policy.send_retries)):
             if not self.send_raw(payload):
@@ -234,10 +203,10 @@ class Hj212Connection:
         return False
 
     def maybe_heartbeat(self, *, now: float | None = None) -> bool:
-        """到点就发一次心跳（`CN=9015`）；返回是否发了。
+        """到点就发一次心跳（CN=9015）；返回是否发了。
 
-        心跳的作用（标准表 12）：**判断网络连接在线状态**。
-        本项目在出口线程按 `heartbeat_interval_s` 调用它。
+        心跳的作用（标准表 12）：判断网络连接在线状态。
+        本项目在出口线程按 heartbeat_interval_s 调用它。
         """
         interval = self.policy.heartbeat_interval_s
         if interval <= 0 or not self.connected:
@@ -263,11 +232,10 @@ class Hj212Connection:
 
 
 class Hj212Adapter:
-    """HJ 212-2025 出口：报文走 TCP，等 `CN=9014` 数据应答算送达。
+    """HJ 212-2025 出口：报文走 TCP，等 CN=9014 数据应答算送达。
 
-    ⭐ 现在支持**长连接 + 心跳 + 超时重发 + 重连退避**（P4 缺口补齐）：
-    传入 `connection=Hj212Connection(...)` 即走长连接路径；
-    不传则退化为一次性请求（演示/单次调用用）。
+    支持长连接 + 心跳 + 超时重发 + 重连退避：传入 connection=Hj212Connection(...)
+    即走长连接路径；不传则退化为一次性请求（演示/单次调用用）。
     """
 
     name = "hj212"
@@ -279,13 +247,13 @@ class Hj212Adapter:
 
     def build_payload(self, sample: Sample) -> str:
         ts_compact = sample.ts.replace("-", "").replace(":", "").replace(" ", "")
-        # ⚠️ 原文 §6.3.4.1：同一项目不同类别用 `,`、不同项目之间用 `;`
+        # 原文 §6.3.4.1：同一项目不同类别用 `,`、不同项目之间用 `;`
         fields = [f"DataTime={ts_compact}"]
         fields.extend(f"{code_of(p.name)}-Rtd={sample.values[p.name]:g}" for p in POINTS)
         packet = Packet(
             qn=make_qn(), st=ST_ATMOSPHERIC_SOURCE, cn=CN_UPLOAD_REALTIME,
-            pw="123456",                 # ⚠️ 占位：真实密码由平台下发
-            mn="0" * 24,                 # ⚠️ 占位：真实 MN 由平台按 CPUID/MAC 赋码
+            pw="123456",                 # 占位：真实密码由平台下发
+            mn="0" * 24,                 # 占位：真实 MN 由平台按 CPUID/MAC 赋码
             flag=8 | 1,
             region=";".join(fields),
             resend=sample.resend,        # True → 写 RF=1
@@ -322,8 +290,8 @@ class Hj212Adapter:
 class HttpJsonAdapter:
     """HTTP/REST 出口：JSON body，送达判据 = HTTP 2xx。
 
-    用途定位（ADR-0006 §2 路线 B）：**面向企业上层系统 / 中台的统计类出口**，
-    不是"实时上报环保平台"。加密走 TLS，不用 SM4（各协议自己的规范）。
+    定位（ADR-0006 §2 路线 B）：面向企业上层系统 / 中台的统计类出口。
+    加密走 TLS，不用 SM4。
     """
 
     name = "http-json"
@@ -358,20 +326,16 @@ class HttpJsonAdapter:
 
 
 # --------------------------------------------------------------------------- #
-# 实现 3：Modbus-TCP 出口（第三个实现 —— 用来检验 P5 抽的接口够不够用）
+# 实现 3：Modbus-TCP 出口（第三个实现——检验 P5 抽的接口够不够用）
 #
-# 定位：把测点写成**厂级 DCS / PLC 的保持寄存器**（ADR-0006 §2 路线 B 的一种）。
-# 现实中"数据给到 DCS"确实常走 Modbus，而不是 HTTP。
-# 用它检验抽象的好处：它与前两个实现的**送达判据完全不同** ——
-#   HJ212  = 等 CN=9014 应答（应用层确认）
-#   HTTP   = 等 2xx（应用层确认）
-#   Modbus = **没有应用层应答**，连接成功 + 写成功即认为送达（协议本身如此）
-# → 正好暴露"送达判据"是否被抽象对了。
+# 定位：把测点写成厂级 DCS / PLC 的保持寄存器。
+# 与前两个实现的送达判据不同——Modbus 没有应用层应答，
+# 连接成功 + 写成功即认为送达，正好暴露"送达判据"是否被抽象对了。
 # --------------------------------------------------------------------------- #
 
 #: 写寄存器时的放大系数：Modbus 保持寄存器是 16 位整数，测点值有小数。
-#: 取 100（两位小数）；量程上限 < 655.35 才不溢出 —— 契约里的 m3/h 流量（65000）会溢出，
-#: 所以这里**只在能安全放下的测点上用**，流量单独用系数 1（整数部分够用）。
+#: 取 100（两位小数）；量程上限 < 655.35 才不溢出——契约里的 m3/h 流量（65000）会溢出，
+#: 所以只在能安全放下的测点上用，流量单独用系数 1（整数部分够用）。
 MODBUS_OUT_SCALE_DEFAULT: Final[int] = 100
 
 
@@ -386,8 +350,8 @@ class ModbusTcpAdapter:
     def _scale_of(self, point: object) -> int:
         """每个测点的写法系数：大数（流量/压力）用 1，其余用 self._scale。
 
-        ⚠️ 这是**出口侧的取舍**，不是契约变更：契约里的 `Point.scale` 是"设备寄存器→真实值"
-        的系数，与"真实值→DCS 寄存器"无关（方向相反、接收方也不同）。
+        这是出口侧的取舍，不是契约变更：契约里的 Point.scale 是"设备寄存器→真实值"
+        的系数，与"真实值→DCS 寄存器"方向相反、接收方也不同。
         """
         high = float(getattr(point, "high"))
         return 1 if high * self._scale > 65535 else self._scale
@@ -431,7 +395,7 @@ class ModbusTcpAdapter:
                 "送达判据=连接+写成功（协议无应用层应答）。定位=DCS/PLC")
 
 
-#: 已实现的出口（加新协议 = 在这里加一个类，**不改上层**）
+#: 已实现的出口（加新协议 = 在这里加一个类，不改上层）
 ADAPTERS: dict[str, type] = {
     "hj212": Hj212Adapter,
     "http-json": HttpJsonAdapter,

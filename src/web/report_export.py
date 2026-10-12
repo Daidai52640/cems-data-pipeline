@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """报表导出：把 src/web/report.py 的聚合结果写成 Excel（数据 + 说明两个 sheet）。
 
-聚合与参数校验一律复用 report.py，导出路径不重写 SQL 和口径 ——
-否则"页面上看到的"和"导出文件里的"会各算各的，这是报表最忌讳的事。
+聚合与参数校验一律复用 report.py，导出路径不重写 SQL 和口径——
+否则"页面上看到的"和"导出文件里的"会各算各的。
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ THIN_BORDER: Final[Border] = Border(
 
 
 def reference_value(measured: Any, o2: Any) -> Optional[float]:
-    """折算值（导出用）：**直接调契约函数** `points.to_reference_o2`，不在这里另写公式。"""
+    """折算值（导出用）：直接调契约函数 points.to_reference_o2，不在这里另写公式。"""
     if measured is None or o2 is None:
         return None
     try:
@@ -95,12 +95,10 @@ def reference_value(measured: Any, o2: Any) -> Optional[float]:
 
 
 def time_label(ts: Any, unit: str) -> str:
-    """「监测时间」列的写法按粒度走（平台报表口径，三种粒度一眼可辨）：
+    """「监测时间」列的写法按粒度走：分钟 15:18、小时 14~15、日 2026-10-02。
 
-        分钟 2026-10-03 15:18 ｜ 小时 2026-10-03 14~15 ｜ 日 2026-10-02
-
-    写成**文本**而不是日期单元格：小时行本来就是"一个区间"，不是某个时刻，
-    用日期格式会被 Excel 显示成 14:00 而丢掉"这个数覆盖 14~15 点"这层意思。
+    写成文本而不是日期单元格：小时行本来就是"一个区间"，
+    用日期格式会被 Excel 显示成 14:00 而丢掉"覆盖 14~15 点"这层意思。
     """
     text = str(ts)[:19].replace("T", " ")
     if unit == "1d":
@@ -116,12 +114,11 @@ RISKY_PREFIXES: Final[tuple[str, ...]] = ("=", "+", "-", "@")
 
 BOLD_FONT: Final[Font] = Font(bold=True)
 
-# 数据来源写进说明页；与 report.py 用同一份库表配置，避免第三处副本
+# 数据来源写进说明页；与 report.py 用同一份库表配置
 TD_SOURCE: Final[str] = f"{report.TD_DB}.{report.TD_STABLE}"
 
 # ---- 日志 ----
-# ⚠️ 级别/格式/时间格式的**唯一真源**是 src/common/logging.py，本模块不复制那三个常量
-#    （历史上这里抄过一份逐字相同的 `LOG_LEVEL`/`LOG_FORMAT`/`LOG_DATEFMT`，从未被引用，已删）。
+# 级别/格式见 src/common/logging.py，本模块不复制那三个常量。
 LOGGER: Final[logging.Logger] = logging.getLogger("web.report_export")
 
 
@@ -140,7 +137,7 @@ def as_datetime(text: Any) -> Any:
 
 
 def as_number(value: Any) -> Any:
-    """数值保留 2 位小数；None 保持 None —— 在 Excel 里就是空白，绝不能写成 0。"""
+    """数值保留 2 位小数；None 保持 None——在 Excel 里就是空白，不能写成 0。"""
     if isinstance(value, (int, float)):
         return round(float(value), report.ROUND_DIGITS)
     return None
@@ -181,17 +178,13 @@ def run_report(report_type: str, query: Mapping[str, str], scope: str = "") -> d
 
 
 def fill_data_sheet(sheet: Any, envelope: dict[str, Any]) -> None:
-    """数据 sheet：标题行 + 信息行 + **3 行合并表头** + 窗口数据（共 13 列 A~M）。
+    """数据 sheet：标题行 + 信息行 + 3 行合并表头 + 窗口数据（共 13 列 A~M）。
 
-    表头结构（三种粒度完全同构，只有列名与时间写法随粒度变）：
-        监测时间 ｜ 流量列 ｜ 颗粒物(标干值/折算值) ｜ 二氧化硫(同) ｜ 氮氧化物(同)
-                 ｜ 氧含量 ｜ 流速 ｜ 温度 ｜ 湿度 ｜ 压力
-
-    ★ 列名与单位取自 src/common/points.py 契约；污染物用中文名，其余测点用"烟气+中文名"。
-    ★ **没有"设备标记"列**：项目里不存在逐点有效性字段（接入层对整条报文收/拒，
-      TDengine 每个测点只有一列数值），所以不凭空造一列。
+    列名与单位取自 src/common/points.py 契约。
+    没有"设备标记"列：项目里不存在逐点有效性字段（接入层对整条报文收/拒，
+    TDengine 每个测点只有一列数值），不凭空造一列。
     """
-    # 列 2 的列名随粒度变：小时表的同一个数按平台口径叫"累计流量"，其余叫"流量"。
+    # 列 2 的列名随粒度变：小时表叫"累计流量"，其余叫"流量"
     flow_key = FLOW_LABEL_HOURLY if envelope.get("unit") == "1h" else FLOW_LABEL
     sheet.column_dimensions["A"].width = TIME_COLUMN_WIDTH
     for index in range(2, len(GROUPS) * 2 + 3):
@@ -199,7 +192,7 @@ def fill_data_sheet(sheet: Any, envelope: dict[str, Any]) -> None:
     for index in range(len(GROUPS) * 2 + 3, 14):
         sheet.column_dimensions[get_column_letter(index)].width = VALUE_COLUMN_WIDTH
     sheet.column_dimensions["A"].width = TIME_COLUMN_WIDTH
-    sheet.freeze_panes = "A6"          # 冻结标题+表头+首列，翻长报表不丢列名
+    sheet.freeze_panes = "A6"          # 冻结标题+表头+首列
 
     last_column = get_column_letter(TOTAL_COLUMNS)
     sheet.merge_cells(f"A1:{last_column}1")
@@ -242,11 +235,11 @@ def fill_data_sheet(sheet: Any, envelope: dict[str, Any]) -> None:
 
     # ---- 数据行 ----
     for row_index, point in enumerate(envelope["points"], start=6):
-        # 时间列按粒度写成文本（分钟 15:18 / 小时 14~15 / 日 2026-10-02），见 time_label
+        # 时间列按粒度写成文本（见 time_label）
         time_cell = sheet.cell(row=row_index, column=1,
                                value=as_text(time_label(point["ts"], envelope["unit"])))
         time_cell.alignment = CENTER
-        # 第 2 列：小时表叫"累计流量"、其余叫"流量"，**取的是同一个值**（不做累加）
+        # 第 2 列：小时表叫"累计流量"、其余叫"流量"，取的是同一个值（不做累加）
         flow_cell = sheet.cell(row=row_index, column=2, value=as_number(point.get("flow")))
         flow_cell.number_format = NUMBER_FORMAT
         for index, group in enumerate(GROUPS):
@@ -265,7 +258,7 @@ def fill_data_sheet(sheet: Any, envelope: dict[str, Any]) -> None:
 def fill_info_sheet(sheet: Any, report_type: str, envelope: dict[str, Any]) -> None:
     """说明 sheet：报表类型/口径/时间范围/生成时间/数据来源/空值含义。
 
-    报表拿去存档或上报时，这页是刚需 —— 否则没人知道数字是怎么算出来的。
+    报表拿去存档或上报时这页是刚需——否则没人知道数字是怎么算出来的。
     """
     sheet.column_dimensions["A"].width = INFO_KEY_WIDTH
     sheet.column_dimensions["B"].width = INFO_VALUE_WIDTH
@@ -287,12 +280,11 @@ def fill_info_sheet(sheet: Any, report_type: str, envelope: dict[str, Any]) -> N
 def build_workbook(report_type: str, envelope: dict[str, Any]) -> bytes:
     """生成 xlsx 字节。
 
-    ⚠️ 这里**不能**用 `write_only=True`：它不支持合并单元格，而本报表的表头是
-    "颗粒物(毫克/立方米) → 浓度 → 标干值/折算值"的三行合并表头（平台报表口径）。
-    报表窗口数有上限（CUSTOM_MAX_DAYS × 每窗口数），普通模式的内存占用可控。
+    不能用 write_only=True：它不支持合并单元格，而本报表的表头是三行合并。
+    报表窗口数有上限，普通模式内存占用可控。
     """
     workbook = Workbook()
-    workbook.remove(workbook.active)      # 普通模式会自带一个空 sheet，报表只要"数据/说明"两页
+    workbook.remove(workbook.active)      # 普通模式自带空 sheet，报表只要"数据/说明"两页
     fill_data_sheet(workbook.create_sheet(SHEET_DATA), envelope)
     fill_info_sheet(workbook.create_sheet(SHEET_INFO), report_type, envelope)
     buffer = io.BytesIO()
@@ -306,7 +298,7 @@ def export_workbook(
     """导出入口：返回 (xlsx 字节, 中文文件名)。
 
     参数非法抛 ExportParamError / report.ReportParamError，查库失败抛 report.ReportQueryError，
-    由接口层分别转 400 与 503（错误不会写进 xlsx 里让用户下载）。
+    由接口层分别转 400 与 503。
     """
     report_type = (query.get("type") or "").strip()
     if report_type not in REPORT_TYPES:
@@ -314,7 +306,7 @@ def export_workbook(
             f"type 应为 {'/'.join(REPORT_TYPES)} 之一，收到 {report_type!r}"
         )
     envelope = run_report(report_type, query, scope)
-    # 报表标题行的"设备"用的是页面上的展示名（1号炉 / 2号炉），由调用方算好传进来；
+    # 报表标题行的"设备"用页面上的展示名，由调用方算好传进来；
     # 这里不重复实现命名规则（唯一实现在 web_dashboard.device_label）。
     envelope["device_label"] = device_label or scope
     content = build_workbook(report_type, envelope)

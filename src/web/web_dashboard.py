@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """Web 展示大屏：Flask 提供 TDengine 近段数据接口，前端用 ECharts 画各烟气测点的实时曲线。
 
-⚠️ 测点数**不写死**：页面标题与曲线都用 `points.py` 的契约现算（历史上标题曾长期写着
-"8 测点"而契约早已是 9，改契约时没人会记得回来改这个数）。
+测点数不写死：页面标题与曲线都用 points.py 的契约现算。
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ import taosrest
 from flask import Flask, Response, jsonify, redirect, request
 from werkzeug.exceptions import HTTPException
 
-# 让 src/common 能被导入：三种启动方式（python src/x.py、python -m src.x、任意 CWD）都能工作
+# 让 src/common 能被导入：三种启动方式都能工作
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -36,8 +35,7 @@ from src.web import cache   # noqa: E402
 from src.web import curve   # noqa: E402
 
 # ==================== 1. 配置区（要改参数只动这里） ====================
-# 连接参数支持环境变量覆盖，默认值与本机直接运行一致；
-# 容器化部署时由 docker-compose.yml 注入服务名（如 TD_URL=http://tdengine:6041）。
+# 连接参数支持环境变量覆盖；容器化部署时由 docker-compose.yml 注入服务名。
 
 # ---- TDengine（对应 taosAdapter 的 REST 接口）----
 TD_URL: Final[str] = os.getenv("TD_URL", "http://localhost:6041")
@@ -50,16 +48,10 @@ TD_STABLE: Final[str] = os.getenv("TD_STABLE", "cems_data")
 # 列名与顺序统一来自 src/common/points.py，这里不再抄一份。
 POINTS: Final[tuple[str, ...]] = COLUMNS
 
-# ---- 图表面板（small multiples）：一个量纲一根轴，绝不共用刻度 ----
-# ★ 为什么不是一个图里挂 4 根 Y 轴（改造前的做法，实测"乱"）：
-#   9 个测点的量程差 3 个数量级（流量 0~65000、压力 85~105），
-#   把量程差得远的曲线塞进同一根轴，小量程的那条会被压成一条直线（看不出任何变化），
-#   左右挂 4 根轴又会引出"哪条线读哪根轴"的误读 —— 这是数据可视化里公认的坑
-#   （双重轴图的批评见 Datawrapper《Dual-axis charts》：easily misread；ECharts 手册也只
-#    建议左右各一根轴）。所以改成**按量纲拆成多个上下排列的面板**，每格一根自己的 Y 轴，
-#   横轴共用并联动 —— 形状可比、数值可读，且不存在"读错轴"。
-#
-# 分组依据是**单位 + 量程数量级**（列名/单位来自测点契约，这里只声明怎么分组与配色）：
+# ---- 图表面板（small multiples）：一个量纲一根轴 ----
+# 9 个测量程差 3 个数量级（流量 0~65000、压力 85~105），塞同一根轴小量程的会被压成直线，
+# 双重 Y 轴又容易误读。所以按量纲拆成多个上下排列的面板，每格一根自己的 Y 轴。
+# 分组依据是单位 + 量程数量级。
 CHART_PANELS: Final[tuple[tuple[str, str, tuple[str, ...]], ...]] = (
     ("污染物浓度", "mg/m3", ("dust", "so2", "nox")),
     ("氧含量 / 湿度", "%", ("o2", "humidity")),
@@ -84,7 +76,7 @@ POINT_PRESENTATION: Final[dict[str, tuple[str, int, str]]] = {
 
 
 def build_point_views_json() -> str:
-    """生成前端用的测点呈现配置（JSON），两个页面共用；缺配置直接报错，别带着半个图上线。"""
+    """生成前端用的测点呈现配置（JSON），两个页面共用；缺配置直接报错。"""
     views: list[dict[str, Any]] = []
     for point in CONTRACT_POINTS:
         if point.column not in POINT_PRESENTATION:
@@ -101,7 +93,7 @@ POINT_VIEWS_JSON: Final[str] = build_point_views_json()
 
 
 def build_panels_json() -> str:
-    """生成前端用的面板定义（JSON）。契约里的测点必须**恰好**落在某一个面板里，否则报错。"""
+    """生成前端用的面板定义（JSON）。契约里的测点必须恰好落在某一个面板里，否则报错。"""
     placed = [key for _title, _unit, keys in CHART_PANELS for key in keys]
     missing = [point.column for point in CONTRACT_POINTS if point.column not in placed]
     if missing:
@@ -130,42 +122,28 @@ WEB_HOST: Final[str] = os.getenv("WEB_HOST", "0.0.0.0")   # 监听所有网卡�
 WEB_PORT: Final[int] = int(os.getenv("WEB_PORT", "5000"))
 WEB_THREADS: Final[int] = int(os.getenv("WEB_THREADS", "8"))   # waitress 工作线程数
 
-# ---- 健康判据（GET /api/health，见 §4）----
-# 判据是**数据新鲜度**，不是"库连得上"。原来只看"能不能连库"，
-# 于是"网关 MQTT 断 / 网关只写缓存补不出去 / 订阅端连着但不入库 / 设备刷新线程死 /
-# tag 拼错导致查询恒 0 行"这些故障全都 200 + ok，容器 healthy、无告警。
-#
-# 阈值 = 轮询周期 × 因子（默认 5.0 s × 3 = 15 s）：
-#   · 周期真源是网关的 POLL_INTERVAL（单设备/双设备实测都在 11~12 条/分钟 ≈ 5 s 一条），
-#     web 侧的覆盖率口径（src/web/report.py）已经在用同一个变量，这里沿用同一个。
-#   · 因子取 3：允许连续丢 2 条样本而不误报（本机实测间隔均值 5.15 s，15 s 有 2.9 倍余量），
-#     同时远小于"人工发现不了"的量级 —— 一个整分钟没有任何新数据必然判不健康。
+# ---- 健康判据（GET /api/health）----
+# 判据是数据新鲜度，不是"库连得上"。原来只看连接，于是网关断/补传堵/不入库/
+# 线程死/tag拼错恒0行 这些故障全 200+ok、容器 healthy、无告警。
+# 阈值 = 轮询周期 × 因子（默认 5.0s × 3 = 15s）：允许连续丢 2 条不误报。
 POLL_INTERVAL_SECONDS: Final[float] = float(os.getenv("POLL_INTERVAL", "5.0"))
 HEALTH_STALE_POLL_FACTOR: Final[int] = int(os.getenv("HEALTH_STALE_POLL_FACTOR", "3"))
 HEALTH_STALE_AFTER_SECONDS: Final[float] = POLL_INTERVAL_SECONDS * HEALTH_STALE_POLL_FACTOR
 
-# ---- 数据新鲜度指示（页面上那一条"最后一条数据：N 秒前"，见 §5 的 loadFreshness）----
-# ★ 为什么单独一个阈值，而不直接复用上面的 HEALTH_STALE_AFTER_SECONDS（15 s）：
-#   两者**用途不同、容忍度不同**。
-#     · 健康判据（/api/health）是**编排层**的判据，超了要让容器变 unhealthy → 必须敏感（15 s）；
-#     · 页面指示是**给人看**的"数据流有没有停"。真机链路上偶发一次补传滞后（实测最大 32.1 s，
-#       见 docs/reference/性能与可靠性指标.md §4.2）就会让 15 s 的判据闪红，人会被训练成
-#       "红色=正常抖动"，真正停流时反而没人看 —— 所以展示层阈值要更宽，默认 30 s。
-# ⚠️ 这正是"治全绿零数据"的最小方案：不引入 Prometheus、不加容器、不加依赖，
-#    取数走**已有的** /api/health（它内部用**已有的** query_recent 查 TDengine 最新 ts）。
+# ---- 数据新鲜度指示（页面上"最后一条数据：N 秒前"）----
+# 这个阈值和 HEALTH_STALE_AFTER_SECONDS 刻意不同：
+#   /api/health 是编排层判据，超了要让容器 unhealthy → 必须敏感（15s）；
+#   页面指示是给人看的，真机偶发补传滞后（最大 32.1s）就闪红会让人被训练成"红色=正常抖动"。
+#   所以展示层阈值更宽，默认 30s。
 FRESHNESS_WARN_SECONDS: Final[float] = float(os.getenv("FRESHNESS_WARN_SECONDS", "30"))
 
-# ---- ⛔ "连续 N 分钟无入库"的**主动告警**（2026-10-11 新增）----
-#
-# ⚠️ 与上面 FRESHNESS_WARN_SECONDS 的分工（两个阈值刻意不同，别合并）：
-#   · `FRESHNESS_WARN_SECONDS`（默认 30 s）= **展示**阈值 —— 大屏胶囊变红，给人看；
-#   · `STALE_ALERT_SECONDS`（默认 300 s）= **告警**阈值 —— 连续停流超过它才升到 CRITICAL 日志。
-# ⭐ 为什么需要它：有了 30 s 的红色胶囊，只是"**看得见**"；
-#   而"全绿零数据"最危险的地方是**没人盯着大屏** —— 停流 5 分钟没有任何主动信号。
-#   这个计时器把"看得见"变成"**叫得出来**"：停流超阈值就往 CRITICAL 打一行，
-#   谁在收日志都能被叫醒，不需要有人守着页面。
-# ⚠️ 状态是**进程内**的（web 只有一个实例，够用）；容器重启会把计时清零 ——
-#   这是刻意的取舍：重启本身就是一次新的观测起点。
+# ---- "连续 N 分钟无入库"的主动告警（2026-10-11 新增）----
+# 与 FRESHNESS_WARN_SECONDS 的分工（别合并）：
+#   FRESHNESS_WARN_SECONDS（30s）= 展示阈值——大屏胶囊变红，给人看；
+#   STALE_ALERT_SECONDS（300s）= 告警阈值——连续停流超它才升 CRITICAL 日志。
+# 有了红色胶囊只是"看得见"；"全绿零数据"最危险的是没人盯大屏。
+# 这个计时器把"看得见"变成"叫得出来"：停流超阈值往 CRITICAL 打一行，谁收日志都能被叫醒。
+# 状态是进程内的（web 单实例够用）；容器重启清零——重启本身就是新观测起点。
 STALE_ALERT_SECONDS: Final[float] = float(os.getenv("STALE_ALERT_SECONDS", "300"))
 
 #: 本轮"连续不健康"的起始时刻（健康一次就清空）。
@@ -177,8 +155,7 @@ XLSX_MIME: Final[str] = "application/vnd.openxmlformats-officedocument.spreadshe
 XLSX_ASCII_NAME: Final[str] = "CEMS_report.xlsx"
 
 # ---- 日志 ----
-# 级别/格式/时间格式统一在 src/common/logging.py（唯一真源）；
-# 这里只留本进程的 LOGGER —— 4 个进程的日志靠 getLogger 的名字区分来源。
+# 级别/格式见 src/common/logging.py；这里只留本进程的 LOGGER。
 LOGGER: Final[logging.Logger] = logging.getLogger("web.dashboard")
 
 
@@ -209,17 +186,13 @@ def query_recent(minutes: int = QUERY_MINUTES, scope: str = "") -> list[tuple[An
 
     查询失败抛 TdQueryError（由接口层兜住，不影响 Web 进程存活）。
 
-    两个约束是必须的：
-      ts <= now —— 库里一旦有时间戳在"未来"的脏数据（时钟跳变等），
-                   只写 ts >= now - N m 会把它们全捞回来，"最近 10 分钟"直接失真
-      LIMIT     —— 查询结果不能无上限膨胀，否则响应体会随着积压越滚越大
-    取数用"倒序 + LIMIT"再翻转，保证截断时留下的是**最新**的 N 个点。
+    两个约束：
+      ts <= now —— 库里一旦有"未来"的脏数据（时钟跳变），只写 ts >= now-Nm 会全捞回来；
+      LIMIT     —— 查询结果不能无上限膨胀。
+    取数用"倒序 + LIMIT"再翻转，保证截断时留下的是最新 N 个点。
 
-    ★ **按 plant/device tag 过滤**：`cems_data` 是多设备共用的超级表（TAG = plant/device），
-    不过滤就会把两台设备的点按 ts 混排成一条曲线。取值同源于 `cache.DEVICE_SCOPE_PARTS`
-    （与缓存键同源，避免"查询按 A 设备、键按 B 设备"）。
-    ⚠️ 这条读路径同时是缓存**水位**的观测源（下面 note_data_ts / note_minute_max）——
-      加了设备过滤后，水位观测到的才是"本设备"的写入进度。
+    按 plant/device tag 过滤：超级表多设备共用，不过滤会把两台设备的点混排成一条曲线。
+    这条读路径同时是缓存水位的观测源。
     """
     conn: Any = None
     try:
@@ -253,23 +226,22 @@ app = Flask(__name__)
 
 
 def request_scope() -> str:
-    """从查询参数取设备维度（`?plant=&device=`），返回 `plant/device` 串。
+    """从查询参数取设备维度（?plant=&device=），返回 plant/device 串。
 
-    - 都不传 ⇒ 本实例配置的那台设备（`TD_PLANT/TD_DEVICE`），单设备部署行为不变；
-    - 只传 `device` ⇒ plant 用本实例配置值补齐（前端只需要传一台设备名）；
-    - 非法值抛 `ValueError`，由路由翻成 400 —— **不静默回落**：
+    - 都不传 ⇒ 本实例配置的那台设备；
+    - 只传 device ⇒ plant 用本实例配置值补齐；
+    - 非法值抛 ValueError，由路由翻成 400——不静默回落：
       静默回落会让"我想看 device2，页面却给了 device1 的数据"这种错看不出来。
     """
     return cache.scope_from_request(request.args.get("plant"), request.args.get("device"))
 
 
 def device_label(plant: str, device: str) -> str:
-    """页面上显示的设备名：仿真环境里 `plant1/device1` -> `1号炉`。
+    """页面上显示的设备名：仿真环境里 plant1/device1 -> 1号炉。
 
-    ★ 只改**显示**，不动 tag：库里/接口里仍是 plant1/device1。tag 是数据归属，
-      SQL 过滤、缓存键、告警表都按它走，动它牵一发动全身；页面上的名字是给人看的。
-    ★ 规则：device 末尾的数字 n -> `{n}号炉`；匹配不上就原样显示 `plant/device`，
-      绝不吞掉信息（将来接现场、设备名不带数字时也不会变空白）。
+    只改显示，不动 tag：库里/接口里仍是 plant1/device1。tag 是数据归属，
+    SQL 过滤、缓存键都按它走；页面上的名字是给人看的。
+    规则：device 末尾数字 n -> {n}号炉；匹配不上就原样显示，不吞信息。
     """
     matched = re.search(r"(\d+)\s*$", device or "")
     if matched:
@@ -278,11 +250,10 @@ def device_label(plant: str, device: str) -> str:
 
 
 def query_devices() -> list[dict[str, str]]:
-    """库里**有数据的**全部 (plant, device)，供页面上的设备选择器用。
+    """库里有数据的全部 (plant, device)，供页面设备选择器用。
 
-    ★ 为什么用 `SELECT DISTINCT plant, device` 而不是 `SHOW TABLES`：
-      子表会留下空壳（C19 血缘演练的 `trace_run*` 表就是空表），
-      按行 DISTINCT 只返回真正有数据的设备 —— 实测正是 plant1/device1 与 plant2/device2 两台。
+    用 SELECT DISTINCT plant, device 而不是 SHOW TABLES：
+    子表会留下空壳，按行 DISTINCT 只返回真正有数据的设备。
     """
     conn: Any = None
     try:
@@ -304,8 +275,8 @@ def query_devices() -> list[dict[str, str]]:
          "label": device_label(str(row[0]), str(row[1]))}
         for row in rows
     ]
-    # 本实例配置的那台排在最前，其余按名称稳定排序 —— 选择器顺序别每次刷新都跳
-    # ⚠️ 设备维度的唯一真源在 cache（`TD_PLANT/TD_DEVICE` 是那边的配置项），这里不要另读环境变量
+    # 本实例配置的那台排在最前，其余按名称稳定排序——选择器顺序别每次刷新都跳
+    # 设备维度的配置在 cache（TD_PLANT/TD_DEVICE），这里不要另读环境变量
     default_plant, default_device = cache.DEVICE_SCOPE_PARTS
     devices.sort(key=lambda item: (item["plant"] != default_plant or item["device"] != default_device,
                                    item["plant"], item["device"]))
@@ -327,11 +298,9 @@ def api_devices() -> tuple[Response, int] | Response:
 def api_data() -> tuple[Response, int] | Response:
     """接口1：返回最近数据（JSON），前端每 REFRESH_SECONDS 秒调用一次。
 
-    这个接口**没有缓存**（它按定义包含"当前秒"）。它对缓存层的唯一作用是
-    **顺带喂两个水位**（见 src/web/cache.py §6）：
-      - data_ts：最新数据时间戳 → 判断"一个历史窗口是不是已经写完了"
-      - 分钟最大值：每个分钟里观测到的最晚一条 → 判断"哪个窗口的内容变过"，
-        变了就把对应缓存条目作废（这就是"数据更新后缓存多久刷新"的机制）
+    这个接口没有缓存（按定义包含当前秒）。它对缓存层的唯一作用是顺带喂两个水位：
+      - data_ts：最新数据时间戳 → 判断历史窗口是否已写完
+      - 分钟最大值：每个分钟观测到的最晚一条 → 判断哪个窗口内容变过，变了就作废缓存
     两者都来自刚读出来的真实行，不额外查库、不依赖容器墙钟。
     """
     try:
@@ -350,11 +319,9 @@ def api_data() -> tuple[Response, int] | Response:
     if rows:
         timestamps = [cache.ts_text(row[0]) for row in rows]
         cache.note_data_ts(max(timestamps), scope)
-        # ⚠️ 这里**不能**先按"是否比边界旧"过滤：分钟最大值必须覆盖**每一个**观测到的分钟。
-        # 先前加了这道过滤，后果是"窗口里新来的那条恰好比边界新"就被丢掉，
-        # 该分钟的最大值不变 → 缓存不失效（实测 200 s 内测不到刷新）。
-        # 不做过滤也不会误杀：比边界新的分钟本来就不满足"窗口已闭合"，
-        # 压根不会进缓存，它的最大值怎么变都无所谓（见 _closure）。
+        # 不能先按"是否比边界旧"过滤：分钟最大值必须覆盖每一个观测到的分钟。
+        # 先前加了这道过滤，窗口里新来的那条恰好比边界新就被丢掉，该分钟最大值不变，
+        # 缓存不失效。不做过滤也不会误杀：比边界新的分钟本来就不满足"窗口已闭合"。
         cache.note_minute_max(timestamps, scope)
 
     payload: dict[str, Any] = {"ts": [str(row[0]) for row in rows],   # 时间轴
@@ -367,10 +334,8 @@ def api_data() -> tuple[Response, int] | Response:
 def latest_sample_age_seconds(rows: list[tuple[Any, ...]]) -> Optional[float]:
     """最近一条样本的时间戳距离"现在"多少秒（行里没有可解析时间戳时返回 None）。
 
-    ⚠️ 时间戳统一走 `cache.ts_text()` + `cache.parse_ts_text()`（去掉时区标记的 19 位本地串），
-    与缓存水位的口径**完全同源**：容器时区与 TDengine 一致（TZ=Asia/Shanghai），
-    容器虚拟时钟相对宿主有 100 ms 级漂移（见缓存模块头部），对 15 s 量级的判据无影响。
-    直接拿 datetime 相减会在"带时区的 aware datetime"上抛 TypeError，所以先归一到本地串。
+    时间戳统一走 cache.ts_text() + cache.parse_ts_text()，与缓存水位口径同源。
+    直接拿 datetime 相减会在 aware datetime 上抛 TypeError，所以先归一到本地串。
     """
     if not rows:
         return None
@@ -382,26 +347,15 @@ def latest_sample_age_seconds(rows: list[tuple[Any, ...]]) -> Optional[float]:
 
 @app.route("/api/health")
 def api_health() -> tuple[Response, int] | Response:
-    """接口2：健康检查 —— 判据是**数据新鲜度**，不是"库连得上"。
+    """接口2：健康检查——判据是数据新鲜度，不是"库连得上"。
 
-    ★ 为什么原来的判据不够（这次修的就是它）：
-      原实现只探"能不能连上库并查到最近 1 分钟的行"，且 `rows_last_1min == 0` 也返回 200。
-      于是下面这些故障**全部**表现为 200 + 容器 healthy + 无告警：
-        网关 MQTT 断 / 网关只写本地缓存补不出去 / 订阅端连着但不入库 /
-        设备刷新线程死 / tag 拼错导致查询恒 0 行（静默全绿）。
-      现在两条判据任一不满足即 503，并在 `reason` 里给出原因：
-        ① `rows_last_1min == 0`          → reason=no_rows_last_1min
-        ② 最近一条样本距今 > 阈值         → reason=stale_data（阈值 = POLL_INTERVAL × 因子，默认 15 s）
-      查库失败仍是 503（reason=td_unreachable）。
-
-    ★ 字段兼容：`td` / `rows_last_1min` 语义未变（分别是"库探针"与"最近 1 分钟条数"）；
-      `ok` 的语义**升级为"真健康"**，与 HTTP 状态严格一致（200 ⇔ ok=true），
-      并新增同义字段 `healthy`、`reason`、`data_age_seconds`、`stale_after_seconds`。
-      需要"库是否连得上"这个子判据的调用方读 `td` 字段。
-      （仓库内没有解析这些字段的消费者：容器 healthcheck 直接按 HTTP 状态码判成败，
-        scripts/measure_nginx_redis.py 只量接口耗时。字段只增不减，不影响既有调用方。）
+    原来的判据只探"能不能连上库"，导致网关 MQTT 断/补传堵/不入库/线程死/tag拼错
+    全部 200 + 容器 healthy + 无告警。现在两条判据任一不满足即 503：
+      ① rows_last_1min == 0          → reason=no_rows_last_1min
+      ② 最近一条样本距今 > 阈值       → reason=stale_data
+    查库失败仍是 503（reason=td_unreachable）。
     """
-    global _stale_since   # ⭐ "连续停流"计时（见 STALE_ALERT_SECONDS 的说明）
+    global _stale_since   # "连续停流"计时（见 STALE_ALERT_SECONDS）
     threshold = HEALTH_STALE_AFTER_SECONDS
     try:
         rows = query_recent(1)
@@ -427,7 +381,7 @@ def api_health() -> tuple[Response, int] | Response:
     elif age > threshold:
         reason = "stale_data"
     else:
-        # ⭐ 恢复 ⇒ 清掉停流计时：下一次不健康**从这一刻重新算**
+        # 恢复 ⇒ 清掉停流计时：下一次不健康从这一刻重新算
         _stale_since = None
         payload.update({"ok": True, "healthy": True, "reason": "fresh"})
         return jsonify(payload)
@@ -445,7 +399,7 @@ def api_health() -> tuple[Response, int] | Response:
         "stale_alert_after_seconds": STALE_ALERT_SECONDS,
     })
     if stale_for >= STALE_ALERT_SECONDS:
-        # ⛔ **主动告警**：不是"看得见"，是"叫得出来"（治债 15 的正解）
+        # 主动告警：停流超阈值，按五层顺序排查
         LOGGER.critical(
             "⛔ 连续 %.1f 分钟无有效入库（告警阈值 %.0f s；reason=%s；最近 1 分钟 %d 条）"
             " —— 这不是抖动，是**停流**。按五层顺序排查："
@@ -466,12 +420,8 @@ def api_health() -> tuple[Response, int] | Response:
 def api_cache_stats() -> Response:
     """接口2b：缓存统计（命中率 / 查库次数 / 水位）—— 仅供测量与排障。
 
-    ⚠️ 默认 nginx 配置把 `/api/cache/` 整个路径 return 403，不对公网暴露内部计数。
-    测量脚本直连 web 容器端口取数。
-
-    ★ 统计**不按设备拆**：计数是"这个 Redis 命名空间里缓存层整体好不好用"的度量，多设备部署下
-      各实例共用同一个 Redis DB，拆开反而读不出全局健康度。响应里用 `device_scope` 说明这些计数
-      覆盖的是哪台设备（理由与取舍见 `cache.stats()` 的 docstring）。
+    nginx 把 /api/cache/ 整个路径 return 403，不对公网暴露内部计数。
+    统计不按设备拆：各实例共用同一 Redis DB，拆开反而读不出全局健康度。
     """
     return jsonify(cache.stats())
 
@@ -480,15 +430,14 @@ def api_cache_stats() -> Response:
 def api_cache_clear() -> Response:
     """接口2c：清空全部查询缓存（演练/排障用）。返回删除条数。
 
-    ★ 清理**不按设备拆**：语义是"把缓存层清干净"，缓存可随时重建，所以全清没有代价；
-      只清本设备那一份会留下别的设备的条目，制造"清了但还在"的假象，也让演练的空白基线失真
-      （理由见 `cache.clear()` 的 docstring）。
+    清理不按设备拆：语义是把缓存层清干净，缓存可随时重建。
+    只清一半会留下别的设备的条目，制造"清了但还在"的假象。
     """
     return jsonify(cache.clear())
 
 
 def _render_page(template: str) -> Response:
-    """页面模板统一注入：刷新周期 / 测点表 / 面板表 / 测点数 / 新鲜度阈值（都是契约现算，不写死）。"""
+    """页面模板统一注入：刷新周期 / 测点表 / 面板表 / 测点数 / 新鲜度阈值（都是契约现算）。"""
     html = (
         template
         .replace("__REFRESH_MS__", str(REFRESH_SECONDS * 1000))
@@ -496,7 +445,7 @@ def _render_page(template: str) -> Response:
         .replace("__POINTS_JSON__", POINT_VIEWS_JSON)
         .replace("__PANELS_JSON__", PANELS_JSON)
         .replace("__POINT_COUNT__", str(len(POINTS)))
-        # 新鲜度阈值只注入一个数：判据实现留在服务端（/api/health），前端只负责上色
+        # 新鲜度阈值只注入一个数：判据实现留在服务端，前端只负责上色
         .replace("__FRESHNESS_WARN__", str(FRESHNESS_WARN_SECONDS))
     )
     return Response(html, mimetype="text/html")
@@ -504,10 +453,10 @@ def _render_page(template: str) -> Response:
 
 @app.route("/")
 def index() -> Response:
-    """首页：**监测数据表格**（默认视图，进入就能看见）。
+    """首页：监测数据表格（默认视图）。
 
-    视图切换在左上角那个按钮（`/chart`）——表格是"按窗口看数"，曲线是"看形状"，
-    两者共用同一套查询口径（`/api/report/range`），不会各说各话。
+    视图切换在左上角按钮（/chart）——表格是"按窗口看数"，曲线是"看形状"，
+    两者共用同一套查询口径（/api/report/range）。
     """
     return _render_page(TABLE_PAGE)
 
@@ -525,18 +474,18 @@ def report_response(
     where: str,
     builder: Callable[[], dict[str, Any]],
 ) -> tuple[Response, int] | Response:
-    """报表接口统一出口：参数错 400（文案直接可用），查库错走 safe_error 转 503。"""
+    """报表接口统一出口：参数错 400，查库错走 safe_error 转 503。"""
     try:
         return jsonify(builder())
     except ValueError as exc:
-        # 设备维度不合法（`request_scope`）与时间参数不合法同一层级：都是 400
+        # 设备维度不合法与时间参数不合法同一层级：都是 400
         LOGGER.warning("[%s] 参数不合法: %s", where, exc)
         return jsonify({"error": str(exc)}), 400
     except report.ReportParamError as exc:
         LOGGER.warning("[%s] 参数不合法: %s", where, exc)
         return jsonify({"error": str(exc)}), 400
     except report.ReportQueryError as exc:
-        # 查库失败统一 503（和 /api/data 一致）；safe_error 只负责脱敏与记日志
+        # 查库失败统一 503；safe_error 只负责脱敏与记日志
         body, _status = safe_error(exc, where)
         return jsonify(body), 503
 
@@ -590,15 +539,15 @@ def api_report_custom() -> tuple[Response, int] | Response:
 
 @app.route("/report")
 def report_page() -> Response:
-    """老入口：报表页已改到首页（`/`），这里只做重定向，保证旧链接不断。"""
+    """老入口：报表页已改到首页（/），这里只做重定向，保证旧链接不断。"""
     return redirect("/")
 
 
 @app.route("/api/curve")
 def api_curve() -> tuple[Response, int] | Response:
-    """自由区间曲线：按跨度自动分级降采样，返回结构与 /api/data 一致（列式）+ 粒度元信息。
+    """自由区间曲线：按跨度自动分级降采样，返回结构与 /api/data 一致 + 粒度元信息。
 
-    实时模式仍然用 /api/data（契约不变）；长区间必须走这里，
+    实时模式仍然用 /api/data；长区间必须走这里，
     否则原始点查询会被 LIMIT 静默截断，看起来像"前面那段没数据"。
     """
     where = "GET /api/curve"
@@ -631,7 +580,7 @@ def api_report_export() -> tuple[Response, int] | Response:
         LOGGER.warning("[%s] 设备参数不合法: %s", where, exc)
         return jsonify({"error": str(exc)}), 400
     except (report_export.ExportParamError, report.ReportParamError) as exc:
-        # 参数问题返回 400 + JSON，绝不能把错误信息塞进 xlsx 里让用户下载
+        # 参数问题返回 400 + JSON，不能把错误信息塞进 xlsx 里让用户下载
         LOGGER.warning("[%s] 参数不合法: %s", where, exc)
         return jsonify({"error": str(exc)}), 400
     except report.ReportQueryError as exc:
@@ -654,7 +603,7 @@ def api_report_export() -> tuple[Response, int] | Response:
 def handle_unexpected_error(exc: Exception) -> tuple[Response, int] | HTTPException:
     """兜底错误处理：未预期异常记日志并返回 JSON，HTTP 异常（404 等）按原状态码返回。"""
     if isinstance(exc, HTTPException):
-        # 404/405 这类是正常的 HTTP 语义，不是服务故障，不该记 error 也不该变成 500
+        # 404/405 是正常 HTTP 语义，不是服务故障，不该记 error 也不该变成 500
         return exc
     body, status = safe_error(exc, "未预期的接口异常")
     return jsonify(body), status
@@ -1186,6 +1135,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
 
 
+
 # ==================== 6. 主流程 ====================
 
 TABLE_PAGE = """<!DOCTYPE html>
@@ -1528,15 +1478,13 @@ def main() -> None:
     setup_logging()
     LOGGER.info("Web 大屏启动: http://localhost:%d （局域网: http://<本机IP>:%d）", WEB_PORT, WEB_PORT)
     LOGGER.info("数据源: %s 库=%s 超级表=%s 最近 %d 分钟", TD_URL, TD_DB, TD_STABLE, QUERY_MINUTES)
-    # 缓存层的设备维度：cache.py 在**导入时**已经算好，但那会儿日志系统还没配置（setup_logging 在
-    # 这个函数里才跑），导入时的 INFO 记录会被丢弃 —— 所以在这里补一次，保证 `docker logs` 里能看见
-    # "这台 web 给哪台设备做缓存"（多设备部署排查时第一个要确认的就是它）。
+    # cache.py 在导入时已算好设备维度，但那会儿日志系统还没配置（setup_logging 在这个函数里才跑），
+    # 导入时的 INFO 会被丢弃——所以在这里补一次，保证 docker logs 里能看见
     LOGGER.info("查询缓存设备维度: %s（缓存键按设备隔离，见 src/web/cache.py）", cache.DEVICE_SCOPE)
     try:
         serve_forever()
     except OSError as exc:
-        # 端口被占/无权限属于启动失败：必须以非 0 退出码结束，
-        # 否则编排层（compose / 脚本）看到的是"正常退出"，不会告警也不会重启
+        # 端口被占/无权限属于启动失败：必须以非 0 退出码结束，否则编排层看到"正常退出"不会告警
         LOGGER.critical("Web 服务启动失败（端口 %d 可能被占用）: %s", WEB_PORT, exc)
         raise SystemExit(1) from exc
     except Exception:
@@ -1549,9 +1497,8 @@ def main() -> None:
 def serve_forever() -> None:
     """用 waitress（生产级 WSGI 服务器）起服务；没装时回落到 Flask 自带服务器。
 
-    Flask 自带的 werkzeug 开发服务器会在日志里警告"不要用于生产"，
-    而且没有正经的并发处理；因此它只用于本机开发自测，
-    对外提供服务（含容器编排部署）时必须走 waitress。
+    Flask 自带的 werkzeug 开发服务器会警告"不要用于生产"且没有正经并发处理，
+    只用于本机开发自测。
     """
     try:
         from waitress import serve as waitress_serve

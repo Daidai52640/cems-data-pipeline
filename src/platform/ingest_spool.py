@@ -1,31 +1,30 @@
 # -*- coding: utf-8 -*-
 """接入层落盘队列：写库失败时把原始报文落到本地，等 TDengine 恢复后再补传。
 
-====================== 为什么需要它（要修的那个洞） ======================
-订阅端收到 QoS1 报文后，paho 在 `on_message` **正常返回**时发送 PUBACK，broker 随即
-删掉队列里那条唯一的持久副本；而网关那边早在收到 broker PUBACK 时就把 `cache.jsonl`
-删了。于是"**写库失败、但回调正常返回**" = 这条数据在整条链路上**没有任何副本**，
+为什么需要它：订阅端收到 QoS1 报文后，paho 在 on_message 正常返回时发送 PUBACK，
+broker 随即删掉队列里那条唯一的持久副本；而网关那边早在收到 broker PUBACK 时就把
+cache.jsonl 删了。于是"写库失败、但回调正常返回" = 这条数据在整条链路上没有任何副本，
 永久丢失（README 曾把它列为「接入层无副本 · P1 未修」）。
 
-修法是**把提交点从"broker 确认"挪到"下游真的持久化"**：写库失败时先把**原始报文**
+修法是把提交点从"broker 确认"挪到"下游真的持久化"：写库失败时先把原始报文
 追加进本地队列（fsync 落盘）再返回；后台线程定期补传，只有入库成功才把它从队列里删掉。
 这样任一时刻，"尚未入库的报文"至少有一份本地持久副本。
 
-====================== 崩溃安全（照搬网关已验证的段方案） ======================
+崩溃安全（照搬网关已验证的段方案）：
     spool.jsonl           只由 on_message 追加（单写者，永不整文件回写）
     inflight-<seq>.jsonl  只由补传线程持有（段名唯一，永不覆盖已有文件）
 两个写者各写各的文件，靠"原子改名"交接：
-    1) 取批：把 spool.jsonl 原子改名成一个**新**段名（目标名唯一，不覆盖任何文件）
+    1) 取批：把 spool.jsonl 原子改名成一个新段名（目标名唯一，不覆盖任何文件）
     2) 补传：只读段文件（此时新采的数据继续追加进全新的 spool.jsonl）
-    3) 收尾：把未成功的行写回 spool.jsonl 队首，**写成功之后**才删段文件
-任何一步被杀，段文件都还在盘上 → 下次取批接着处理 → **不丢**；最坏是重复投递一次，
-而 TDengine 按 `(子表, ts)` 覆盖，重复是幂等的、无害的。
+    3) 收尾：把未成功的行写回 spool.jsonl 队首，写成功之后才删段文件
+任何一步被杀，段文件都还在盘上 → 下次取批接着处理 → 不丢；最坏是重复投递一次，
+而 TDengine 按 (子表, ts) 覆盖，重复是幂等的、无害的。
 
-⚠️ 与网关 `data/cache.jsonl` 是**两回事**：网关卡在"网关→broker"，本队列补的是
-   "接入层→TDengine"。多设备时每台设备各用一份目录（`SUBSCRIBER_DATA_DIR`），
-   理由与网关缓存目录同源（见 src/gateway/gateway.py 配置区）。
-⚠️ 只保证**进程被杀/容器重启**不丢（依赖 fsync 落盘）；掉电等更极端场景未做演练，
-   与项目其它部分的口径一致（见 README「已知边界」）。
+与网关 data/cache.jsonl 是两回事：网关卡在"网关→broker"，本队列补的是
+"接入层→TDengine"。多设备时每台设备各用一份目录（SUBSCRIBER_DATA_DIR），
+理由与网关缓存目录同源（见 src/gateway/gateway.py 配置区）。
+只保证进程被杀/容器重启不丢（依赖 fsync 落盘）；掉电等更极端场景未做演练，
+与项目其它部分的口径一致（见 README「已知边界」）。
 """
 
 from __future__ import annotations
@@ -46,9 +45,9 @@ SEGMENT_GLOB: Final[str] = f"{SEGMENT_PREFIX}*{SEGMENT_SUFFIX}"
 class IngestSpool:
     """写库失败时的本地持久队列（append-only 队尾 + 唯一段名交接）。
 
-    线程模型：`append()` 由 MQTT 回调线程调用；`take_batch()` / `finish()` 由**唯一**
-    一个补传线程调用。两者用同一把锁串行化文件操作，但**绝不在锁内做网络 I/O** ——
-    补传的写库动作发生在锁外（`take_batch` 返回之后），否则会卡住接收。
+    线程模型：append() 由 MQTT 回调线程调用；take_batch() / finish() 由唯一
+    一个补传线程调用。两者用同一把锁串行化文件操作，但绝不在锁内做网络 I/O ——
+    补传的写库动作发生在锁外（take_batch 返回之后），否则会卡住接收。
     """
 
     def __init__(
@@ -72,9 +71,9 @@ class IngestSpool:
     # ==================== 基础文件操作（调用方自持锁的除外） ====================
 
     def _read_lines(self, path: Path) -> Optional[list[str]]:
-        """读文件的非空行；**返回 None 表示读失败**（与"文件不存在/为空"的 [] 严格区分）。
+        """读文件的非空行；返回 None 表示读失败（与"文件不存在/为空"的 [] 严格区分）。
 
-        ⚠️ 这个区分是安全关键：若把"读失败"当成"空"，`finish()` 就会把一个读不出来的段
+        这个区分是安全关键：若把"读失败"当成"空"，finish() 就会把一个读不出来的段
         当成"已并入"而删掉 = 抹掉唯一副本。读失败一律返回 None，由调用方保守处理
         （不删任何文件、本轮不推进）。
         """
@@ -98,7 +97,7 @@ class IngestSpool:
     def _write_lines(self, path: Path, lines: Sequence[str]) -> bool:
         """整文件写入：先写 .tmp 再原子替换；tmp 写完 fsync，避免只停在页缓存里。
 
-        ⚠️ 只有补传线程会调它（`finish`）；`append` 走的是"追加 + fsync"，不整文件回写，
+        只有补传线程会调它（finish）；append 走的是"追加 + fsync"，不整文件回写，
         所以"追加中被回写抹掉"在结构上不可能发生。
         """
         try:
@@ -146,7 +145,7 @@ class IngestSpool:
             return True
         except OSError as exc:
             self.log.critical(
-                "[落盘队列] 目录不可写，写库失败时将**无处落盘**（会丢数据）: %s (%s)",
+                "[落盘队列] 目录不可写，写库失败时将无处落盘（会丢数据）: %s (%s)",
                 self.dir, exc,
             )
             return False
@@ -169,7 +168,7 @@ class IngestSpool:
     def _trim_if_oversize(self) -> None:
         """队列超过容量上限时，按"丢最旧、保最新"裁剪（调用方需已持有锁）。
 
-        ⚠️ 这一步**会丢数据**（丢的是最旧的一批），所以只在"再不裁就要把磁盘写满、
+        这一步会丢数据（丢的是最旧的一批），所以只在"再不裁就要把磁盘写满、
         之后每条都写不进去"时才做，并且升 CRITICAL。容量因此必须给得比"一次正常
         断库窗口的积压"大得多（默认 256 MB ≈ 按 12 条/分钟算可扛数月）。
         """
@@ -191,7 +190,7 @@ class IngestSpool:
     def has_backlog(self) -> bool:
         """是否还有待补传数据（空文件与空段都不算）。
 
-        ⚠️ 必须把**在途段**也算进来：硬杀发生在取批过程中时，数据只落在段文件里，
+        必须把在途段也算进来：硬杀发生在取批过程中时，数据只落在段文件里，
         此时 spool.jsonl 可能为空；只看它就永远不会触发补传 = 残留段永久滞留 = 真丢。
         """
         try:
@@ -226,7 +225,7 @@ class IngestSpool:
             if self._size(self.spool_file) > 0:
                 target = self._next_segment()
                 try:
-                    os.replace(self.spool_file, target)   # ★ 原子交接（目标名唯一）
+                    os.replace(self.spool_file, target)   # 原子交接（目标名唯一）
                     current = target
                 except OSError as exc:
                     # 改名失败：本轮只补残留段；spool.jsonl 原样留着，下轮再试
@@ -247,7 +246,7 @@ class IngestSpool:
     def finish(self, remaining: Sequence[str]) -> bool:
         """补传收尾：未确认的行放回 spool.jsonl 队首，写成功后才删本批的段文件。
 
-        ⚠️ 回写失败时**绝不能删段文件** —— 它是这批数据当下唯一的副本，删掉就是真丢。
+        回写失败时绝不能删段文件 —— 它是这批数据当下唯一的副本，删掉就是真丢。
         """
         with self._lock:
             existing = self._read_lines(self.spool_file)

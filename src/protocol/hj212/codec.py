@@ -1,37 +1,17 @@
 """HJ 212—2025 报文编解码（P1）。
 
-报文结构（§6.3.2 表 2 + §6.3.3 表 3，PDF 第 9 页）::
+报文结构（§6.3.2 表 2 + §6.3.3 表 3）::
 
     ## + 数据段长度(4 位十进制) + 数据段 + CRC(4 位十六进制) + \\r\\n
-
     数据段 = QN=…;ST=…;CN=…;PW=…;MN=…;Flag=…;[PNUM=…;PNO=…;][RF=1;]CP=&&…&&
 
-两条容易踩错、原文写得最明确的地方：
+两个易错点：
+1. RF 只在补传报文出现（表 3："非补传时，无本字段"）。实时报文带 RF 直接报错。
+2. 长度字段 = 数据段字符数（不含 CRC）。经附录 A.1 和 A.2 两个官方向量交叉验证。
+   数据段超 1024 字符应分包（§8.1.2），本阶段不实现分包闭环，超限直接报错。
 
-1. **``RF`` 只在补传报文出现。** 表 3 原文："RF=1，标志数据报文属于补传报文；
-   **非补传时，无本字段**。" 标准里**没有 ``RF=0``** —— 实时报文不得带 RF 字段。
-   本模块对"实时报文却带 RF"直接报错，不静默容忍。
-2. **长度字段的语义以"校验一致"为准。** 表 2 写"数据段的 ASCII 字符数"，
-   但附录 A.1 的官方示例 ``##0087…`` 实算数据段为 87 字符，与表 2 一致；
-   §8.1.2 又要求"数据段超 1 024 个字符时应分包传输"。故本模块按
-   **数据段长度 == 声明的 4 位整数** 编解码，并对 1024 上限做显式检查。
-
-字段长度（表 3："长度包含字段名称、半角'='、字段内容三部分"）：
-
-===========  ======  ==================================================
-字段         长度    说明
-===========  ======  ==================================================
-``QN``       20      ``QN=`` + 17 位 ``YYYYMMDDhhmmss`` + 3 位毫秒
-``ST``       5       ``ST=`` + 2 位系统编码
-``CN``       7       ``CN=`` + 4 位命令编码
-``PW``       9       ``PW=`` + 6 位密码
-``MN``       27      ``MN=`` + 24 个 0～9/A～F
-``Flag``     6..8    字段总长 6~8（由取值位数决定）
-``PNUM``     6       ``PNUM=`` + 总包数；不分包时无本字段
-``PNO``      5       ``PNO=`` + 包号；不分包时无本字段
-``RF``       4       ``RF=1``；非补传时无本字段
-``CP``       [0,950] ``CP=&&数据区&&``
-===========  ======  ==================================================
+字段长度（表 3：含字段名、半角'='、字段内容三部分）：
+QN=20, ST=5, CN=7, PW=9, MN=27, Flag=6..8, PNUM=6, PNO=5, RF=4, CP=[0,950]。
 """
 
 from __future__ import annotations
@@ -108,12 +88,12 @@ class NeedsDecryption(CodecError):
 class DataRegion:
     """数据区 ``CP=&&`` 与 ``&&`` 之间的内容（不含 ``&&``，已在报文层剥离）。
 
-    ``raw`` 是**权威值**：编解码一律原样搬运，不做重排或重格式化，
+    ``raw`` 是权威值：编解码一律原样搬运，不做重排或重格式化，
     以免与对端解析结果不一致。``fields`` 只是给本项目读值用的有序视图。
     """
 
     raw: str
-    #: 解析出的 ``(字段名, 值)`` 序列，**保持报文中的原始顺序**。
+    #: 解析出的 ``(字段名, 值)`` 序列，保持报文中的原始顺序。
     fields: tuple[tuple[str, str], ...] = ()
 
     @staticmethod
@@ -147,7 +127,7 @@ class DataRegion:
 
 @dataclass(frozen=True)
 class Packet:
-    """一条 HJ 212 报文的**数据段**（不含包头/长度/CRC/包尾）。"""
+    """一条 HJ 212 报文的数据段（不含包头/长度/CRC/包尾）。"""
 
     qn: str
     st: str
@@ -160,12 +140,12 @@ class Packet:
     pnum: str | None = None
     #: 包号 PNO；``None`` 表示不分包。
     pno: str | None = None
-    #: 补传标志。``True`` → 写 ``RF=1``；``False`` → **不写 RF 字段**。
+    #: 补传标志。``True`` → 写 ``RF=1``；``False`` → 不写 RF 字段。
     resend: bool = False
     #: 数据区的解析视图（由 :meth:`from_data_segment` 填充）。
     data: DataRegion = DataRegion(raw="")
     #: 数据区是否处于加密形态（``{0x..}``）。加密后长度可达明文的 5 倍，
-    #: 因此这个标记会让"数据区 ≤ 950 字符"的检查改为对**明文**生效。
+    #: 因此这个标记会让"数据区 ≤ 950 字符"的检查改为对明文生效。
     encrypted: bool = False
 
     def __post_init__(self) -> None:
@@ -217,7 +197,7 @@ class Packet:
         if self.pnum is not None:
             items.append(("PNUM", self.pnum))
             items.append(("PNO", self.pno or ""))
-        # ⚠️ 实时报文不写 RF —— 表 3："非补传时，无本字段"。
+        # 实时报文不写 RF —— 表 3："非补传时，无本字段"。
         if self.resend:
             items.append(("RF", RF_RESEND))
         return tuple(items)
@@ -335,14 +315,12 @@ def encode_packet(
 ) -> str:
     """把 :class:`Packet` 编成完整报文。
 
-    顺序严格按附录 A.2：**先算 CRC 并组包，再对数据段的数据区加密**——
-    因此 CRC 是对**明文**数据段算出来的那一份，加密后不再重算。
+    顺序严格按附录 A.2：先算 CRC 并组包，再对数据段的数据区加密——
+    因此 CRC 是对明文数据段算出来的那一份，加密后不再重算。
 
     ``key`` 为 ``None`` 时不加密；给出密钥时按 SM4/ECB/Nopadding 加密数据区。
-
-    ``max_segment_length`` 默认 1024（§8.1.2）。**加密后**的数据段长度按
-    十六进制书写形式计算，因此加密会把长度放大约 5 倍——这正是"应分包"
-    的触发点，本阶段不实现分包闭环（ADR-0006 §3 第 4 条），超限直接报错。
+    ``max_segment_length`` 默认 1024（§8.1.2）。加密后的数据段长度按
+    十六进制书写形式计算（放大约 5 倍），超限直接报错（本阶段不实现分包闭环）。
     """
     segment, _ = _build_segment(packet, key)
     length = len(segment) - CRC_HEX_WIDTH
@@ -357,7 +335,7 @@ def encode_packet(
 def segment_length_of(packet: Packet, *, key: bytes | None = None) -> int:
     """预计算长度字段的取值（加密时按密文的十六进制书写形式）。
 
-    返回值与报文里那 4 位十进制数字**完全一致**，可直接用于分包边界判断。
+    返回值与报文里那 4 位十进制数字一致，可直接用于分包边界判断。
     """
     segment, _ = _build_segment(packet, key)
     return len(segment) - CRC_HEX_WIDTH
@@ -366,7 +344,7 @@ def segment_length_of(packet: Packet, *, key: bytes | None = None) -> int:
 def _build_segment(packet: Packet, key: bytes | None) -> tuple[str, str]:
     """返回 ``(含 CRC 的数据段, CRC)``；``key`` 非空时数据区加密。
 
-    顺序严格照附录 A.2：**先对明文数据段算 CRC，再把数据区换成密文**——
+    顺序严格照附录 A.2：先对明文数据段算 CRC，再把数据区换成密文——
     CRC 永远是明文那一份，加密后不重算。
     """
     head = "".join(f"{name}={value};" for name, value in packet.header_fields())
@@ -386,7 +364,7 @@ def decode_packet(raw: str, *, key: bytes | None = None) -> DecodedPacket:
 
     * 数据区是 ``{0x..}`` 加密形态且给了 ``key`` → 解密后填入 ``packet.region``
     * 是加密形态但没给 ``key`` → 抛 :class:`NeedsDecryption`（不静默返回密文）
-    * 结构合法但 CRC 不符 → **不抛异常**，在 :class:`DecodedPacket` 里如实标记
+    * 结构合法但 CRC 不符 → 不抛异常，在 :class:`DecodedPacket` 里如实标记
       （标准："如果CRC错误，执行结束"；由调用方决定怎么处置）
     """
     if not isinstance(raw, str):
@@ -411,14 +389,8 @@ def decode_packet(raw: str, *, key: bytes | None = None) -> DecodedPacket:
     if not all(c in _HEX_DIGITS for c in crc_hex):
         raise StructuralError(f"CRC 字段必须是 4 位十六进制：{crc_hex!r}")
 
-    # 报文结构：## + 数据段长度(4) + 数据段 + CRC(4) + \r\n
-    #
-    # ⚠️ 长度字段的口径经**两个官方示例交叉校验**后定为"数据段字符数，不含 CRC"：
-    #   * 附录 A.1（PDF 第 32 页）：报文 97 字符 = 2(包头) + 4(长度) + 87(数据段)
-    #     + 4(CRC)，长度字段写的正是 "0087" → **不含 CRC**。
-    #   * §6.4.2 / 附录 A.2 的加密示例：长度字段 "0295" 等于
-    #     80(头部) + 5("CP=&&") + 208(密文书写形式) + 2("&&")，同样不含 CRC。
-    #   → 两个示例一致，故采用"不含 CRC"口径；数据段长度上限 1024（§8.1.2）。
+    # 长度字段口径 = 数据段字符数（不含 CRC）。
+    # 经附录 A.1（##0087 → 87 字符数据段）和附录 A.2（0295 = 80+5+208+2）两个官方向量交叉验证。
     length_matches = declared == len(segment)
 
     packet = Packet.from_data_segment(segment)
@@ -434,9 +406,8 @@ def decode_packet(raw: str, *, key: bytes | None = None) -> DecodedPacket:
         packet = packet.as_plaintext(key)
         decrypted = True
 
-    # ⚠️ CRC 永远对**明文**数据段计算（附录 A.2："先完成CRC校验并组包，再对数据段
-    # 加密"）。所以加密报文必须先解密、还原出明文数据段，再校验 CRC；
-    # 若拿密文去算，永远对不上。
+    # CRC 永远对明文数据段计算（附录 A.2：先完成CRC校验并组包，再对数据段加密）。
+    # 加密报文必须先解密、还原出明文数据段再校验 CRC；拿密文去算永远对不上。
     plain_segment = _plaintext_segment(packet) if was_encrypted else segment
     crc_computed = crc16_hex(plain_segment.encode("ascii", errors="replace"))
     crc_ok = crc16_verify(plain_segment.encode("ascii", errors="replace"), crc_hex)
@@ -455,7 +426,7 @@ def decode_packet(raw: str, *, key: bytes | None = None) -> DecodedPacket:
 
 
 def _plaintext_segment(packet: Packet) -> str:
-    """按已解密的报文对象还原出**明文**数据段（不含 CRC）。"""
+    """按已解密的报文对象还原出明文数据段（不含 CRC）。"""
     head = "".join(f"{name}={value};" for name, value in packet.header_fields())
     return f"{head}{CP_PREFIX}{packet.region}{REGION_SUFFIX}"
 
@@ -464,9 +435,8 @@ def _matched_suffix(text: str) -> str | None:
     """识别包尾。
 
     * 标准形态是 ``<CR><LF>``
-    * 同时容忍 ``\\r\\n`` 的**可打印写法**——标准 PDF 的示例就是这样印的
-      （附录 A.1/A.2 的报文里 ``\\r\\n`` 是 4 个字面字符），测试向量取自 PDF，
-      必须能直接喂进来。
+    * 同时容忍 ``\\r\\n`` 的可打印写法——标准 PDF 示例就是这样印的
+      （附录 A.1/A.2 的报文里 ``\\r\\n`` 是 4 个字面字符），测试向量取自 PDF。
     """
     if text.endswith("\\r\\n"):
         return text[-4:]
