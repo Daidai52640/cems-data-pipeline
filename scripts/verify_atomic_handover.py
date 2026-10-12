@@ -18,16 +18,16 @@
 |---|---|
 | 0 | 全部门禁断言通过（`[KNOWN]` 的 D1 不计入判定） |
 | 1 | 有门禁断言 FAIL（含 P7 生产文件被改动） |
-| 2 | **测试自身**的问题：语料缺失/行数不符/时间戳格式非法；或不匹配的坏实现没被负向对照抓住 |
-| 3 | **安全守卫拒绝运行**：路径补丁未生效（防止污染生产 `data/`）——在任何写操作之前退出 |
+| 2 | 测试自身的问题：语料缺失/行数不符/时间戳格式非法；或不匹配的坏实现没被负向对照抓住 |
+| 3 | 安全守卫拒绝运行：路径补丁未生效（防止污染生产 `data/`）——在任何写操作之前退出 |
 
 ⚠️ 本脚本完全离线：stub MQTT 客户端（不连 broker）、`TemporaryDirectory`（不碰生产 `data/`）、
 失败与注入全部由"第 k 次 publish"下标决定（不 sleep、不起线程、不用随机）。
 
-⚠️ 在途批次文件的读法（测试侧纪律）：本脚本**不硬编码**某一个文件名，而是把临时目录里
+在途批次文件的读法（测试侧纪律）：本脚本不硬编码某一个文件名，而是把临时目录里
 "除 `cache.jsonl` 以外的全部 `.jsonl` 产物"当作在途批次视图（`_in_flight_files()`）。
 这样"固定名 `.sending`"与"唯一段名 `inflight-<seq>.jsonl`"两种命名都能被如实观测，
-而 §2 的 P2/P5/P6/D1 断言**逐条强度不变**（不因为改名而放松）。
+而 §2 的 P2/P5/P6/D1 断言逐条强度不变（不因为改名而放松）。
 """
 
 from __future__ import annotations
@@ -91,7 +91,7 @@ class CorpusError(Exception):
 # ==================== 输入 ====================
 
 def load_corpus(path: pathlib.Path = SNAPSHOT) -> tuple[list[str], list[str]]:
-    """读真实报文快照并**逐字**校验，返回 `(leftover, current)`。
+    """读真实报文快照并逐字校验，返回 `(leftover, current)`。
 
     - 逐字：只 `splitlines()` + 去首尾空白，不改大小写、不动时间戳、不解析字段。
     - 校验：必须恰好 35 行，且每行行首 19 字符是定长时间戳——否则测试的前提就不成立。
@@ -116,8 +116,8 @@ def load_corpus(path: pathlib.Path = SNAPSHOT) -> tuple[list[str], list[str]]:
 def permute(batch: Sequence[str], sort_mode: str) -> list[str]:
     """测试自己的排列函数：排序关 = 原序；排序开 = 按行首时间戳稳定排序。
 
-    ⚠️ 它代表"将来有人给取批加按时间序排序"这件事，期望值也由同一个函数算出，
-    所以断言的是"**交接对排列不敏感**"，不是"必须保持某个具体顺序"。
+    它代表"将来有人给取批加按时间序排序"这件事，期望值也由同一个函数算出，
+    所以断言的是"交接对排列不敏感"，不是"必须保持某个具体顺序"。
     """
     if sort_mode == "off":
         return list(batch)
@@ -125,11 +125,11 @@ def permute(batch: Sequence[str], sort_mode: str) -> list[str]:
 
 
 def install_takeover_permutation(sandbox: Sandbox, sort_mode: str) -> None:
-    """安装"按时间戳排序"的取批视图（只改返回**值**与它在盘上的顺序，不碰交接动作本身）。
+    """安装"按时间戳排序"的取批视图（只改返回值与它在盘上的顺序，不碰交接动作本身）。
 
-    ⚠️ 必须把排列后的批次写回**本批自己的那个在途产物**（真实文件操作一行不改）：
-    否则"盘上的在途批次"与调用方拿到的批次**顺序不一致**，P5/P6 拿"盘上内容 == 批次"
-    作判据时会因为**测试自己造出来的不一致**而误报 FAIL（ADR-0007 §2.7 要求期望值与
+    必须把排列后的批次写回本批自己的那个在途产物（真实文件操作一行不改）：
+    否则"盘上的在途批次"与调用方拿到的批次顺序不一致，P5/P6 拿"盘上内容 == 批次"
+    作判据时会因为测试自己造出来的不一致而误报 FAIL（ADR-0007 §2.7 要求期望值与
     返回值同源，故盘上顺序必须与返回值同源）。
 
     写回目标是"实现自己声明的本批在途产物"：固定名实现 = `.sending`；
@@ -222,7 +222,7 @@ def _next_segment_path() -> pathlib.Path:
 
     固定名实现（`.sending`）返回 `DATA_DIR/cache.jsonl.sending`；
     唯一段名实现（`inflight-<seq>.jsonl`）返回尚未使用的下一个段名。
-    测试用它来构造"上一轮补传残留"，从而**同时适配两种命名**。
+    测试用它来构造"上一轮补传残留"，从而同时适配两种命名。
     """
     helper = getattr(gw, "_next_segment_path", None)
     if callable(helper):
@@ -239,7 +239,7 @@ def _setup_leftover(sandbox: Sandbox, lines: Sequence[str]) -> pathlib.Path:
 
 
 def _snapshot_in_flight(sandbox: Sandbox) -> dict[str, Optional[bytes]]:
-    """在途产物的逐字节快照；**不预先创建**文件——被杀时该产物本来就没写出来。"""
+    """在途产物的逐字节快照；不预先创建文件——被杀时该产物本来就没写出来。"""
     snapshot: dict[str, Optional[bytes]] = {}
     for item in _in_flight_candidates(sandbox):
         snapshot[item.name] = item.read_bytes() if item.exists() else None
@@ -368,7 +368,7 @@ def case_p3_interleaved_write(sandbox: Sandbox, mode: str, checks: Checks) -> in
         if index == HOOK_PUBLISH_INDEX:
             new_line = _new_line_from(payload)
             injected.append(new_line)
-            gw.save_to_cache(new_line)          # ★ 全测试最关键的一次注入
+            gw.save_to_cache(new_line)          # 全测试最关键的一次注入
         if index > 0 and index % RESEND_WINDOW == 0:
             window_index = index // RESEND_WINDOW
             on_disk = _in_flight_lines(sandbox)
@@ -420,7 +420,7 @@ def case_p3_interleaved_write(sandbox: Sandbox, mode: str, checks: Checks) -> in
 def case_p5_writeback_failure(sandbox: Sandbox, mode: str, checks: Checks) -> None:
     """P5：回写失败时在途产物仍在且逐字不变、一条不丢；解除阻塞后能补齐。
 
-    ⚠️ 失败是**真实 OSError**：把 `cache.jsonl.tmp` 建成目录 → `_write_lines()` 里
+    失败是真实 OSError：把 `cache.jsonl.tmp` 建成目录 → `_write_lines()` 里
     `tmp.write_text(...)` 抛 `PermissionError`（`OSError` 子类），走真实异常分支，
     不 patch `_write_lines`。
     """
@@ -466,10 +466,10 @@ def case_p5_writeback_failure(sandbox: Sandbox, mode: str, checks: Checks) -> No
 
 # ==================== P8：滞留段必须仍被判定为"有积压" ====================
 #
-# ⚠️ 为什么单列一条：改成唯一段名（inflight-<seq>.jsonl）之后，
+# 为什么单列一条：改成唯一段名（inflight-<seq>.jsonl）之后，
 # 出现了一个新的滞留路径 —— 硬杀发生在取批过程中时，leftover 只落在段文件里，
 # 此时 cache.jsonl 可能为空。若 has_backlog() 只看 cache.jsonl/旧 .sending，
-# 重启后就不会触发补传，**残留段永久滞留 = 真丢数据**。
+# 重启后就不会触发补传，残留段永久滞留 = 真丢数据。
 # 修复前 `.sending` 是固定名，那个检查顺带覆盖了它；改名后必须显式覆盖。
 
 
@@ -499,7 +499,7 @@ class _ProcessKilled(BaseException):
 
     用 `BaseException`（不是 `Exception`）：硬杀不会被 `except OSError` / `except Exception`
     接住，数据确实留在内存里再也回不来——这正是要复现的语义。
-    ⚠️ 必须**抛出**而不是"跳过写回并返回成功"：返回成功会让调用方误以为已落盘，
+    必须抛出而不是"跳过写回并返回成功"：返回成功会让调用方误以为已落盘，
     从而继续执行后面的清理动作，模拟出真实的硬杀里根本不会发生的状态。
     """
 
@@ -507,12 +507,12 @@ class _ProcessKilled(BaseException):
 def case_d1_kill_window(sandbox: Sandbox, mode: str, checks: Checks) -> None:
     """D1：接管途中硬杀（`os.replace` 完成、合并批写回之前）→ leftover 是否还在盘上。
 
-    模拟方式 = **在"合并批写回"那一步把控制流打断**（ADR-0007 §2.9），等价于进程在该步骤前
+    模拟方式 = 在"合并批写回"那一步把控制流打断（ADR-0007 §2.9），等价于进程在该步骤前
     被 SIGKILL：`.sending` 已被覆盖/新段已建好，但合并批还没落盘。
 
-    判据（两种在途命名都可用，且**与排列无关**）：
+    判据（两种在途命名都可用，且与排列无关）：
 
-    1. 残留产物**逐字节未被改动**（`read_bytes()` 相等）——覆盖动作会改它；
+    1. 残留产物逐字节未被改动（`read_bytes()` 相等）——覆盖动作会改它；
     2. leftover 的每一行都仍在盘上（多重集包含，不看顺序）；
     3. 落盘总数 == leftover + current（一条不少）。
     """
@@ -573,9 +573,9 @@ def case_d1_kill_window(sandbox: Sandbox, mode: str, checks: Checks) -> None:
 # ==================== N1：负向对照（证明检测器有鉴别力） ====================
 
 def _install_finish_resend_always_unlink() -> Callable[[], None]:
-    """N1a 的坏实现：回写失败**仍**删在途文件。
+    """N1a 的坏实现：回写失败仍删在途文件。
 
-    对照的语义是"回写失败还删唯一副本"，所以这里删的是**当前实现真正的在途产物**：
+    对照的语义是"回写失败还删唯一副本"，所以这里删的是当前实现真正的在途产物：
     固定名实现 = `.sending`；段实现 = `BATCH_SEGMENTS` 里的段。测试不写死某一个文件名，
     否则换了命名之后这条对照会变成"删一个不存在的文件"，白白失去鉴别力。
     """
@@ -585,7 +585,7 @@ def _install_finish_resend_always_unlink() -> Callable[[], None]:
         with gw.CACHE_LOCK:
             gw._write_lines(gw.CACHE_FILE, remaining + gw._read_lines(gw.CACHE_FILE))
             for path in list(getattr(gw, "BATCH_SEGMENTS", [])) or [gw.SENDING_FILE]:
-                pathlib.Path(path).unlink(missing_ok=True)   # ★ 注入的缺陷
+                pathlib.Path(path).unlink(missing_ok=True)   # 注入的缺陷
 
     gw._finish_resend = broken                            # type: ignore[assignment]
 
@@ -607,7 +607,7 @@ def _install_take_over_copy(sandbox: Sandbox) -> Callable[[], None]:
             batch = leftover + current
             if batch:
                 target = pathlib.Path(next_segment()) if callable(next_segment) else gw.SENDING_FILE
-                gw._write_lines(target, batch)            # ★ 复制而不是改名
+                gw._write_lines(target, batch)            # 复制而不是改名
             return batch                              # cache.jsonl 原封不动留在盘上
 
     gw._take_over_pending = broken                        # type: ignore[assignment]
@@ -677,8 +677,8 @@ def guard_p7_production_untouched(
 ) -> None:
     """P7 哨兵断言：生产 `data/` 的两个缓存文件与目录条目集合前后一致。
 
-    ⚠️ 八服务在跑时这条有歧义：变化既可能是"本脚本越界写了"（严重缺陷），
-    也可能是**并发运行的网关进程**恰好写了它。脚本遇到变化不猜测，直接 FAIL 并打印
+    八服务在跑时这条有歧义：变化既可能是"本脚本越界写了"（严重缺陷），
+    也可能是并发运行的网关进程恰好写了它。脚本遇到变化不猜测，直接 FAIL 并打印
     三种可能的解释 + 判定方法（ADR-0007 §2.10）。
     """
     for name, before in before_files.items():

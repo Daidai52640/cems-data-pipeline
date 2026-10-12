@@ -66,11 +66,8 @@ def parse_iso_utc(text: str) -> float:
 
 
 def td_count_between(start_local: str, end_local: str, device: str = "") -> int:
-    """同窗口**被测设备**的库内条数（"走补传路径占比"的分母）。
-
-    ⚠️ **必须带 device 谓词**：不过滤时分母是所有设备之和，占比被系统性算小
-    （见文件头的实测数字）。
-    """
+    """同窗口被测设备的库内条数（"走补传路径占比"的分母）。必须带 device 谓词：
+    不过滤时分母是所有设备之和，占比被系统性算小（见文件头的实测数字）。"""
     start = datetime.strptime(start_local, TS_FORMAT).replace(tzinfo=LOCAL_TZ).timestamp()
     end = datetime.strptime(end_local, TS_FORMAT).replace(tzinfo=LOCAL_TZ).timestamp()
     sql = (f"SELECT COUNT(*) FROM cems.cems_data "

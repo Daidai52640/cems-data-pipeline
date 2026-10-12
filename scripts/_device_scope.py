@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-"""设备维度 scope 的**唯一真源**：给测量/分析脚本提供「按哪台设备统计」的参数与 SQL 谓词。
+"""设备维度 scope 的唯一真源：给测量/分析脚本提供「按哪台设备统计」的参数与 SQL 谓词。
 
 为什么需要这个模块
 -----------------------------------------------------------------------------
-`cems_data` 是**多设备共用的超级表**，TAG 是 `(plant, device)`。多设备上线后，
+`cems_data` 是多设备共用的超级表，TAG 是 `(plant, device)`。多设备上线后，
 同一张表里同时存在 device1 / device2（压测时还会有 `plant=loadtest` 的标签）
 的多条曲线。测量脚本如果裸读 `SELECT ... FROM cems.cems_data`：
 
-- `measure_completeness` 的「实际条数」= 各设备条数之和 → 完整率被撑到 **>100%**
+- `measure_completeness` 的「实际条数」= 各设备条数之和 → 完整率被撑到 >100%
   （实测 2026-10-02 21:36~22:09 同一窗口：混读 899 行 ⇒ 名义完整率 245.90%，
   device1 单独 364 行 ⇒ 99.56%、device2 单独 365 行 ⇒ 99.84%）；
-- `measure_latency` 的 `ORDER BY ts DESC LIMIT n` 取回的是**所有设备混排**的最近 n 行，
+- `measure_latency` 的 `ORDER BY ts DESC LIMIT n` 取回的是所有设备混排的最近 n 行，
   「库内可查」样本里混进别的设备（实测压测并发时 `LIMIT 600` 取回的 600 行里
-  device1 只占 195 行 = **32.5%**，另 195 行是 device2、210 行是压测标签）；
+  device1 只占 195 行 = 32.5%，另 195 行是 device2、210 行是压测标签）；
 - `measure_resend_success` 的对账分母（该补条数）与 `COUNT(*)` 分母都会把
   另一台设备的行算进来，补传成功率不再可分设备；
 - `analyze_gateway_resend_lag` 的「走补传路径占比」分母同样被放大
@@ -21,7 +21,7 @@
 - `verify_report_coverage` 的前提里那段核查 SQL 会把两台设备的行一起聚合，
   断档分钟会被另一台设备的数据填上，核查结论反了。
 
-所以**默认单设备（device1）时必须与改造前逐位一致**，多设备时用 `--device` 分开统计。
+所以默认单设备（device1）时必须与改造前逐位一致，多设备时用 `--device` 分开统计。
 本模块只做两件事：读 scope、生成 SQL 谓词；不改任何测量口径。
 
 用法
@@ -80,7 +80,7 @@ def add_device_argument(
 
 
 def device_predicate(device: Optional[str] = None) -> str:
-    """返回**裸条件** `device = 'device1'`，由调用方决定怎么拼进 WHERE。
+    """返回裸条件 `device = 'device1'`，由调用方决定怎么拼进 WHERE。
 
     返回裸条件（不带前导 `AND` / `WHERE`）是有意的：各脚本的 WHERE 子句形态不同
     （有的只有设备、有的还有 `ts > ? AND ts <= ?`），带前导 `AND` 会逼出

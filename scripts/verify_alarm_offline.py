@@ -2,7 +2,6 @@
 r"""排放超标告警 · 离线回放验收（ADR-0002 §2.2 5) 的 V1 边界用例 + 落库/快照/幂等）。
 
 ⚠️ 离线运行：只 import 仓库代码，不连库、不连 broker，可反复跑；用到的边界数据由脚本自己造。
-
 覆盖：
   A 纯逻辑边界（不碰库）
     (a) 折算值 == 限值          → 0 个事件（`>` 语义：正好等于限值算达标）
@@ -125,9 +124,8 @@ def payload_text(ts: str, dust: float, so2: float, nox: float, o2: float) -> str
 def parse(text: str) -> tuple[str, dict[str, float], dict[str, float]]:
     """报文 → (ts, 标干值, 数学层折算值)，与接入层同一条路径。
 
-    ⚠️ 逐点化（ADR-0009）后 `parse_payload` 返回**三元组**：第三个是"无效测点"。
-    本脚本造的报文一定是 9 点全合法（它验的是告警判据），所以这里断言无效集为空 ——
-    不静默忽略，万一报文造错会当场炸出来。
+    逐点化（ADR-0009）后 `parse_payload` 返回三元组，第三个是"无效测点"。本脚本造的
+    报文一定 9 点全合法，所以这里断言无效集为空——不静默忽略，万一报文造错当场炸出来。
     """
     ts, values, invalid = SUB.parse_payload(text)
     if invalid:
@@ -514,10 +512,10 @@ def section_c_hourly() -> None:
         "C4 该小时**没有**任何 ok（样本不足绝不判达标）",
     )
 
-    # 真库满覆盖小时（对照）：**动态挑一个数据真有的小时**
-    # ⚠️ 原先硬编码 "2026-10-02 16:00"（当时 722 条）。但那个小时现在 n_total=0
-    #    —— 库被清过/重建过（多设备迁移期间），于是这条判据变成"在不存在的时段上
-    #    求 ok/over"，必然误报 FAIL。**判据要跟着数据走，不能钉死某个历史时刻。**
+    # 真库满覆盖小时（对照）：动态挑一个数据真有的小时
+    # 原先硬编码 "2026-10-02 16:00"（当时 722 条）。但那个小时现在 n_total=0
+    #   —— 库被清过/重建过（多设备迁移期间），于是这条判据变成"在不存在的时段上
+    #   求 ok/over"，必然误报 FAIL。判据要跟着数据走，不能钉死某个历史时刻。
     _cols, picked = query(
         f"SELECT _wstart, COUNT(*) FROM {TD_DB}.{TABLES.data_stable} "
         f"WHERE plant = 'plant1' AND device = 'device1' AND ts >= '2026-10-02 20:00:00' "
@@ -529,12 +527,12 @@ def section_c_hourly() -> None:
     else:
         hour_text = str(full_hours[-1][0])[:19].replace("T", " ")
         print(f"  选取满覆盖小时（{full_hours[-1][1]} 条）: {hour_text}")
-        # ⚠️⚠️ 关键：`TABLES` 的标签是 **verify/offline**（给"写入的结论行"做隔离），
-        #   而 `hour_rows_sql` 是拿 **自己的 plant/device 去 `cems_data` 里找原始行** ——
-        #   于是它去查 `plant='verify' AND device='offline'` 的数据，那里**根本没有行**
+        # 关键：`TABLES` 的标签是 verify/offline（给"写入的结论行"做隔离），
+        #   而 `hour_rows_sql` 是拿自己的 plant/device 去 `cems_data` 里找原始行 ——
+        #   于是它去查 `plant='verify' AND device='offline'` 的数据，那里根本没有行
         #   → 结算恒得 0 行 → verdict=insufficient。
         #   （实测踩到：库里该小时真有 722 条，但结算读出 0 条。）
-        #   修法：读原始数据要用**真实数据源标签**，写结论仍用隔离标签 —— 两者分开。
+        #   修法：读原始数据要用真实数据源标签，写结论仍用隔离标签 —— 两者分开。
         source_tables = AlarmTables(
             db=TD_DB,
             plant=os.getenv("TD_PLANT", "plant1"),

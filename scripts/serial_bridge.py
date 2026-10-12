@@ -17,7 +17,7 @@
                                             |
                               [项目 1 的网关容器]（代码零改动）
 
-⭐ 这样**不需要给网关加 RTU 支持** —— 现场本来也是这么接的。
+这样不需要给网关加 RTU 支持 —— 现场本来也是这么接的。
    而"我亲手接过 485 线、跑过 RTU 帧"这件事，见
    `docs/runbooks/真机接入.md` 的 S2/S4（有原始字节）。
 
@@ -28,10 +28,10 @@
   |----------|----------------|----------|------|------|
   | `0x0000` | 湿度           | uint16   | ÷10  | %RH |
   | `0x0001` | 温度           | **int16**| ÷10  | degC（补码） |
-  | `0x0002` | ⭐ **桥状态**  | uint16   | —    | `0`=新鲜，`1`=陈旧 |
+  | `0x0002` | 桥状态        | uint16   | —    | `0`=新鲜，`1`=陈旧 |
   | `0x0003` | 连续读失败次数 | uint16   | —    | 每次成功清零 |
 
-⭐⭐ **陈旧时 `0x0000`/`0x0001` 写的是「越界值」而不是上一次的好值**：
+陈旧时 `0x0000`/`0x0001` 写的是「越界值」而不是上一次的好值：
 `Humidity → 101.0 %`、`Temp → 301.0 degC`（**同时超出 CEMS 与变送器两套契约的量程**，导入期有自检）。
 
 **为什么这么做**：实测发现这台变送器**读错地址时返回全 0 而不报异常**
@@ -39,12 +39,12 @@
 本桥**故意不重复这个错误**，而且是**两层**：
 
 1. `0x0002` 状态位 —— 给**会读它**的消费者（如设备层混流那条路）
-2. ⭐ **越界值** —— 给**不会读状态位**的消费者
+2. 越界值 —— 给**不会读状态位**的消费者
    （如 `POINT_SET=transmitter` 的网关，它只读 2 个寄存器、看不到状态位）
 
 **把"无效"做进值本身，任何消费者都无法误用。** 只置状态位是不够的 —— 那只是把洞留给下一个人。
 
-⚠️ **刻意不用 0**：`0` 落在两套契约的所有量程内，会被当成真实读数入库。
+⚠️ 刻意不用 0：`0` 落在两套契约的所有量程内，会被当成真实读数入库。
 
 ============================ 用法（在 Windows 宿主上跑）============================
     python scripts/serial_bridge.py --port COM3
@@ -52,7 +52,7 @@
     # 换个 TCP 端口 / 改轮询周期
     python scripts/serial_bridge.py --port COM3 --tcp-port 5021 --interval 1.0
 
-⚠️ 本脚本**不能放进容器**：容器拿不到宿主的 COM 口。
+⚠️ 本脚本不能放进容器：容器拿不到宿主的 COM 口。
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ REG_COUNT: Final[int] = 2
 #: 手册明写"16bits 数据高字节在前" → 标准 Modbus 字节序
 ENDIAN: Final[str] = "AB"
 DTYPE_HUMIDITY: Final[str] = "uint16"
-DTYPE_TEMPERATURE: Final[str] = "int16"  # ⭐ 温度是**有符号**的：-40~125 degC
+DTYPE_TEMPERATURE: Final[str] = "int16"  # 温度是有符号的：-40~125 degC
 
 #: 两个测点各自的寄存器换算系数（值 = 原始整数 / SCALE）
 SCALE: Final[int] = 10
@@ -105,7 +105,7 @@ BRIDGE_REG_TOTAL: Final[int] = 4
 STATUS_FRESH: Final[int] = 0
 STATUS_STALE: Final[int] = 1
 
-#: ⭐ **陈旧时对外写的越界值**。必须**同时**超出两套契约的量程：
+#: 陈旧时对外写的越界值。必须**同时**超出两套契约的量程：
 #:   CEMS（`src/common/points.py`）      `Temp [0, 300]` / `Humidity [0, 100]`
 #:   变送器（`src/common/points_transmitter.py`）`AirTemp [-40, 125]` / `AirHumidity [0, 100]`
 #: `301.0 degC` 同时超出两者；`101.0 %` 同时超出两者。
@@ -114,18 +114,14 @@ STATUS_STALE: Final[int] = 1
 #:   路径 A（设备层混流）读了状态位，**路径 B（`POINT_SET=transmitter`）的网关只读 2 个寄存器、看不到状态位**。
 #:   把"无效"做进**值本身**，任何消费者都无法误用。
 #:
-#: ⚠️ **为什么不用 0**：`0` **落在上述所有量程内**，会被当成真实读数一路入库 ——
+#: 为什么不用 0：`0` **落在上述所有量程内**，会被当成真实读数一路入库 ——
 #:   那正是真机教我们的坑（读错地址沉默返回 0，见 `docs/runbooks/真机接入.md` S4 发现 1）。
 STALE_HUMIDITY_RAW: Final[int] = 1010    # 101.0 %
 STALE_TEMPERATURE_RAW: Final[int] = 3010  # 301.0 degC
 
 
 def _check_stale_sentinels() -> None:
-    """导入期自检：越界值必须**同时**超出 CEMS 与变送器两套契约的量程。
-
-    ⚠️ 这一条不能省：若哪天有人把 `Temp` 量程放宽到 310，`301.0` 就不再越界 ——
-    这个"无效标记"会被当成合法读数一路入库，**又是一个静默假数据**，而且极难发现。
-    """
+    """导入期自检：越界值必须同时超出 CEMS 与变送器两套契约的量程（否则会被当成合法读数入库）。"""
     from src.common import points_transmitter
     from src.common.points import POINTS as CEMS_POINTS
 
@@ -243,7 +239,7 @@ class Bridge:
 
     # -------------------------------------------------- TCP 侧
     def snapshot(self) -> list[int]:
-        """对外快照。⭐ **陈旧时不返回旧值，改返回越界值** —— 让下游无法误用（见模块顶部说明）。"""
+        """对外快照。陈旧时不返回旧值，改返回越界值，让下游无法误用（见模块顶部说明）。"""
         with self._lock:
             stale = self._failures > 0 or not self._have_value
             if stale:
@@ -261,13 +257,8 @@ class Bridge:
 
 
 def build_context() -> ModbusServerContext:
-    """建服务端上下文。
-
-    ⚠️ **必须 `single=False`**（照 `src/device/modbus_server.py` 的既有结论）：
-    pymodbus 在 `single=True` 下会把**任何**请求的 unit id 改写成内部地址 0 ——
-    于是"请求一个不存在的从站"会**成功返回**这份唯一数据，**既不报错也无异常码**。
-    那种静默错在本项目已经踩过一次，这里不再踩。
-    """
+    """建服务端上下文。必须 single=False：pymodbus 在 single=True 下会把任何请求的 unit id
+    改写成地址 0，请求不存在的从站也会成功返回这份数据、既不报错也无异常码（本项目已踩过）。"""
     block = ModbusSequentialDataBlock(0, [0] * BRIDGE_REG_TOTAL)
     context = ModbusSlaveContext(di=block, co=block, hr=block, ir=block)
     return ModbusServerContext(slaves={SLAVE_ID: context}, single=False)
@@ -290,10 +281,8 @@ def main() -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
         force=True,
-        # ⚠️ **显式写 stdout**：`basicConfig` 的默认流是 `stderr`。
-        # 本桥被 `scripts/up.ps1` 以 `Start-Process -RedirectStandardOutput/Error`
-        # 拉起时，两个流分别落两个文件 —— 不写这一行，**正常读数会全跑进 .err.log**，
-        # 而 .log 是空的（实测踩过，排障时会误以为桥没输出）。
+        # 显式写 stdout：basicConfig 默认是 stderr；被 up.ps1 以 RedirectStandardOutput/Error
+        # 拉起时两个流分落两文件，不写这行正常读数会全跑进 .err.log、.log 是空的。
         stream=sys.stdout,
     )
 

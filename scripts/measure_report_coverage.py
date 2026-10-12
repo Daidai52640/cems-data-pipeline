@@ -14,7 +14,7 @@
 口径与 `scripts/measure_completeness.py` 保持一致（同一套断档判据），便于两个数字互相引用：
   断档判据 = max(3 × 中位间隔, 中位间隔 + 10 s)；窗口"跨断档"= 该窗口区间与任一断档区间相交。
 
-★ 设备维度（多设备共用超级表）：`cems_data` 的 TAG 是 `(plant, device)`，混读会把两台设备的行
+设备维度（多设备共用超级表）：`cems_data` 的 TAG 是 `(plant, device)`，混读会把两台设备的行
   加在同一个窗口里（实测同一分钟 24 行 = device1 12 + device2 12）。这不是"数字偏大"那么轻：
   覆盖率算的是 `min(1.0, 窗口条数 / 名义条数)`，**混读时一台设备的采样丢失会被另一台填平** ——
   实测 2026-10-02 21:04 那一分钟：混读 12 行（覆盖率 1.0，"正常"），而 device2 自己只有 2 行
@@ -92,7 +92,7 @@ def where_clause(predicate: str) -> str:
 # 所以复用 ops 的同一批底层函数（taos_sql / taos_scalar，仍是容器内 taos CLI、仍是
 # 纪元毫秒比较）加一层设备谓词，取数口径与 ops 的版本逐字一致。
 #
-# ⚠️ 为什么不给它们直接加参数：那两个函数被备份/恢复演练脚本共用，改签名会波及别处。
+# 为什么不给它们直接加参数：那两个函数被备份/恢复演练脚本共用，改签名会波及别处。
 def scoped_count(container: str, db: str, stable: str, predicate: str) -> int:
     """按设备过滤后的总条数（等价 ops.count_rows，多一个 tag 谓词）。"""
     sql = f"SELECT COUNT(*) FROM {db}.{stable}{where_clause(predicate)};"
@@ -121,11 +121,8 @@ def scoped_timestamps(container: str, db: str, stable: str, predicate: str) -> l
 def window_counts(
     container: str, db: str, stable: str, unit: str, predicate: str = ""
 ) -> list[tuple[int, int]]:
-    """按 `unit` 分段，返回 [(窗口起始 epoch ms, 窗口内条数)]。
-
-    ⚠️ 设备谓词必须出现在 INTERVAL 之前：多设备下同一窗口会同时收到两台设备的行
-    （实测 24 = 12 + 12），窗口条数直接翻倍。
-    """
+    """按 `unit` 分段，返回 [(窗口起始 epoch ms, 窗口内条数)]。设备谓词必须出现在 INTERVAL 之前，
+    否则多设备下同窗口条数直接翻倍（实测 24 = 12 + 12）。"""
     rows = ops.taos_sql(
         container,
         f"SELECT CAST(_wstart AS BIGINT) AS w, COUNT(*) AS n "
@@ -143,10 +140,9 @@ def analyse_unit(
 ) -> dict[str, Any]:
     """单个粒度的窗口条数分析：干净窗口 vs 跨断档窗口，各自的覆盖率分布。
 
-    ⚠️ 首末两个不完整窗口必须排除：它们"条数少"是因为库里本来就只有那么多数据
-    （例如最后一个分钟窗口才过了 20 秒），量的是数据边界而不是采样节奏。
-    把它们算进"正常窗口下限"，会得出"正常窗口覆盖 41.7%"这种错误结论。
-    （报表接口本身照样会标出这些窗口，那是它的职责；标定时要把它们摘掉。）
+    首末两个不完整窗口必须排除：它们"条数少"是因为库里本来就只有那么多数据
+    （例如最后一个分钟窗口才过了 20 秒），量的是数据边界而不是采样节奏；算进"正常窗口下限"
+    会得出"正常窗口覆盖 41.7%"这种错误结论。报表接口照样会标出这些窗口（那是它的职责），标定时摘掉。
     """
     seconds = WINDOW_SECONDS[unit]
     span_ms = seconds * 1000

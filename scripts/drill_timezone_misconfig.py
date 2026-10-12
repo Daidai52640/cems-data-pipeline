@@ -107,7 +107,7 @@ def main() -> int:
 
         gw = sh([
             "docker", "run", "-d", "--name", GW, "--network", NETWORK,
-            "-e", "TZ=UTC",                                   # ★ 注入的时区错误
+            "-e", "TZ=UTC",                                   # 注入的时区错误
             "-e", "MQTT_HOST=emqx", "-e", "MQTT_PORT=1883",
             "-e", f"MQTT_TOPIC={TOPIC}",
             "-e", f"MQTT_CLIENT_ID={GW}",

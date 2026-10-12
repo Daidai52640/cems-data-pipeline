@@ -68,11 +68,8 @@ def to_float(text: str) -> float | None:
 
 
 def pick_limit(limits: set[float]) -> float:
-    """从出现过的内存上限集合里选"真正的那个上限"。
-
-    ⚠️ 容器没在跑的采样点 `docker stats` 会把上限也记成 0；那不是"上限变了"。
-    所以先剔掉 0，再取**出现次数最多**的值（并列时取值小的，确定性优先）。
-    """
+    """从出现过的内存上限集合里选"真正的那个上限"。容器没在跑的采样点 docker stats 会把
+    上限记成 0（不是"上限变了"），先剔掉 0，再取出现次数最多的值（并列取值小的，确定性优先）。"""
     if not limits:
         return 0.0
     values = sorted(v for v in limits if v > 0)

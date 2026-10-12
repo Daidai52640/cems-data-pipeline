@@ -8,7 +8,7 @@
       `is_published` 三个成员（够 `_publish_async` / `_wait_published` 用）。
     - 确定性：失败与注入全部由"第 k 次 publish"下标决定，不 sleep、不起线程、不用随机。
     - 零风险：`Sandbox` 只把网关模块的缓存路径指到 `tempfile.TemporaryDirectory()`；
-      `__enter__` 里有**硬守卫**，三个路径不指向临时目录就 `SystemExit(3)`，什么都不做。
+      `__enter__` 里有硬守卫，三个路径不指向临时目录就 `SystemExit(3)`，什么都不做。
     - 不写大量数据：语料 35 行（≈250 B/行），临时目录总字节由调用方断言 < 1 MB。
 """
 
@@ -63,7 +63,7 @@ class StubMessageInfo:
         self._ok = ok
 
     def wait_for_publish(self, timeout: float | None = None) -> None:
-        """对齐 paho：超时是**静默返回**，所以被测代码必须再用 is_published() 复核。"""
+        """对齐 paho：超时是静默返回，所以被测代码必须再用 is_published() 复核。"""
         return None
 
     def is_published(self) -> bool:
@@ -74,7 +74,7 @@ class StubMqttClient:
     """stub MQTT 客户端：publish 计数 + 指定下标失败 + publish hook。
 
     - `fail_indices`：这些下标的 publish 判为"未确认"（等价于没收到 PUBACK）。
-    - `hook(index, payload)`：在每次 publish 返回**之前**调用，用于确定性注入
+    - `hook(index, payload)`：在每次 publish 返回之前调用，用于确定性注入
       （P3 的 `save_to_cache()`）与读盘观测（P6）。
     - 只记录 topic/qos/payload，不产生任何网络行为。
     """
@@ -104,7 +104,7 @@ class StubMqttClient:
 # 3. 沙箱（ADR-0007 §2.3）
 # ---------------------------------------------------------------------------
 
-#: 需要在沙箱里被重定向的模块级常量（`DATA_DIR` 是推导常量，**没有 env 出口**）
+#: 需要在沙箱里被重定向的模块级常量（`DATA_DIR` 是推导常量，没有 env 出口）
 PATCHED_NAMES: tuple[str, ...] = (
     "DATA_DIR",
     "CACHE_FILE",
@@ -114,7 +114,7 @@ PATCHED_NAMES: tuple[str, ...] = (
     "CACHE_MAX_BYTES",
 )
 
-#: 需要在沙箱里被**复位**的模块级可变状态（不是常量，但同样会跨用例泄漏）。
+#: 需要在沙箱里被复位的模块级可变状态（不是常量，但同样会跨用例泄漏）。
 #: `BATCH_SEGMENTS` 记录"本批落在哪些段"：不重置的话，下一个用例会以为上一个用例
 #: （临时目录已删）的段仍是自己的，滚动回写与收尾都会写到错的地方。
 RESET_STATE: dict[str, Any] = {
@@ -145,9 +145,9 @@ def same_path(left: Any, right: Any) -> bool:
 
 
 def path_is_within(path: Any, directory: Any) -> bool:
-    """`path` 是否**就在** `directory` 之内（含 `directory` 自身）。
+    """`path` 是否就在 `directory` 之内（含 `directory` 自身）。
 
-    ⚠️ 方向是单向的：`path_is_within(tmp/"cache.jsonl", tmp)` 为真，
+    方向是单向的：`path_is_within(tmp/"cache.jsonl", tmp)` 为真，
     反之 `path_is_within(tmp, tmp/"cache.jsonl")` 为假。守卫断言必须用单向语义 +
     `same_path()` 判"完全一致"，双向比较会把嵌套路径误判成不通过。
     """
@@ -168,7 +168,7 @@ class Sandbox:
             sandbox.assert_paths_patched()   # 硬守卫，不通过直接 SystemExit(3)
             ...                              # 用例只往 sandbox.tmp 写
 
-    ⚠️ `Final[...]` 只是类型标注，运行期不设防；上述函数在**调用时**才读模块全局，
+    `Final[...]` 只是类型标注，运行期不设防；上述函数在调用时才读模块全局，
     所以改模块属性是生效的（探针实测 `A_patch` 三项全 true）。
     """
 
@@ -210,7 +210,7 @@ class Sandbox:
             self.original[name] = getattr(self.gw, name)
             setattr(self.gw, name, value)
 
-        # ★ 硬守卫必须在任何写操作之前：宁可不测，也不许有污染生产的可能。
+        # 硬守卫必须在任何写操作之前：宁可不测，也不许有污染生产的可能。
         self.assert_paths_patched()
         return self
 
@@ -298,7 +298,7 @@ STATUS_KNOWN = "KNOWN"
 class Checks:
     """逐条收集 `[PASS]/[FAIL]/[KNOWN]` 判定，最后统一汇总。
 
-    ⚠️ `[KNOWN]` 是**已登记的既有窗口**（ADR-0007 §2.9 D1），只输出、不计门禁；
+    `[KNOWN]` 是已登记的既有窗口（ADR-0007 §2.9 D1），只输出、不计门禁；
     否则套件永远红，反而会被人调松。
     """
 

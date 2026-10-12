@@ -70,11 +70,8 @@ def td_now() -> tuple[float, float, float]:
 
 
 def exec_date(name: str) -> tuple[float, float, float]:
-    """容器墙钟：返回 (container_epoch, 宿主侧 t_before, 宿主侧 t_after)。
-
-    宿主时间会取在 exec 前后各一次，所以 (t_before, t_after) 是容器读数真实
-    发生时刻的区间；用中点抵消大部分 exec 延迟，不消的部分对同一台机器是常数。
-    """
+    """容器墙钟：返回 (container_epoch, 宿主侧 t_before, 宿主侧 t_after)。宿主时间取在
+    exec 前后各一次，用中点抵消大部分 exec 延迟；不消的部分对同一台机器是常数。"""
     t_before = time.time()
     out = subprocess.run(
         ["docker", "exec", name, "date", "+%s.%N"],
@@ -123,11 +120,8 @@ def slope_ms_per_s(samples: list[tuple[float, float]]) -> float:
 # ---------------- A. 容器之间是否同一时钟 ----------------
 
 def part_a(rounds: int, gap_s: float) -> dict:
-    """每个样本都自带宿主侧时间括号，所以容器间差异不受"顺序调用"影响。
-
-    多轮之间隔 gap_s 秒，用来观察各容器是不是**一起**在漂（同一 VM 内核 → 共享
-    同一个 CLOCK_REALTIME，应该一起漂）。
-    """
+    """每个样本都自带宿主侧时间括号，容器间差异不受"顺序调用"影响。多轮间隔 gap_s，
+    观察各容器是不是一起在漂（同一 VM 内核共享 CLOCK_REALTIME，理应一起漂）。"""
     per_container: dict[str, list[float]] = {name: [] for name in CONTAINERS}
     table: list[dict[str, float]] = []
     for _ in range(rounds):

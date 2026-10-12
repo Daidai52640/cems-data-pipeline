@@ -6,16 +6,16 @@
 
 输出五段证据：
     A. 尖峰幅度与"偶发性"：触发概率、命中占比、相邻周期爬升幅度
-    B. 尖峰确实把**折算值**顶过限值（平时达标 → 事件式超标）
+    B. 尖峰确实把折算值顶过限值（平时达标 → 事件式超标）
     C. 判定口径：折算值口径 vs 标干值口径的差异，并复现 points.py 里的反例
        （标干 30 达标，O2=9% 时折算 37.5 超标）
     D. 尖峰受环境变量控制：SIM_SPIKE_PROB 变则事件率变；0 则完全关闭
     E. 结束码：全部通过 0，任一不通过 1
 
-⚠️ 口径纪律（本脚本严格照做）：
-    - 折算值只在**一处**算：调用 src/common/points.to_reference_o2()，不自己抄公式
+口径纪律（本脚本严格照做）：
+    - 折算值只在一处算：调用 src/common/points.to_reference_o2()，不自己抄公式
     - 不新建 TDengine 列、不写库：折算值是导出量，见 points.py 顶部说明
-    - 判定用**折算值**（环保口径），不是标干值
+    - 判定用折算值（环保口径），不是标干值
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ SPAN_BY_NAME: dict[str, float] = {
     point.name: point.high - point.low for point in POINTS
 }
 # 尖峰允许的最大"每周期爬升"，按量程百分比计。
-#   尖峰是**真实事件**，它的上升沿本来就比常态漂移陡，所以这里给 5% 量程
+#   尖峰是真实事件，它的上升沿本来就比常态漂移陡，所以这里给 5% 量程
 #   （常态漂移每周期只走约 0.002% 量程，量级差 3 个数量级，两者不会混）。
 SPIKE_RAMP_LIMIT: float = 0.05
 EXCEED_LIMIT_PCT: float = 50.0                # 折算值越限时间占比上限（有尖峰时）
@@ -62,7 +62,7 @@ def _check(condition: bool, description: str) -> None:
 def simulator_with_spikes(probability: float) -> SIM.CemsSimulator:
     """构造一个指定尖峰概率的仿真器。
 
-    ⚠️ 必须改**模块级常量**再构造，不能用 dataclasses.replace(p, spike_probability=...)
+    ⚠️ 必须改模块级常量再构造，不能用 dataclasses.replace(p, spike_probability=...)
        逐个替换：那样会把尖峰也发给物理量（Flow/Temp/O2 的 spike_probability 本来被
        _is_limit_anchored 闸到 0），实测会把 O2 的比值从 0.29 顶到 0.80，
        整个折算统计全乱（这正是我踩过的坑，留在这里当护栏）。
@@ -100,7 +100,7 @@ def section_a_spike_rarity() -> None:
         diffs = [
             a - b for a, b in zip(series(spikes_on, name), series(spikes_off, name))
         ]
-        # ⚠️ 命中占比**不是**"超标时间占比"：三角包络的两头很小，落在窗口内 ≠ 越限。
+        # 命中占比不是"超标时间占比"：三角包络的两头很小，落在窗口内 ≠ 越限。
         #    所以这里只做参考打印，真正判"偶发"的是 B 段的折算值越限占比。
         hit_share = 100.0 * sum(1 for d in diffs if d > 1e-9) / len(diffs)
         # 事件数 = 从"无尖峰"跳到"有尖峰"的次数
@@ -122,7 +122,7 @@ def section_a_spike_rarity() -> None:
 
 
 def section_b_exceedance() -> None:
-    """B. 尖峰必须把**折算值**顶过限值：平时达标 → 事件式超标。"""
+    """B. 尖峰必须把折算值顶过限值：平时达标 → 事件式超标。"""
     print(f"\n=== B. 折算值越限（判定口径 = 折算值，基准氧 {O2_REFERENCE}%）===")
     spikes_on = simulator_with_spikes(SIM.SPIKE_PROBABILITY)
     spikes_off = simulator_with_spikes(0.0)
@@ -170,7 +170,7 @@ def section_b_exceedance() -> None:
             for _, mean_ratio, _, over_pct in baseline_rows),
         "无尖峰时每个污染物折算均值 < 限值、越限 < 50%",
     )
-    # ⚠️ 这一条是新加的（原来是缺口）：只验"均值 < 限值"挡不住"基线+漂移就已经常年越限"。
+    # 这一条是新加的（原来是缺口）：只验"均值 < 限值"挡不住"基线+漂移就已经常年越限"。
     #    实测教训：基线锚到限值 75% 时 NOx 有 20% 的时间在越限，超标就不再是事件。
     _check(
         worst_baseline_over < BASELINE_OVER_LIMIT_PCT,
@@ -179,7 +179,7 @@ def section_b_exceedance() -> None:
     )
 
     # 逐次超标事件：证明"超标"是可被下游观测到、可复现的事件，而不是统计上的噪声。
-    # ⚠️ 要把"连续越限"合并成一次事件：折算值在限值附近抖动时（O2 与尖峰各自都在动）
+    # 要把"连续越限"合并成一次事件：折算值在限值附近抖动时（O2 与尖峰各自都在动）
     #    会出现多次"上穿/下穿"，不合并会把 1 次尖峰数成十几次，看着像"常年超标"。
     #    这里按 EVENTS_GAP_SECONDS 的间隔判定事件边界，并取事件内的折算峰值。
     print(f"\n  折算值超标事件（24h 窗口；间隔 > {EVENTS_GAP_SECONDS // 60} 分钟算两次事件）：")
@@ -225,8 +225,8 @@ def section_b_exceedance() -> None:
 def section_c_converted_vs_standard() -> None:
     """C. 判定口径：必须用折算值；折算既会放大也会衰减，别写成"一定更大"。
 
-    ⚠️ 我一开始在这里断言"折算越限% ≥ 标干越限%"，实测**不成立**：
-        折算 = 标干 × (21-6)/(21-O2)，O2 > 6% 时放大、O2 < 6% 时**衰减**。
+        我一开始在这里断言"折算越限% ≥ 标干越限%"，实测不成立：
+        折算 = 标干 × (21-6)/(21-O2)，O2 > 6% 时放大、O2 < 6% 时衰减。
         本模块 O2 实测区间 4.3%~7.3%（跨过基准 6%），所以两种情形都会出现。
         ⇒ 正确断言是"折算与标干不同，且方向由 O2 与基准的大小关系决定"。
     """
@@ -250,7 +250,7 @@ def section_c_converted_vs_standard() -> None:
         )
 
     # 折算倍数的方向必须跟 O2 与基准的关系一致
-    # ⚠️ 必须扫**一整天**：只取开头几百个采样（约十几分钟）时 O2 变化很小，
+    # 必须扫一整天：只取开头几百个采样（约十几分钟）时 O2 变化很小，
     #    倍数区间会窄到看不出"跨过 1.0"，会得到一个假的失败。
     factors = [
         to_reference_o2(value, o2) / value

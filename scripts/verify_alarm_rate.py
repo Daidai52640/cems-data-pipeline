@@ -4,11 +4,11 @@ r"""排放超标告警 · 事件率验收（ADR-0002 §5 的两条量化判据�
 判据：
   A) SIM_SPIKE_ENABLE=0 跑 1 小时 → 事件表新增 start 行数 = 0
   B) 默认参数（SIM_SPIKE_PROB=0.004）跑 1 小时 → 出现 start/end 成对记录，
-     且**小时事件数 <= 12 个/测点**（不出现告警风暴）
+     且小时事件数 <= 12 个/测点（不出现告警风暴）
 
-做法：用 src/device/simulator.py 的**真**仿真信号（同种子、同一小时、5 秒一条 = 720 条），
+做法：用 src/device/simulator.py 的真仿真信号（同种子、同一小时、5 秒一条 = 720 条），
      喂给 AlarmJudge（默认判据参数），统计每个测点的 START 数。
-     ⚠️ SPIKE_ENABLED 是模块导入期读的环境变量，所以两种模式必须分**两个进程**跑：
+     SPIKE_ENABLED 是模块导入期读的环境变量，所以两种模式必须分两个进程跑：
         python verify_alarm_rate.py --mode off
         python verify_alarm_rate.py --mode default
 """
@@ -33,11 +33,11 @@ from src.common.alarm_judge import (   # noqa: E402
 )
 from src.common.points import LIMITS, ZS_TARGETS, to_reference_o2   # noqa: E402
 
-# ⚠️⚠️ 必须在**导入 simulator 之前**把尖峰开关设进环境！
-#     `simulator.SPIKE_ENABLED` 是**模块导入期**读一次 env 的常量
+# ⚠️ 必须在导入 simulator 之前把尖峰开关设进环境！
+#     `simulator.SPIKE_ENABLED` 是模块导入期读一次 env 的常量
 #     （`SPIKE_ENABLED: Final[bool] = os.getenv(...)`）——导入之后再改 env 完全无效。
 #     原实现漏了这一步："--mode off" 只把 SIM_SPIKE_ENABLE 打进日志、从未真正设置，
-#     于是两种模式跑的是**同一份"尖峰开启"的配置**：判据 A 恒失败，
+#     于是两种模式跑的是同一份"尖峰开启"的配置：判据 A 恒失败，
 #     而且两个模式的数字完全相同（实测都是 7 —— 这正是暴露它的线索）。
 _MODE = (
     "off"
@@ -49,7 +49,7 @@ if _MODE == "off":
 
 from src.device.simulator import CemsSimulator                      # noqa: E402
 
-# 反向自检：确认开关**真的**生效了 —— 否则判据 A 会以"假失败"的形式骗人
+# 反向自检：确认开关真的生效了 —— 否则判据 A 会以"假失败"的形式骗人
 if _MODE == "off" and CemsSimulator(seed=1).__class__ is not None:
     import src.device.simulator as _sim
     if getattr(_sim, "SPIKE_ENABLED", True):
@@ -58,7 +58,7 @@ if _MODE == "off" and CemsSimulator(seed=1).__class__ is not None:
             "（SIM_SPIKE_ENABLE 必须在导入 simulator 之前设置）"
         )
 
-# ⚠️ 必须用**带时区**的时刻：设备层传的就是 datetime.now(timezone.utc)（simulator.SIM_EPOCH 也是 UTC）。
+# 必须用带时区的时刻：设备层传的就是 datetime.now(timezone.utc)（simulator.SIM_EPOCH 也是 UTC）。
 #    仿真时间轴上的一小时，与设备层同一时基。
 HOUR_START = datetime(2026, 10, 2, 12, 0, 0, tzinfo=timezone.utc)
 STEP_SECONDS = 5.0                                 # 网关轮询周期
@@ -117,10 +117,10 @@ def main() -> int:
         return 0 if total == 0 else 1
 
     worst = max(starts.values())
-    # ⚠️ 判据 B 的"成对"应该是**有事件的测点必须 start==end**，而不是
+    # 判据 B 的"成对"应该是"有事件的测点必须 start==end"，而不是
     #    "三个测点都必须有事件" —— 后者把"某个测点这一小时没越限"（完全正常、
     #    正是仿真设计意图）判成失败：实测那一小时只有 NOx 越限（dust/so2 无事件），
-    #    于是 `all(...)` 恒 False，判据**永远不可能通过**。
+    #    于是 `all(...)` 恒 False，判据永远不可能通过。
     paired = all(starts[c] == ends[c] for c in ZS_TARGETS)
     fired = {c: (starts[c], ends[c]) for c in ZS_TARGETS if starts[c] or ends[c]}
     print(f"\n[B 判据] 默认参数 → 单测点最多 {worst} 个事件（上限 {MAX_EVENTS_PER_POINT}）；"

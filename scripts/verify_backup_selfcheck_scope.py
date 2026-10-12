@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """备份自检口径复核：`reported_rows` 到底该和谁比。
 
-背景（2026-10-03 双设备验收实测）：一份**完全成功**的备份被判成
+背景（2026-10-03 双设备验收实测）：一份完全成功的备份被判成
 `rows_out_of_range`（pre=18570 dumped=19100 post=18570），因为
-`taosdump` 的 `reported_rows` 是**整库**（cems 下全部 stable）的行数，
-而被拿去比的是 `cems_data` **一张超级表**的 `COUNT(*)`。
+`taosdump` 的 `reported_rows` 是整库（cems 下全部 stable）的行数，
+而被拿去比的是 `cems_data` 一张超级表的 `COUNT(*)`。
 
 两条判据：
   ① reported_rows == Σ(cems 库全部 stable 的 COUNT(*))  → 备份完整性（应相等）
@@ -68,8 +68,8 @@ def main() -> int:
     post_ts = int(manifest["window"]["post_max_ms"])
 
     counts = stable_counts(args.container, args.db)
-    # ⚠️ 非主表（verdict / alarm）在 dump 之后**仍会新增**（告警与小时结算是持续运行的），
-    #    所以"当前值"不等于"dump 时的值"，必须按 manifest 里的 **post_count** 设成**同一时刻**的
+    # ⚠️ 非主表（verdict / alarm）在 dump 之后仍会新增（告警与小时结算是持续运行的），
+    #    所以"当前值"不等于"dump 时的值"，必须按 manifest 里的 post_count 设成同一时刻的
     #    快照来重建 —— 否则会把 dump 之后新写入的告警算进"备份应有的行数"。
     others = {k: v for k, v in counts.items() if k != args.stable}
     others_at_post = {}

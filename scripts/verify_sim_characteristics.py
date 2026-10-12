@@ -58,7 +58,7 @@ def new_readings(name: str, cycles: int = CYCLES) -> list[float]:
 def old_readings(name: str, seed: int, cycles: int = CYCLES) -> list[float]:
     """复现改造前的算法：每个周期在量程内独立均匀随机（random.uniform）。
 
-    这里刻意**照抄**改造前 modbus_server.build_registers() 的那一行，
+    这里刻意照抄改造前 modbus_server.build_registers() 的那一行，
     作为"前后对比"的基线，不是新实现的回退路径。
     """
     point = next(item for item in POINTS if item.name == name)
@@ -69,7 +69,7 @@ def old_readings(name: str, seed: int, cycles: int = CYCLES) -> list[float]:
 def encoded_deltas(values: list[float], scale: int) -> list[int]:
     """把物理量按设备层口径编码成寄存器整数，返回相邻差值绝对值。
 
-    ⚠️ 必须比较**编码后**的整数：网关拿到的就是它，
+    ⚠️ 必须比较编码后的整数：网关拿到的就是它，
     而且能自动消掉量程差异（Flow 量程 65000、O2 只有 25，直接比物理值没意义）。
     """
     encoded = [encode(value, scale) for value in values]
@@ -142,8 +142,8 @@ def section_c_layering() -> None:
 def section_d_load_coupling() -> None:
     """D. 负荷耦合：把"负荷分量"单独剥出来，验证相关性符号符合 COUPLING_BY_NAME。
 
-    ⚠️ 不能直接对采样序列求相关：所有测点共享同一个 24 小时日周期，
-    默认参数下 corr(Flow, O2) 实测是 **正的**（+0.85，被日周期主导）——
+    不能直接对采样序列求相关：所有测点共享同一个 24 小时日周期，
+    默认参数下 corr(Flow, O2) 实测是正的（+0.85，被日周期主导）——
     这本身不是缺陷（白天负荷与氧含量一起涨落是正常工况），
     但它会掩盖负荷耦合项。所以这里按"开耦合 − 关耦合"差分出负荷分量再判符号。
     """
@@ -191,16 +191,16 @@ def section_d_load_coupling() -> None:
 
 
 def section_e_baseline_calibration() -> None:
-    """E. 基线标定：污染物必须**平时达标**（2026-10-01 补）。
+    """E. 基线标定：污染物必须平时达标（2026-10-01 补）。
 
-    ⚠️ 这一节是补上一个真实事故的护栏：
+       这一节是补上一个真实事故的护栏：
        第一版把基线取成"量程的 50%~90%"，而限值只占量程的 5%~17.5%，
        结果污染物常年顶在限值 3~10 倍（实测 SO2 均值 105 vs 限值 35），
        "超标告警"永远亮着 = 没有告警。
-       根因是**锚错参照物**：污染物该锚"限值"，物理量才锚"量程"。
-    ⚠️ 同一类事故还有第二个入口（同日发现）：**O2 被当成物理量锚到量程 40%~70%**
+       根因是锚错参照物：污染物该锚"限值"，物理量才锚"量程"。
+       同一类事故还有第二个入口（同日发现）：O2 被当成物理量锚到量程 40%~70%
        ⇒ 实测氧含量 12.5%（真实烟气是 3%~8%），而折算公式对 O2 极敏感
-       ⇒ 全测点折算值被放大 1.9 倍、折算口径越限 100%。所以这里**折算了也判一次**。
+       ⇒ 全测点折算值被放大 1.9 倍、折算口径越限 100%。所以这里折算了也判一次。
     """
     print("\n=== E. 基线标定（污染物应锚在限值上，物理量锚在量程上）===")
     print("%-10s %8s %10s %10s %9s %8s %10s"

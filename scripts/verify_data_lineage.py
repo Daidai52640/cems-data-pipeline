@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-"""验收 C19：**数据血缘追踪**——同一条数据从寄存器走到北向出口，每一跳都是它、不丢不改。
+"""验收 C19：数据血缘追踪——同一条数据从寄存器走到北向出口，每一跳都是它、不丢不改。
 
 ## 为什么要这个脚本（它补的是别的脚本补不上的）
 项目已有 23 个验证脚本，但各验一段。"网关发出了"有证据、"入库了"有证据，
-**却没人证明"发出去的就是入库的那条"**。后果：某一层静默丢样本/算错值时，
-各段脚本可能全绿。本脚本给数据打**唯一标记**，逐跳比对面值与条数：
+却没人证明"发出去的就是入库的那条"。后果：某一层静默丢样本/算错值时，
+各段脚本可能全绿。本脚本给数据打唯一标记，逐跳比对面值与条数：
 
     寄存器(源) → MQTT(报文) → 库(行) → 报表(聚合) → 北向(HJ212 往返)
 
 ## 标记怎么保证唯一（且不污染现有数据）
-用**一次性临时链路**：`TD_PLANT=trace` + `TD_DEVICE=run<唯一后缀>`。
-于是库里 `WHERE device='runXXXX'` 精确等于本次跑的这批，**绝不与 device1/device2 混**。
+用一次性临时链路：`TD_PLANT=trace` + `TD_DEVICE=run<唯一后缀>`。
+于是库里 `WHERE device='runXXXX'` 精确等于本次跑的这批，绝不与 device1/device2 混。
 收尾删 `plant='trace'` 的行（TDengine 删行不删表，以 COUNT=0 为准）。
 
 ## 判据（T1~T8，逐条打印 PASS/FAIL）
@@ -27,8 +27,8 @@
     python scripts/verify_data_lineage.py [--seconds 25] [--help]
 需要 docker；会在 cems-net 上起临时容器，跑完自动清理。
 
-⚠️ 若某跳的工装不具备（例如北向需要额外依赖），对应项打印 SKIP 并说明原因，
-   **不伪造 PASS**（宁可显式跳过）。
+若某跳的工装不具备（例如北向需要额外依赖），对应项打印 SKIP 并说明原因，
+   不伪造 PASS（宁可显式跳过）。
 """
 from __future__ import annotations
 
@@ -46,9 +46,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-# ⚠️ Windows 控制台默认代码页是 GBK，而下面的报告里用了 ⚠/⇒ 这类字符 ——
+# Windows 控制台默认代码页是 GBK，而下面的报告里用了 ⚠/⇒ 这类字符 ——
 #    输出被重定向/被捕获时（`python ... > log`、`... | Select-Object`）会抛
-#    `UnicodeEncodeError: 'gbk' codec can't encode character`，**在能报结论之前就崩**，
+#    `UnicodeEncodeError: 'gbk' codec can't encode character`，在能报结论之前就崩，
 #    看起来像"脚本坏了"而不是"编码不对"（实测踩过：T1 判据那行带 ⇒）。
 #    这里显式把 stdout/stderr 重配成 UTF-8，errors="replace" 兜底，绝不因为编码再崩。
 for _stream in (sys.stdout, sys.stderr):
@@ -150,7 +150,7 @@ class LineageRun:
         self._docker(
             "run", "-d", "--name", name, "--network", NETWORK, "--entrypoint", "python",
             IMAGE, "-c", code, self.topic,
-            # ⚠️ 旁听窗口必须**覆盖整个采集+重投+落库周期**：
+            # 旁听窗口必须覆盖整个采集+重投+落库周期：
             #    原先只给 seconds+10，网关启动前/重投阶段发出的报文会落在窗口外
             #    → 表现为"库比旁听多几条"，会被误判成接入层多写（实测踩到 7 vs 5）
             str(int(self.seconds) * 2 + 60),
@@ -182,8 +182,8 @@ class LineageRun:
             "-e", f"MQTT_TOPIC={self.topic}",
             "-e", f"MQTT_CLIENT_ID=lineage-gw-{self.run_id}",
             "-e", f"GATEWAY_DATA_DIR=/tmp/{self.run_id}-gwdata",
-            # ⚠️ 必须给一个**空的**匿名卷：缓存目录在容器里，而 docker 宿主的 /tmp
-            #    是同一份 —— 上一轮遗留的 inflight-*.jsonl 会被这一轮网关**补传出去**
+            # 必须给一个空的匿名卷：缓存目录在容器里，而 docker 宿主的 /tmp
+            #    是同一份 —— 上一轮遗留的 inflight-*.jsonl 会被这一轮网关补传出去
             #    （实测：T3 的"源寄存器 vs 报文"因此差 41% 量程，报文里全是上一轮的值）。
             #    匿名卷每次新建 ⇒ 每轮都是干净目录。
             "-v", f"/tmp/{self.run_id}-gwdata",
@@ -201,7 +201,7 @@ class LineageRun:
             "-e", f"MQTT_HOST={MQTT_HOST}",
             "-e", f"MQTT_TOPIC={self.topic}",
             "-e", f"MQTT_CLIENT_ID=lineage-sub-{self.run_id}",
-            # ⚠️ 必须显式给 TDengine 地址：订阅端默认是 http://localhost:6041，
+            # 必须显式给 TDengine 地址：订阅端默认是 http://localhost:6041，
             #    在容器里指向它自己 → 建表/入库全失败（实测踩到过）
             "-e", "TD_URL=http://tdengine:6041",
             "-e", f"TD_PLANT={self.plant}", "-e", f"TD_DEVICE={self.run_id}",
@@ -213,8 +213,8 @@ class LineageRun:
     def dump_logs(self, tail: int = 12) -> None:
         """把临时容器的日志尾巴打出来。
 
-        ★ 这是**诊断能力**，不是调试残留：本脚本的核心用途就是"哪一跳断了"，
-          而"库 0 行"这类失败必须能立刻看到**接入层/网关自己怎么说的**，
+        这是诊断能力，不是调试残留：本脚本的核心用途就是"哪一跳断了"，
+          而"库 0 行"这类失败必须能立刻看到接入层/网关自己怎么说的，
           否则只能靠猜。默认在跑完时对失败链路打印。
         """
         for name in self.names:
@@ -233,11 +233,11 @@ class LineageRun:
                     print(f"    {ln.strip()[:150]}")
 
     def freeze(self) -> None:
-        """暂停采集/接入容器，让后续所有取证基于**同一静止快照**。
+        """暂停采集/接入容器，让后续所有取证基于同一静止快照。
 
-        ★ 为什么必须这么做：链路一直在写库，而各条判据是**分别**去读的 ——
+        为什么必须这么做：链路一直在写库，而各条判据是分别去读的 ——
           先读库、再跑聚合，中间又入库几行，就会出现"库 7 vs 聚合 14"这类
-          **假失败**（实测踩到 3 次）。冻结之后，库与接口看到的状态不再变化，
+          假失败（实测踩到 3 次）。冻结之后，库与接口看到的状态不再变化，
           判据之间的比较才有意义。
         旁听容器不冻结（它要收重投测试的报文）。
         """
@@ -256,11 +256,11 @@ class LineageRun:
     def cleanup(self) -> None:
         """删临时容器 + 清 trace 数据（TDengine 删行不删表，以 COUNT=0 为准）。
 
-        ⚠️ 必须清**四张表**，不能只清 `cems_data`（2026-10-03 修）：
-        临时接入层跑起来后会照常做**小时结算与告警判定**，于是
+        ⚠️ 必须清四张表，不能只清 `cems_data`（2026-10-03 修）：
+        临时接入层跑起来后会照常做小时结算与告警判定，于是
         `cems_hourly_verdict` / `cems_alarm_event` / `cems_alarm_push` 里
         也会按 `plant=trace` 写进结论与事件行。原先只删数据表 →
-        **每跑一次就残留几十行**（实测清理时一次删出 102/106/106 行）。
+        每跑一次就残留几十行（实测清理时一次删出 102/106/106 行）。
         任何"用临时标签跑真实链路"的脚本都有这个坑。
         """
         for name in self.names:
@@ -348,7 +348,7 @@ def main() -> int:
 
     try:
         # ---- 起链路（顺序有讲究）----
-        # ⚠️ 旁听必须**先于网关**订阅：否则第一条报文在旁听上线前就发出去了，
+        # 旁听必须先于网关订阅：否则第一条报文在旁听上线前就发出去了，
         #    日志里会少一条 → 会被误判成"接入层丢数据"（实测踩到：库 7 vs 旁听 6）。
         run.start_listener()
         run.start_device()
@@ -357,14 +357,14 @@ def main() -> int:
         time.sleep(3)
         run.start_gateway()             # 网关最后起：此时旁听与接入层都已就位
         time.sleep(3)
-        # ⚠️ 源值要在**网关刚开始发**的这一刻读：拖到最后读，曲线早就走远了
+        # 源值要在网关刚开始发的这一刻读：拖到最后读，曲线早就走远了
         #    （实测拖到最后读会差 42% 量程，那是测量设计错，不是系统错）
         source = run.read_source_registers()
 
         print("  采集中…")
         time.sleep(args.seconds + 6)
 
-        # ★ 冻结采集/接入：之后的取证全部基于**同一静止快照**。
+        # 冻结采集/接入：之后的取证全部基于同一静止快照。
         #   否则"先读库、再跑聚合"之间又入库几行，会出现"库 7 vs 聚合 14"这类假失败
         #   （实测踩到 3 次）。旁听容器不冻结（重投测试还要收报文）。
         run.freeze()
@@ -376,10 +376,10 @@ def main() -> int:
         cols = ["ts", *[p.column for p in POINTS]]
 
         # ---- T1 源 → MQTT ----
-        # ⚠️ 预期条数**不能只按 --seconds 算**：网关从"启动 → 首发 → 停止观察"之间
+        # 预期条数不能只按 --seconds 算：网关从"启动 → 首发 → 停止观察"之间
         #    有自己的启动延迟与收尾（实测比 `seconds/周期` 多 2~3 条），
         #    `--seconds` 越短，这个固定开销占比越大（12s 时理论 2 条、实际 5 条）。
-        #    正确做法是**按实际观测到的时间跨度自校准**：N 条报文应当覆盖
+        #    正确做法是按实际观测到的时间跨度自校准：N 条报文应当覆盖
         #    (N-1)×周期 秒；若观测跨度与条数自洽，说明采集节奏正确。
         theoretical = max(1, int(args.seconds / POLL_INTERVAL))
         print("\n[T1] 源 → MQTT（采集/发布层）")
@@ -409,7 +409,7 @@ def main() -> int:
         print("\n[T2] MQTT → 库（接入层）")
         _check(len(rows) == len(listened), "库行数 == 旁听条数",
                f"库 {len(rows)} vs 旁听 {len(listened)}")
-        # ⚠️ 必须把两边的时间戳归一到**同一口径**再比：
+        # 必须把两边的时间戳归一到同一口径再比：
         #    报文里是本地时间 "2026-10-02 23:49:22"，而 REST 返回的是 UTC ISO
         #    "2026-10-02T15:49:22.000Z" —— 直接比字符串一条都命中不了（实测踩到）。
         #    用项目自己的两个函数换算，避免我在这里另造一套时区逻辑：
@@ -440,20 +440,20 @@ def main() -> int:
         elif not listened:
             _skip("源寄存器与报文一致", "没有旁听到报文")
         else:
-            # ⚠️ 不能逐点比对：源寄存器读的是"某一瞬间"，报文是每 5s 一条的序列，
+            # 不能逐点比对：源寄存器读的是"某一瞬间"，报文是每 5s 一条的序列，
             #    曲线在这几秒里本来就在走（实测逐点比会差 40% 量程 —— 那是测量设计错）。
-            #    改成**包络判据**：源读数必须落在这一批报文的取值范围内（容许 2% 量程），
+            #    改成包络判据：源读数必须落在这一批报文的取值范围内（容许 2% 量程），
             #    这足以证明"网关发的是寄存器里的真实数据"，而不是常量/错寄存器/错 scale。
-            # ⚠️ 这里**故意只给 SKIP，不给 PASS/FAIL**：
+            # 这里故意只给 SKIP，不给 PASS/FAIL：
             #    源寄存器读的是"某一瞬间"，报文是每 5s 一条的序列；两者之间隔了几秒，
             #    而仿真曲线在这几秒里会走（实测逐点比会差 40% 量程）。
             #    我试过"取时间最近的那条报文""包络判据"两种对齐法，都仍受
             #    "gw 启动 → 首次 publish → 我发子进程读寄存器"这条链路的时序不确定性影响。
-            #    **寄存器映射本身已单独证实是对的**（一次精确测量：同一时刻
+            #    寄存器映射本身已单独证实是对的（一次精确测量：同一时刻
             #      RAW[0..3]=[29858,288,195,529] → Flow 29858.00 / Dust 2.88 / SO2 19.50
             #      / NOx 52.90，而 simulator 给出 Flow=30126.5 Dust=2.88 SO2=19.5 NOx=52.9
             #      —— Dust/SO2/NOx 逐值相等，Flow 差 0.9% 是两者取样时刻不同）。
-            #    真正逐值、零容差的"值不被改"证明在 **T2**（报文 ↔ 库，7/7 完全命中）。
+            #    真正逐值、零容差的"值不被改"证明在 T2（报文 ↔ 库，7/7 完全命中）。
             _skip(
                 "源寄存器与报文同刻比对",
                 "工装无法消除二者取样时刻差（逐值零容差的证明由 T2 承担；寄存器映射已单独证实）",
@@ -469,30 +469,30 @@ def main() -> int:
             from src.common.alarm_judge import normalize_ts
             from src.web import report                       # 延迟导入：无 Redis 也能跑
 
-            # ⚠️ 窗口必须按**本地整分钟**取，且要覆盖全部入库行：
+            # 窗口必须按本地整分钟取，且要覆盖全部入库行：
             #    REST 返回的是 UTC ISO，先 normalize 成本地口径再对齐到分钟，
             #    否则窗口会整体偏 8 小时、聚出 0 行（实测踩到 strftime 报错与 12 vs 7）
-            # ⚠️ 聚合查询会**重新读库**，而链路此时仍在采集 → 两边看到的快照时刻不同
+            # 聚合查询会重新读库，而链路此时仍在采集 → 两边看到的快照时刻不同
             #    （实测：库 7 行的时候聚合已是 14 行，多的 7 条是这中间新入库的样本）。
-            #    修法：**先回读一次库**（取同一时刻的基准），紧接着再跑聚合。
+            #    修法：先回读一次库（取同一时刻的基准），紧接着再跑聚合。
             #    注意顺序：先回读 rows，再算窗口，最后才调聚合。
             rows = run.db_rows()
             stamps = sorted(normalize_ts(r[0]) for r in rows)
             start = _dt.strptime(stamps[0][:19], "%Y-%m-%d %H:%M:%S").replace(second=0, microsecond=0)
             end = _dt.strptime(stamps[-1][:19], "%Y-%m-%d %H:%M:%S").replace(second=0, microsecond=0)
-            # ⚠️ 半开区间 [start, end)：整批数据落在**同一分钟**或**跨分钟**时，
+            # 半开区间 [start, end)：整批数据落在同一分钟或跨分钟时，
             #    只 +0 会让最后一个有数据的分钟被排除（实测：库 2 分钟、聚合只 1 分钟）。
             #    右边界取"最后一行的分钟 + 1"，保证覆盖到含最后一行的那一分钟。
             end = end + timedelta(minutes=1)
-            # ★ 必须显式传 scope，否则聚合读的**不是本次跑的这批数据**。
+            # 必须显式传 scope，否则聚合读的不是本次跑的这批数据。
             #   `report.query_aggregate()` 的 scope 为空时回落到 `cache.DEVICE_SCOPE`
             #   （= web 实例配置的 plant/device，默认 plant1/device1），SQL 里就是
             #   `AND plant='plant1' AND device='device1'`。而本次跑的是 TD_PLANT=trace +
-            #   TD_DEVICE=run<唯一后缀> 的**一次性临时链路** —— 于是 T4 拿"真实设备正在
+            #   TD_DEVICE=run<唯一后缀> 的一次性临时链路 —— 于是 T4 拿"真实设备正在
             #   采集的数据"去比"trace 的行数"，表现为聚合条数恒定多出一截。
             #   实测（2026-10-03，--seconds 20）：库 6 行 / 聚合 14 行，其中 00:00 那分钟
             #   "库 4 / 聚合 12" —— 多出来的正是 plant1/device1 在同一分钟的实时样本。
-            #   这不是测量噪声也不是聚合口径问题，是**验证工装自己读错了设备维度**。
+            #   这不是测量噪声也不是聚合口径问题，是验证工装自己读错了设备维度。
             #   修法：把 scope 钉成本次 trace 的设备（`src/web/cache.py` 的 scope_split
             #   接受 `plant/device` 串，白名单校验通过）。
             scope = f"{run.plant}/{run.run_id}"
@@ -504,8 +504,8 @@ def main() -> int:
                 _skip("报表聚合与库一致", f"报表查询失败: {type(exc).__name__}: {exc}")
                 got = None
             if got is not None:
-                # ⚠️ 不用"Python 字符串键"去对齐两边的时间戳（两边表示不同，容易假失败）。
-                #    直接拿聚合结果的**时间戳集合**与"库里逐分钟的真值"比：
+                # 不用"Python 字符串键"去对齐两边的时间戳（两边表示不同，容易假失败）。
+                #    直接拿聚合结果的时间戳集合与"库里逐分钟的真值"比：
                 #    - 库里逐分钟真值用 `_td_ops` 走同一条链路查，口径一致
                 #    - 只比"聚合返回了哪几分钟"与"哪几分钟真的有数据"是否一致
                 db_minutes = {stamp[:16] for stamp in stamps}
@@ -516,8 +516,8 @@ def main() -> int:
                        + (f"，缺 {missing[:3]}" if missing else ""))
                 # 条数口径：现在能硬判了 —— 基准 rows 是"紧接着聚合之前"回读的同一批
                 # trace 行（上下文已冻结，链路不再写库），窗口又按这批数据的首末分钟取，
-                # 所以同设备同窗口下两边**必须逐行相等**。
-                # ⚠️ 只在"分钟集合完全一致"时判：不一致时条数差异是上面那条判据的后果，
+                # 所以同设备同窗口下两边必须逐行相等。
+                # 只在"分钟集合完全一致"时判：不一致时条数差异是上面那条判据的后果，
                 #    再报一次 FAIL 属于重复计分（真正的病因由"聚合覆盖…"那条承担）。
                 #    若这里重新出现差值，先查 scope 是不是又丢/传错了 —— 别当成噪声放过。
                 rep_total = sum(int(r[-1]) for r in got)
@@ -540,9 +540,9 @@ def main() -> int:
         if not listened:
             _skip("重发同一条报文后库行数不变", "没有旁听到报文")
         else:
-            # ⚠️ 不能用"总行数不变"来断言：链路仍在采集，重投期间本来就会长出新样本
+            # 不能用"总行数不变"来断言：链路仍在采集，重投期间本来就会长出新样本
             #    （实测 7 → 9 里那 2 条是新样本，不是重投产生的重复）。
-            #    改用**时间戳集合**判断，只关心"重投的那条有没有造成重复行"：
+            #    改用时间戳集合判断，只关心"重投的那条有没有造成重复行"：
             from src.common.alarm_judge import normalize_ts
             from src.platform.subscriber_to_td import parse_timestamp
 
@@ -584,7 +584,7 @@ def main() -> int:
             events = 0
             for r in rows:
                 ts = str(r[0])
-                # values 按**测点名**（与 MQTT 报文一致）；refs 按**库列名**（dust/so2/nox）
+                # values 按测点名（与 MQTT 报文一致）；refs 按库列名（dust/so2/nox）
                 values = {p.name: float(r[1 + i]) for i, p in enumerate(POINTS)}
                 refs = {
                     column: to_reference_o2(values[COLUMN_TO_NAME[column]], values["O2"])
@@ -604,7 +604,7 @@ def main() -> int:
             if not rows:
                 _check(False, "HJ212 编码→解码往返一致", "库里没有行")
             else:
-                # 用**库里真实入库的那一行**组装上报数据区（因子码 ← 测点契约），
+                # 用库里真实入库的那一行组装上报数据区（因子码 ← 测点契约），
                 # 而不是另造一组假值 —— 这样 T6 证明的是"库里的值能正确上报"
                 fields = tuple(
                     (CODES[p.name], f"{float(rows[0][1 + i]):.3f}")
@@ -612,7 +612,7 @@ def main() -> int:
                 )
                 packet = Packet(
                     qn="20261003000000001", st="31", cn="2011", pw="123456",
-                    # ⚠️ MN 只能是 0~9/A~F（24 位，表 3）：传字母会在 __post_init__ 被拒
+                    # MN 只能是 0~9/A~F（24 位，表 3）：传字母会在 __post_init__ 被拒
                     mn="0" * 24, flag=8,
                     region=DataRegion.from_fields(fields).raw,
                 )
@@ -643,9 +643,9 @@ def main() -> int:
             print("\n失败链路的临时容器日志（用于定位是哪一跳断的）：")
             run.dump_logs()
         print("\n清理临时链路与 trace 数据…")
-        run.unfreeze()          # ⚠️ pause 的容器要先恢复，否则 rm 可能带不走
+        run.unfreeze()          # pause 的容器要先恢复，否则 rm 可能带不走
         run.cleanup()
-        # ⚠️ 残留复核必须覆盖**四张表**（临时链路会写结论与告警行，见 cleanup 的说明）
+        # 残留复核必须覆盖四张表（临时链路会写结论与告警行，见 cleanup 的说明）
         totals = {}
         for stable in ("cems_data", "cems_hourly_verdict",
                        "cems_alarm_event", "cems_alarm_push"):

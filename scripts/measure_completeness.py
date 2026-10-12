@@ -98,11 +98,8 @@ def td_query(sql: str, timeout: float = 15.0) -> list[list[str]]:
 
 
 def fetch_timestamps(since: float, until: float, device: str = "") -> list[float]:
-    """按 ts 游标分页取回窗口内**指定设备**的全部时间戳（秒，整数）。
-
-    ⚠️ **必须带 device 谓词**：超级表里两台设备（外加压测标签）同时在写，
-    不带过滤时"实际条数"是所有设备之和，完整率会被算到 100% 以上。
-    """
+    """按 ts 游标分页取回窗口内指定设备的全部时间戳（秒，整数）。必须带 device 谓词：
+    超级表里两台设备同时在写，不带过滤时完整率会被算到 100% 以上。"""
     out: list[float] = []
     cursor = since
     where = device_predicate(device)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""验收自检：无法折算时的**传输哨兵值**（HJ 212-2025 §8.1.1 d)，不需要 Docker）。
+"""验收自检：无法折算时的传输哨兵值（HJ 212-2025 §8.1.1 d)，不需要 Docker）。
 
 用法：
     python scripts/verify_reference_sentinel.py
@@ -7,16 +7,16 @@
 输出四段证据：
     A. 契约层：O2 >= 21% 时 to_reference_o2() 仍返回 nan（数学语义）
        → to_transmit_value(nan) == 9999.99（协议语义）
-    B. 回归：O2 < 21% 的折算值与**改动前的算式逐位一致**（float.hex() 比对）
+    B. 回归：O2 < 21% 的折算值与改动前的算式逐位一致（float.hex() 比对）
     C. 接入层端到端（离线，不连 MQTT / TDengine）：
        reference_values() 仍是 nan，而 transmit_reference_values() /
        record_reference() / latest_reference_values() 三个出站出口都是哨兵值
     D. 结束码：全部通过 0，任一不通过 1（可直接进 CI）
 
-⚠️ 口径纪律（本脚本严格照做）：
+口径纪律（本脚本严格照做）：
     - 现行折算值一律调 points.to_reference_o2()，本脚本不重写公式；
       B 段的"改动前算式"只用于证明逐位一致，不是第二份实现
-    - 哨兵值是**协议编码值**，不参与判定：9999.99 大于任何限值，
+    - 哨兵值是协议编码值，不参与判定：9999.99 大于任何限值，
       本脚本同时反证"拿它判超标会误报"，把这条纪律钉死
     - 不新建 TDengine 列、不写库：折算值是导出量（见 points.py 顶部说明）
 """
@@ -59,7 +59,7 @@ def _check(condition: bool, description: str) -> None:
 
 
 def _legacy_reference(value: float, o2: float, o2_ref: float = O2_REFERENCE) -> float:
-    """**改动前**的算式原样复刻（仅 B 段逐位对照用，不是第二份实现）。"""
+    """改动前的算式原样复刻（仅 B 段逐位对照用，不是第二份实现）。"""
     denominator = 21.0 - o2
     if denominator <= 0.0:
         return float("nan")

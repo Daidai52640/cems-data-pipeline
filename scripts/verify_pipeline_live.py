@@ -12,7 +12,7 @@
     D. 结束码：全部通过 0，任一不通过 1
 
 ⚠️ --since 不是可选项而几乎是必须项：
-    库里同时存在**改造前**的纯随机数据（random.uniform）。
+    库里同时存在改造前的纯随机数据（random.uniform）。
     如果回看窗口跨过了切换时刻，A/C 两项会被旧数据的乱跳带偏
     —— 实测 5 分钟窗口里旧数据把 temp 相邻跳变拉到量程的 93%，
     而只看新数据时只有 1.2%。切换时刻取设备容器本次启动的时间：
@@ -90,14 +90,14 @@ def fetch_rows(
 ) -> tuple[list[str], list[list[Any]]]:
     """取最近 minutes 分钟的入库记录，按时间升序；since 非空时只保留其后的行。
 
-    ⚠️ **必须按设备 TAG 过滤**：数据表是"一台设备一条子表、共用一个超级表"的多设备模型，
+    必须按设备 TAG 过滤：数据表是"一台设备一条子表、共用一个超级表"的多设备模型，
     库里同时会有 device1/device2 两条曲线。不过滤的话本脚本会把两台设备的行混在一起，
     A（节奏）/ C（跳变）两项都会因为"两条曲线交替出现"而误判失败
     （实测：混读 max|Δflow| ≈ 量程 11.4%，按设备分开只有 0.39% / 0.43%）。
 
-    ⚠️ since 必须由**本脚本**过滤，不能写进 SQL：
+    since 必须由本脚本过滤，不能写进 SQL：
     TDengine 对 `WHERE ts >= NOW - 5m AND ts >= '2026-09-30 16:52:05'` 这种
-    双时间谓词会**静默忽略字面量那个**（实测返回的仍是全窗口数据），
+    双时间谓词会静默忽略字面量那个（实测返回的仍是全窗口数据），
     所以把筛选放在 Python 里做，结果可控。
     """
     scope = device if device else TD_DEVICE
@@ -168,7 +168,7 @@ def section_b_freshness(rows: list[list[Any]]) -> None:
 def section_c_step_size(columns: list[str], rows: list[list[Any]]) -> None:
     """C. 跳变幅度：相邻两条的差值应远小于量程（改造前是随机的，会大幅越界）。
 
-    除了判 PASS/FAIL，还把**最差的那一对**时间戳打出来：
+    除了判 PASS/FAIL，还把最差的那一对时间戳打出来：
     判定失败时能立刻看出是"信号真的在乱跳"还是"窗口跨到了改造前的数据"。
     """
     print("\n=== C. 相邻两条的跳变（连续两个采集周期 = 5 秒）===")
@@ -199,12 +199,12 @@ def section_c_step_size(columns: list[str], rows: list[list[Any]]) -> None:
 
 
 def section_d_exceedance(columns: list[str], rows: list[list[Any]]) -> None:
-    """D. 库里真实数据按**折算值**口径判超标（判定口径的真源是 points.to_reference_o2）。
+    """D. 库里真实数据按折算值口径判超标（判定口径的真源是 points.to_reference_o2）。
 
-    ⚠️ 折算值不存库：库里只有标干浓度 + 氧含量，折算在这里现算。
-       points.py 顶部已说明"折算值是导出量、不建列"，所以本段是**读取侧**计算，
+    折算值不存库：库里只有标干浓度 + 氧含量，折算在这里现算。
+       points.py 顶部已说明"折算值是导出量、不建列"，所以本段是读取侧计算，
        不会给 cems_data 加任何列。
-    ⚠️ 判定口径必须是折算值：标干值达标不代表达标（氧含量高于基准时折算会放大）。
+    判定口径必须是折算值：标干值达标不代表达标（氧含量高于基准时折算会放大）。
     """
     if "o2" not in columns:
         _check(False, "库里没有 o2 列，无法做折算口径判定")

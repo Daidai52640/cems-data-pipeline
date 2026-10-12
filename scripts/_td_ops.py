@@ -3,18 +3,18 @@
 
 设计约束（为什么这么写）：
 
-1. **一切 SQL 走容器内的 `taos` CLI，不走 taosAdapter REST。**
-   理由：REST 返回的 `ts` 是 **UTC ISO 字符串**（本项目在
+1. 一切 SQL 走容器内的 `taos` CLI，不走 taosAdapter REST。
+   理由：REST 返回的 `ts` 是 UTC ISO 字符串（本项目在
    `docs/工程完整度-nginx与redis.md` §8.2 第 10 条记录过由此造成的一次真实数据错位）。
-   容器内 CLI 直接按容器 TZ 展示，而本模块更进一步：**所有时间边界与分段键都用
-   `CAST(... AS BIGINT)` 取"纪元毫秒"**，两端比较的是同一个无量纲整数，
+   容器内 CLI 直接按容器 TZ 展示，而本模块更进一步：所有时间边界与分段键都用
+   `CAST(... AS BIGINT)` 取"纪元毫秒"，两端比较的是同一个无量纲整数，
    时区、容器时钟漂移都不会混进结果（时钟漂移见 `docs/reference/容器时钟漂移.md`）。
 
-2. **不假设容器名以外的东西。** 数据卷名一律从 `docker inspect` 里读，
+2. 不假设容器名以外的东西。数据卷名一律从 `docker inspect` 里读，
    不硬编码 —— 本机同时存在 `cems_tdengine-data` 与 `cems-tdengine-data` 两个卷
    （连字符 vs 下划线），硬编码会静默备到那个陈旧的孤儿卷上（见 README/manifest 的卷核对字段）。
 
-3. **本模块只读。** 没有任何写库语句；唯一的写操作由调用方在容器 `/tmp` 下做临时目录。
+3. 本模块只读。没有任何写库语句；唯一的写操作由调用方在容器 `/tmp` 下做临时目录。
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ TD_DB_DEFAULT: Final[str] = "cems"
 TD_STABLE_DEFAULT: Final[str] = "cems_data"
 
 # 业务列（与 src/common/points.py 的 COLUMNS 同源；tags 单列出来）。
-# ⚠️ 这里只是"做校验时要逐列比对"的清单，不参与写入，改它不影响链路契约。
+# 这里只是"做校验时要逐列比对"的清单，不参与写入，改它不影响链路契约。
 VALUE_COLUMNS: Final[tuple[str, ...]] = (
     "so2", "nox", "flow", "dust", "o2", "temp", "humidity", "pressure", "velocity",
 )
@@ -143,7 +143,7 @@ def wait_taos_ready(container: str, timeout: float = 180.0) -> tuple[bool, str]:
     """判据是"能真的查出库列表"，不是容器 healthy。
 
     临时实例没有 healthcheck，而 tdengine 镜像的 healthy 只代表进程活着；
-    能 `SHOW DATABASES` 才代表**可以开始恢复**，RTO 的起点才有意义。
+    能 `SHOW DATABASES` 才代表可以开始恢复，RTO 的起点才有意义。
     """
     deadline = time.time() + timeout
     last = ""
@@ -167,7 +167,7 @@ def parse_taos_table(text: str) -> list[list[str]]:
         <值>   |
         Query OK, N row(s) in set (...)
 
-    ⚠️ **0 行时 taos 根本不打表头与分隔行**，只回一句 `Query OK, 0 row(s) in set`。
+    ⚠️ 0 行时 taos 根本不打表头与分隔行，只回一句 `Query OK, 0 row(s) in set`。
     所以"找不到分隔行"必须判成空结果集，而不是解析失败
     （本项目在这里踩过一次：db_exists 对一个不存在的库直接抛异常）。
     """
@@ -239,7 +239,7 @@ def count_rows(container: str, db: str, stable: str,
 def ts_bounds(container: str, db: str, stable: str) -> tuple[int, int]:
     """首末时间戳（纪元毫秒）。
 
-    ⚠️ 不用 `MAX(ts)`/`MIN(ts)`：TDengine 3.3.6 对 `MAX(ts)` 报
+    不用 `MAX(ts)`/`MIN(ts)`：TDengine 3.3.6 对 `MAX(ts)` 报
     `Invalid data type: max`（项目在 scripts/measure_resend_success.py 里记过同一条），
     所以统一走 `ORDER BY ts LIMIT 1`。
     """
@@ -256,7 +256,7 @@ def segment_rows(container: str, db: str, stable: str, unit: str,
 
     返回 {"windows": {<桶起始ms>: {...}}, "n_windows": n, "total_rows": m}
 
-    ⚠️ 用 `FIRST(ts)/LAST(ts)` 而不是 `MIN(ts)/MAX(ts)`：TDengine 3.3.6 对
+    用 `FIRST(ts)/LAST(ts)` 而不是 `MIN(ts)/MAX(ts)`：TDengine 3.3.6 对
     timestamp 列不支持 MIN/MAX（报 `Invalid parameter data type : min`），
     而 FIRST/LAST 在 INTERVAL 查询里就是桶内首末时间戳（实测已核）。
     """
@@ -314,7 +314,7 @@ def tag_values(container: str, db: str, stable: str) -> list[list[str]]:
 # 卷（物理级）
 # --------------------------------------------------------------------------- #
 def resolve_mounts(container: str) -> list[dict[str, str]]:
-    """从运行中的容器读出**实际**挂载，绝不硬编码卷名。"""
+    """从运行中的容器读出实际挂载，绝不硬编码卷名。"""
     proc = run(["docker", "inspect", container, "--format", "{{json .Mounts}}"], check=True)
     mounts = json.loads(proc.stdout)
     return [

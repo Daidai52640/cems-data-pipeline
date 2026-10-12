@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """验收自检：报表接口的"覆盖率 + 样本不足"标记（只读，走 HTTP，不改任何数据）。
 
-被验的对象是**拔线演练暴露的真实缺陷**：数据缺口在报表里是"消失"的，而不是"被标记"的。
-本脚本用库里 2026-10-01 21:26 那一段**真实断档**做回归，逐条断言：
+被验的对象是拔线演练暴露的真实缺陷：数据缺口在报表里是"消失"的，而不是"被标记"的。
+本脚本用库里 2026-10-01 21:26 那一段真实断档做回归，逐条断言：
 
-  A. 断档窗口必须**出现在结果里**：21:26 ⇒ n=0、coverage=0.0、insufficient=true
+  A. 断档窗口必须出现在结果里：21:26 ⇒ n=0、coverage=0.0、insufficient=true
   B. 断档两侧：21:24（11 条）coverage=0.9167 不判不足；
-     21:27（9 条）coverage=0.75 **正好等于门限**⇒ 按"覆盖率 < 门限"的口径不判不足
+     21:27（9 条）coverage=0.75 正好等于门限⇒ 按"覆盖率 < 门限"的口径不判不足
      （与 docs/adr/0002-告警判据选型.md §3.4 的 `覆盖率 < 门限` 一致：等于门限不算不足）
   C. 正常窗口不被误标：21:28（12 条）coverage=1.0、insufficient=false
   D. envelope 汇总自洽：窗口数/不足窗口数/整体覆盖率/缺口清单互相对得上，
@@ -24,21 +24,21 @@
 设备维度（这段的 SQL 必须按设备过滤）
 -----------------------------------------------------------------------------
 `cems_data` 是多设备共用的超级表（TAG = plant/device），两台设备在同时写。
-下面那段**前置核查 SQL 必须带 `device = '<scope>'`**：不带过滤时同一分钟的
+下面那段前置核查 SQL 必须带 `device = '<scope>'`：不带过滤时同一分钟的
 COUNT(*) 会把两台设备（外加压测标签）的行一起算上，断档分钟被另一台的数据填满，
 "确认 21:26 那一分钟不返回"的核查结论会直接反过来
 （实测 2026-10-02 最近 60 分钟同一段聚合：不过滤合计 1372 行，按 device1 = 714 行、
 device2 = 658 行，混读正好是两台之和）。
 
-⚠️ 本脚本验的是**展示层接口**，而接口的查询在服务端就已经按设备过滤了
+⚠️ 本脚本验的是展示层接口，而接口的查询在服务端就已经按设备过滤了
 （`src/web/report.py` 从 `cache.DEVICE_SCOPE_PARTS` 取 plant/device，
-值来自 web 容器的 `TD_PLANT`/`TD_DEVICE`）。所以这里**没有**、也不该有
+值来自 web 容器的 `TD_PLANT`/`TD_DEVICE`）。所以这里没有、也不该有
 `AND device = ...` —— HTTP 层压根没有设备参数，加了只会制造"以为按设备查了"的假象。
 替代做法：用 `--device` 声明"我期望验的是哪台设备"，脚本会读 web 实例
-`/api/cache/stats` 的 `device_scope` 核对，**不一致就直接失败**，
+`/api/cache/stats` 的 `device_scope` 核对，不一致就直接失败，
 避免拿着 device1 的接口结果去证明 device2 的覆盖率。
 
-前置：断档区间必须真的在**被测设备**的库里（先跑一次
+前置：断档区间必须真的在被测设备的库里（先跑一次
       docker exec tdengine taos -s "SELECT _wstart, COUNT(*) FROM cems.cems_data
         WHERE ts >= '2026-10-01 21:24:00' AND ts < '2026-10-01 21:29:00'
           AND device = 'device1' INTERVAL(1m)"
@@ -57,9 +57,9 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Final
 
-# ⚠️ Windows 控制台默认代码页是 GBK，而下面的报告里用了 ⚠/⇒ 这类字符 ——
+# Windows 控制台默认代码页是 GBK，而下面的报告里用了 ⚠/⇒ 这类字符 ——
 #    输出被重定向/被捕获时（`python ... > log`、`... | Select-Object`）会抛
-#    `UnicodeEncodeError: 'gbk' codec can't encode character`，**在能报结论之前就崩**。
+#    `UnicodeEncodeError: 'gbk' codec can't encode character`，在能报结论之前就崩。
 #    这里显式把 stdout/stderr 重配成 UTF-8，errors="replace" 兜底，绝不因为编码再崩。
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -142,7 +142,7 @@ def section_0_device_scope(device: str) -> None:
     不核对服务端 scope，就可能拿 device1 的接口结果去声称"device2 覆盖率达标"。
 
     读 `/api/cache/stats` 的 `device_scope`（直连 web 容器：nginx 不转发该路径）。
-    取不到就**跳过**而不是判失败 —— 直接连 5001 的场景是可选的，
+    取不到就跳过而不是判失败 —— 直接连 5001 的场景是可选的，
     缺这条元数据不代表覆盖率断言本身失效（诚实写明，不假装验过）。
     """
     print("\n=== 0. 设备维度自检（HTTP 接口的服务端 scope）===")
