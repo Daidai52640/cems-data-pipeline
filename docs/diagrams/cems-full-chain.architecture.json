@@ -36,7 +36,8 @@
         {
           "path": "src/device/modbus_server.py",
           "line": 497,
-          "label": "main / StartTcpServer"
+          "label": "main / StartTcpServer",
+          "end_line": 597
         },
         {
           "path": "src/device/simulator.py",
@@ -255,8 +256,9 @@
         },
         {
           "path": "src/common/alarm_judge.py",
-          "line": 754,
-          "label": "3 张告警超级表"
+          "line": 751,
+          "label": "3 张告警超级表",
+          "end_line": 768
         },
         {
           "path": "src/platform/subscriber_to_td.py",
