@@ -1,12 +1,12 @@
-"""甲方口径最小验收：只验"出钱的人会在乎的 8 条"，每条给出可复算的证据。
+"""最小验收：只验"使用方会在乎的 8 条"，每条给出可复算的证据。
 
 与仓库里其它脚本的分工（不要重复，也不要互相替代）：
   · scripts/verify_data_lineage.py —— 工程师口径的逐跳血缘（T1~T8，起临时链路）
   · scripts/verify_alarm_offline.py / verify_report_coverage.py —— 单点深挖
-  · **本脚本** —— 甲方口径：站在"验收会上"的位置，用**正在运行的真实实例**回答
+  · **本脚本** —— 验收口径：站在使用方的位置，用**正在运行的真实实例**回答
     "东西到底能不能用"，不构造场景、不改配置、只读 + 只算。
 
-八条判据（对应的甲方语言见 ACCEPTANCE.md §2）：
+八条判据（对应的非技术语言见 ACCEPTANCE.md §2）：
   A1 采集不间断：两台设备各自都有"当前这一分钟"的新数据（不是历史留存）
   A2 数据不被改：库里每一行逐字段等于按同一公式复算出来的值（含量程合法性）
   A3 两台设备不串：同一时刻两台设备的读数不是同一份镜像
@@ -73,7 +73,7 @@ RESULTS: list[dict[str, Any]] = []
 # ==================== 小工具 ====================
 
 def _check(item: str, ok: bool, claim: str, evidence: str) -> bool:
-    """登记一条判据结果。claim = 甲方能看懂的一句结论；evidence = 可复算的数字。"""
+    """登记一条判据结果。claim = 使用方能看懂的一句结论；evidence = 可复算的数字。"""
     RESULTS.append({"item": item, "pass": bool(ok), "claim": claim, "evidence": evidence})
     print(f"  [{'PASS' if ok else 'FAIL'}] {claim}\n         证据：{evidence}")
     return bool(ok)
@@ -218,7 +218,7 @@ def a2_values_faithful() -> None:
         "A2", not bad_round, "数值精度符合契约（FLOAT 列，无异常位数）",
         f"小数位异常 {len(bad_round)} 个" + (f"：{bad_round[:2]}" if bad_round else ""),
     )
-    # 9 个测点是否齐全（甲方最怕"少了几列没人发现"）
+    # 9 个测点是否齐全（最怕"少了几列没人发现"）
     complete_rows = 0
     for row in rows:
         if len(row) < 3 + len(POINTS):
@@ -606,14 +606,14 @@ SECTIONS = {
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="甲方口径最小验收（只读）")
+    parser = argparse.ArgumentParser(description="最小验收（只读）")
     parser.add_argument("--only", nargs="*", choices=sorted(SECTIONS),
                         help="只跑指定的几条（默认全部）")
     parser.add_argument("--json", type=Path, default=None, help="把结果落一份 JSON")
     args = parser.parse_args()
 
     print("=" * 62)
-    print("甲方口径最小验收（只读，不改任何东西）")
+    print("最小验收（只读，不改任何东西）")
     print(f"时间：{datetime.now():%Y-%m-%d %H:%M:%S}　库：{TD_DB}.{TD_STABLE}　"
           f"入口：{WEB_URL}")
     print("=" * 62)

@@ -70,7 +70,7 @@
 
 | 文件 | 一句话用途 | 关键参数 / 用法 |
 |---|---|---|
-| `acceptance_min.py` | 甲方口径最小验收：只验"出钱的人会在乎的 8 条"（A1~A8），每条给出可复算证据。 | `--only A1 A3` 只跑指定几条；`--json out.json` 落机读结果。只读，不构造场景。 |
+| `acceptance_min.py` | 最小验收：只验"使用方会在乎的 8 条"（A1~A8），每条给出可复算证据。 | `--only A1 A3` 只跑指定几条；`--json out.json` 落机读结果。只读，不构造场景。 |
 | `analyze_gateway_resend_lag.py` | 从网关日志量"缓存→补传"滞后（单时钟口径），并统计走补传路径的条目占比。 | `--log-file`（不给就现场 `docker logs`）、`--container cems-gateway`、`--since`、`--tag resend_lag`。 |
 | `sim_trace_dump.py` | 子进程工具（验收类的一员）：按固定假时钟输出一整段仿真读数（JSON 行），供 `verify_sim_reproducible.py` 做跨进程比对。 | `python scripts/sim_trace_dump.py [种子] [起始时刻] [点数]`。不单独使用。 |
 | `verify_alarm_live.py` | 排放超标告警线上验收：在八服务运行时查真库，验 L1~L7（三张表、事件成对、判定快照、推送一一对应、幂等、小时结论、判据统计日志）。 | `--since "2026-10-02 18:26:00"`、`--device device1`。**只读**，可反复跑。 |

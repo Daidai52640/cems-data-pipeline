@@ -13,7 +13,7 @@
 | `drill/` | 43 | 补传 / 恢复 / 时区演练的逐次台账与汇总 | `resend_*`（对账台账 + 缓存快照，含 before/after）、`gateway_resend_*`（滞后与占比）、`tdengine_restore_drill_*`（单设备逐次 + 汇总）、`emqx_restart_*`（1A/1B 对账，**含 `_run{1,2,3}_logs_*.txt` 原始日志导出**）、`dual_device_*`、`gateway_preflight_*` |
 | `cache/` | 8 | nginx + redis 缓存与一次真实数据错位的留档 | `nginx_redis_run1.json`、`cache_invalidation_drill.json`、`atomic_handover_probe.json`、`_incident_20261001_timestamp_shift_repair.py`、`_show_ab.py` |
 | `backup/` | 16 | 备份自检标定 + **2026-10-03 双设备复验批次** | `backup_selfcheck_scope_*.json`（`scripts/verify_backup_selfcheck_scope.py` 的产出落点）、`dual_device_restore_drill_*`（双设备 RTO 复验 n=3）、`tdengine_restore_drill_*_dual_*`（改名/物理/整表级复验）、`tz_misconfig_drill_*`（时区演练）、`verify_sim_*_tzfix/diurnal_*`（时区修复后的仿真复验）、`emqx_status_watch_*.csv`（§10.6 broker 状态采样） |
-| ⭐ `acceptance/` | 1 | **甲方口径验收的机器产出** | `acceptance_min.json`（`scripts/acceptance_min.py` 的落点；2026-10-12 前此目录**整目录漏登**，见下） |
+| ⭐ `acceptance/` | 1 | **验收的机器产出** | `acceptance_min.json`（`scripts/acceptance_min.py` 的落点；2026-10-12 前此目录**整目录漏登**，见下） |
 | ⭐ `baseline-v2/` | 4 | **基线 v2 冻结时的原始产物** | 大屏"数据新鲜度"正常态 / 超时态截图 + 逐项证据文本（`runbooks/真机接入-基线冻结v2.md` §5.2 引用） |
 | `coverage/` | 1 | 报表覆盖率标定 | `report_coverage_calibration.json` |
 | ⭐ `edge/` | 13 | **边缘侧部署形态证据**（2026-10-11 新增；⚠️ 本地另有 6 份运行产物） | `resource-24h.csv`（**跨夜 12.93 小时**的容器资源采样，每 30 s 一点）、`resource-summary.json`（汇总）、`stability_soak.md`（稳定性长跑结论）、`edge_autonomy_linkcut_*.{txt,json}`（断链自治原始输出 + 逐条对账）、`edge_autonomy_crash_*.{txt,json}`（崩溃自愈）、`edge_linkcut_queue_snapshot_*.txt`（断链期间落盘队列原文） |
