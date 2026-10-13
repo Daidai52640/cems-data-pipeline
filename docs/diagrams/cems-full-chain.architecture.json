@@ -10,7 +10,7 @@
       "url": "https://github.com/Daidai52640/cems-data-pipeline.git",
       "provider": "github",
       "link_mode": "local-only",
-      "revision": "2eb9a0c9a98888ffa644781294b0140df1bd00e9"
+      "revision": "bb97c1b0afaa3302107c3ea8c6dac915613b7a27"
     }
   },
   "components": [
@@ -30,18 +30,17 @@
       "sources": [
         {
           "path": "src/device/modbus_server.py",
-          "line": 95,
+          "line": 94,
           "label": "SLAVE_IDS 解析"
         },
         {
           "path": "src/device/modbus_server.py",
-          "line": 485,
-          "end_line": 563,
+          "line": 497,
           "label": "main / StartTcpServer"
         },
         {
           "path": "src/device/simulator.py",
-          "line": 584,
+          "line": 570,
           "label": "sample（正弦+日周期+噪声）"
         }
       ]
@@ -63,7 +62,6 @@
         {
           "path": "src/gateway/gateway.py",
           "line": 662,
-          "end_line": 764,
           "label": "main（读→发→缓存）"
         },
         {
@@ -120,8 +118,8 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 379,
-          "end_line": 409,
+          "line": 396,
+          "end_line": 410,
           "label": "gateway2 服务（profile）"
         },
         {
@@ -147,7 +145,7 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 393,
+          "line": 410,
           "label": "GATEWAY_DATA_DIR 每实例一份"
         },
         {
@@ -173,8 +171,8 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 233,
-          "end_line": 242,
+          "line": 242,
+          "end_line": 255,
           "label": "离线队列 20000 / 会话 24 h / 落盘"
         }
       ]
@@ -195,17 +193,17 @@
       "sources": [
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 1527,
+          "line": 1601,
           "label": "on_message（校验+入库+判告警）"
         },
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 1617,
+          "line": 1824,
           "label": "main"
         },
         {
           "path": "src/common/alarm_judge.py",
-          "line": 640,
+          "line": 603,
           "label": "judge_hour 小时结算"
         }
       ]
@@ -226,7 +224,7 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 427,
+          "line": 449,
           "label": "subscriber2 服务（profile）"
         },
         {
@@ -257,13 +255,12 @@
         },
         {
           "path": "src/common/alarm_judge.py",
-          "line": 798,
-          "end_line": 813,
+          "line": 754,
           "label": "3 张告警超级表"
         },
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 132,
+          "line": 134,
           "label": "KEEP 365d"
         }
       ]
@@ -289,8 +286,8 @@
         },
         {
           "path": "scripts/backup_tdengine.py",
-          "line": 281,
-          "end_line": 282,
+          "line": 366,
+          "end_line": 394,
           "label": "do_physical_copy 卷级 tar"
         }
       ]
@@ -311,17 +308,17 @@
       "sources": [
         {
           "path": "src/web/web_dashboard.py",
-          "line": 212,
+          "line": 326,
           "label": "/api/data 曲线"
         },
         {
           "path": "src/web/web_dashboard.py",
-          "line": 383,
+          "line": 377,
           "label": "/api/health 新鲜度 200/503"
         },
         {
           "path": "src/web/web_dashboard.py",
-          "line": 619,
+          "line": 598,
           "label": "/api/report/export"
         }
       ]
@@ -342,13 +339,13 @@
       "sources": [
         {
           "path": "src/web/cache.py",
-          "line": 451,
+          "line": 414,
           "label": "_closure 只缓存闭合窗口"
         },
         {
           "path": "docker-compose.yml",
-          "line": 445,
-          "end_line": 482,
+          "line": 489,
+          "end_line": 494,
           "label": "allkeys-lru / 不持久化"
         }
       ]
@@ -379,8 +376,7 @@
         },
         {
           "path": "docker-compose.yml",
-          "line": 483,
-          "end_line": 516,
+          "line": 511,
           "label": "nginx 服务"
         }
       ]
@@ -415,17 +411,17 @@
       "sources": [
         {
           "path": "src/protocol/adapter.py",
-          "line": 265,
+          "line": 234,
           "label": "Hj212Adapter"
         },
         {
           "path": "src/protocol/adapter.py",
-          "line": 378,
+          "line": 342,
           "label": "ModbusTcpAdapter"
         },
         {
           "path": "src/protocol/adapter.py",
-          "line": 442,
+          "line": 406,
           "label": "build_adapter 三出口"
         }
       ]
@@ -434,7 +430,7 @@
       "id": "spool1",
       "type": "database",
       "label": "落盘队列 1",
-      "sublabel": "写库失败先落盘 · 入库成功才删",
+      "sublabel": "写库失败先落盘 · 入库才删",
       "pos": [
         962,
         255
@@ -442,13 +438,25 @@
       "size": [
         160,
         60
+      ],
+      "sources": [
+        {
+          "path": "src/platform/ingest_spool.py",
+          "line": 2,
+          "label": "写库失败先落盘、恢复后补传、入库成功才删"
+        },
+        {
+          "path": "docker-compose.yml",
+          "line": 438,
+          "label": "SUBSCRIBER_DATA_DIR=/app/data/subscriber"
+        }
       ]
     },
     {
       "id": "spool2",
       "type": "database",
       "label": "落盘队列 2",
-      "sublabel": "每实例一份 · 补传幂等",
+      "sublabel": "同上 · 各一份（不可共用）",
       "pos": [
         962,
         375
@@ -456,6 +464,18 @@
       "size": [
         160,
         60
+      ],
+      "sources": [
+        {
+          "path": "docker-compose.yml",
+          "line": 461,
+          "label": "SUBSCRIBER_DATA_DIR=/app/data-plant2/subscriber"
+        },
+        {
+          "path": "docs/reference/配置项全表.md",
+          "line": 129,
+          "label": "两实例共用会拿自己的标签写对方的报文"
+        }
       ]
     }
   ],
