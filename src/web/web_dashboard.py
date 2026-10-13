@@ -26,8 +26,10 @@ PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.common.alarm_judge import AlarmConfig   # noqa: E402
 from src.common.logging import setup_logging   # noqa: E402
 from src.common.points import COLUMNS   # noqa: E402
+from src.common.points import O2_DRY_BASIS, O2_REFERENCE, ZS_TARGETS   # noqa: E402
 from src.common.points import POINTS as CONTRACT_POINTS   # noqa: E402
 from src.web import report   # noqa: E402
 from src.web import report_export   # noqa: E402
@@ -90,6 +92,29 @@ def build_point_views_json() -> str:
 
 
 POINT_VIEWS_JSON: Final[str] = build_point_views_json()
+
+
+def build_contract_consts_json() -> str:
+    """生成前端要用的契约常量（限值 / 基准氧 / 折算分母下限），避免前端手抄。
+
+    为什么必须注入而不是让前端写死：这些数字抄一份就不会跟着契约变。
+    改基准氧（不同炉型不同）或改分母下限时，后端改了、前端还留着老数字，
+    结果就是"后端判超标、前端显示达标"—— 和"折算值落库会漂"是同一类失效。
+
+      限值      ← src/common/points.py 的 Point.limit（只取 ZS_TARGETS 三个折算对象）
+      基准氧/干基氧 ← 同上的 O2_REFERENCE / O2_DRY_BASIS
+      分母下限  ← alarm_judge 的判定门限，与 (O2_DRY_BASIS - o2) < 它 用同一个值
+    """
+    return json.dumps({
+        "zsLimits": {p.column: p.limit for p in CONTRACT_POINTS if p.column in ZS_TARGETS},
+        "zsKeys": list(ZS_TARGETS),
+        "o2DryBasis": O2_DRY_BASIS,
+        "o2Reference": O2_REFERENCE,
+        "o2DenomMin": AlarmConfig.from_env().o2_denominator_min,
+    }, ensure_ascii=False)
+
+
+CONTRACT_CONSTS_JSON: Final[str] = build_contract_consts_json()
 
 
 def build_panels_json() -> str:
@@ -448,6 +473,7 @@ def _render_page(template: str) -> Response:
         .replace("__REFRESH_SEC__", str(REFRESH_SECONDS))
         .replace("__POINTS_JSON__", POINT_VIEWS_JSON)
         .replace("__PANELS_JSON__", PANELS_JSON)
+        .replace("__CONTRACT_CONSTS_JSON__", CONTRACT_CONSTS_JSON)
         .replace("__POINT_COUNT__", str(len(POINTS)))
         # 新鲜度阈值只注入一个数：判据实现留在服务端，前端只负责上色
         .replace("__FRESHNESS_WARN__", str(FRESHNESS_WARN_SECONDS))
@@ -706,10 +732,6 @@ HTML_PAGE = """<!DOCTYPE html>
   // 单次请求超时：fetch 默认不会超时，请求卡住时 finally 不执行、轮询会悄悄停掉
   var FETCH_TIMEOUT_MS = 15000;
   var AXIS_STYLE = { color: '#94a3b8' };
-  // ---- 折算值 / 超标判据（与 src/common/points.py 同源：基准氧 6%，21-6=15；限值 5/35/50）----
-  var ZS_MAP = { dust: true, so2: true, nox: true };
-  var ZS_LIMITS = { dust: 5, so2: 35, nox: 50 };
-  var O2_FOR_ZS_MAX = 19;
   var COLOR_OVER = '#f87171';
   function isFiniteNum(v) {
     return typeof v === 'number' && isFinite(v);
@@ -1222,8 +1244,9 @@ TABLE_PAGE = """<!DOCTYPE html>
 (function() {
   var REFRESH_SEC = __REFRESH_SEC__;
   var POINTS = __POINTS_JSON__;
-  var ZS_LIMIT = { dust:5, so2:35, nox:50 };       // 与后端 points.py 的限值同源口径
-  var O2_FOR_ZS_MAX = 19;
+  // 折算值有关的数字全部由后端注入，本页不手抄（真源 points.py + alarm_judge 的判定门限）
+  var CC = __CONTRACT_CONSTS_JSON__;
+  var ZS_LIMIT = CC.zsLimits;
   var GROUPS = [
     { title:'颗粒物',   unit:'mg/m3', key:'dust' },
     { title:'二氧化硫', unit:'mg/m3', key:'so2'  },
@@ -1249,8 +1272,10 @@ TABLE_PAGE = """<!DOCTYPE html>
   function toConverted(key, measured, o2) {
     if (measured === null || measured === undefined) { return null; }
     if (o2 === null || o2 === undefined) { return null; }
-    if (o2 >= O2_FOR_ZS_MAX) { return null; }
-    return measured * 15 / (21 - o2);
+    // 与判定层同一条判据：(干基氧 - 实测氧) < 分母下限 ⇒ 放大倍数过大，折算不可信，不显示。
+    // 不用 "o2 >= 某常数"：那个常数是手算出来的，改了 ALARM_O2_DENOM_MIN 就不会跟着变。
+    if (CC.o2DryBasis - o2 < CC.o2DenomMin) { return null; }
+    return measured * (CC.o2DryBasis - CC.o2Reference) / (CC.o2DryBasis - o2);
   }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function toLocalInput(d) {

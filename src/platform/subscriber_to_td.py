@@ -1435,11 +1435,13 @@ def hourly_settlement_loop(
 #   record_reference() 记录的是②（往外报的那一份）；抽样日志也打②。
 #   判定/统计必须用①：哨兵值 9999.99 大于任何限值，拿它比限值必然误报。
 #
-# 全仓库唯一调用 points.to_reference_o2() 的地方就是 reference_values()：
-#   - 只有它算折算值，别处要折算就调它 / 取最近值快照，不许再推一遍公式
+# 折算公式只有一份实现（points.to_reference_o2），别处不许再推一遍：
+#   - 调它的地方：本函数的 reference_values()、alarm_judge 的小时结算重算、
+#     report_export 的导出 —— 都是调用，不是各自写一份公式
 #   - 折算值不写库、不进寄存器（导出量，存了会漂）
 #   - O2 >= 21% 时 to_reference_o2() 返回 nan（分母 <= 0，折算无物理意义），
 #     这里原样透出，不绕过、不当 0；要出站再走②编码
+#   - 展示层要用的限值与基准氧也是注入的（web_dashboard 注入给前端），前端同样不手抄
 
 # 最近一条已成功入库数据的传输值快照（含时间戳）；读接口返回副本
 LAST_REFERENCE: Final[dict[str, Any]] = {"ts": "", "values": {}}
