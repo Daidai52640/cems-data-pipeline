@@ -1,6 +1,6 @@
 """HJ 212—2025 报文编解码（P1）。
 
-报文结构（§6.3.2 表 2 + §6.3.3 表 3）::
+报文结构（§6.3.2 表 2 + §6.3.3 表 3，PDF 第 9 页）::
 
     ## + 数据段长度(4 位十进制) + 数据段 + CRC(4 位十六进制) + \\r\\n
     数据段 = QN=…;ST=…;CN=…;PW=…;MN=…;Flag=…;[PNUM=…;PNO=…;][RF=1;]CP=&&…&&
@@ -390,7 +390,7 @@ def decode_packet(raw: str, *, key: bytes | None = None) -> DecodedPacket:
         raise StructuralError(f"CRC 字段必须是 4 位十六进制：{crc_hex!r}")
 
     # 长度字段口径 = 数据段字符数（不含 CRC）。
-    # 经附录 A.1（##0087 → 87 字符数据段）和附录 A.2（0295 = 80+5+208+2）两个官方向量交叉验证。
+    # 经附录 A.1（##0087 → 87 字符数据段，PDF 第 32 页）和附录 A.2（0295 = 80+5+208+2）两个官方向量交叉验证。
     length_matches = declared == len(segment)
 
     packet = Packet.from_data_segment(segment)

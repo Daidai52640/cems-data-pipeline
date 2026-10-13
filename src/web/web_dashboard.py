@@ -126,6 +126,10 @@ WEB_THREADS: Final[int] = int(os.getenv("WEB_THREADS", "8"))   # waitress 工作
 # 判据是数据新鲜度，不是"库连得上"。原来只看连接，于是网关断/补传堵/不入库/
 # 线程死/tag拼错恒0行 这些故障全 200+ok、容器 healthy、无告警。
 # 阈值 = 轮询周期 × 因子（默认 5.0s × 3 = 15s）：允许连续丢 2 条不误报。
+# 周期真源是网关的 POLL_INTERVAL（单设备/双设备实测都在 11~12 条/分钟 ≈ 5s 一条），
+# web 侧的覆盖率口径（src/web/report.py）已经在用同一个变量，这里沿用同一个。
+# 因子取 3 的依据：本机实测间隔均值 5.15s，15s 有 2.9 倍余量（见
+# docs/reference/性能与可靠性指标.md §4.2）；同时远小于"人工发现不了"的量级。
 POLL_INTERVAL_SECONDS: Final[float] = float(os.getenv("POLL_INTERVAL", "5.0"))
 HEALTH_STALE_POLL_FACTOR: Final[int] = int(os.getenv("HEALTH_STALE_POLL_FACTOR", "3"))
 HEALTH_STALE_AFTER_SECONDS: Final[float] = POLL_INTERVAL_SECONDS * HEALTH_STALE_POLL_FACTOR

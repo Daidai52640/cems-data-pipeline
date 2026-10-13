@@ -24,14 +24,14 @@ from .crc16 import crc16_hex
 #: SM4 分组长度（字节 / 字符）。标准：16 字节（128 位）密钥，分组同为 16 字节。
 BLOCK_SIZE: Final[int] = 16
 
-#: 密钥长度，标准 §6.4.2 规定 16 字节。
+#: 密钥长度，标准 §6.4.2 规定 16 字节（PDF 第 13 页）。
 KEY_SIZE: Final[int] = BLOCK_SIZE
 
 #: 加密区在数据段中的边界。
 CP_PREFIX: Final[str] = "CP=&&"
 REGION_SUFFIX: Final[str] = "&&"
 
-#: 附录 A.2 使用的公开测试密钥："密钥使用16个0x30"。
+#: 附录 A.2 使用的公开测试密钥："密钥使用16个0x30"（PDF 第 32 页）。
 OFFICIAL_TEST_KEY: Final[bytes] = bytes([0x30] * BLOCK_SIZE)
 
 

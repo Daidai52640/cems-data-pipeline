@@ -17,19 +17,19 @@ from typing import Final
 from .crypto import OFFICIAL_TEST_KEY
 from .flags import CURRENT_STANDARD_VERSION, build_flag
 
-#: §6.7.1 表 7：大气环境污染源。
+#: §6.7.1 表 7（PDF 第 17–18 页）：大气环境污染源。
 ST_ATMOSPHERIC_SOURCE: Final[str] = "31"
 #: 表 7：地表水体环境污染源（本项目不做水，列出仅供对照）。
 ST_SURFACE_WATER_SOURCE: Final[str] = "32"
 
-#: §6.7.5 表 12：上传污染物实时数据。
+#: §6.7.5 表 12（PDF 第 21 页）：上传污染物实时数据。
 CN_UPLOAD_REALTIME: Final[str] = "2011"
 #: 表 12：上传污染物分钟数据。
 CN_UPLOAD_MINUTE: Final[str] = "2051"
 #: 表 12：取污染物实时数据（请求命令）。
 CN_REQUEST_REALTIME: Final[str] = "2011"
 
-#: §6.4.4：命令编码 2000～2999 的现场机→上位机数据命令应加密。
+#: §6.4.4（PDF 第 13 页）：命令编码 2000～2999 的现场机→上位机数据命令应加密。
 ENCRYPTED_CN_RANGE: Final[tuple[int, int]] = (2000, 2999)
 #: §6.4.4：获取/设置新密钥命令与现场机信息上报也应加密。
 ENCRYPTED_CN_EXTRA: Final[frozenset[str]] = frozenset({"1014", "3020"})

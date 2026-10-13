@@ -390,6 +390,8 @@ class AlarmJudge:
         trigger_ts)。最后一条 phase 是 start/remind → 仍 OPEN 继续累计（不重发 START）；
         是 end → 已闭合；invalid 行不改变 OPEN/CLOSED 状态。
         同时用全部行的最大 ts 作为时间水位，重投同一条报文不会改状态。
+        恢复的 start_ts 从 event_id 里解析（point|judge_type|start_ts），
+        last_notify_ts 用该行的 ts 近似（≤ 一个滑窗的误差，只影响 remind 的最早时刻）。
         """
         folded = 0
         for row in rows:

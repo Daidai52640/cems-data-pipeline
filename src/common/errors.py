@@ -56,7 +56,8 @@ class PayloadFormatError(CemsError):
 class PointInvalidKind(str, Enum):
     """单点不可用的四种原因 —— 关键是"丢"与"留"必须可区分（ADR-0009 §10.1）。
 
-    两者处置可能不同：MISSING 根因通常在采集侧（网关读不到寄存器），INVALID 在数据侧。
+    两者处置可能不同：MISSING 与 INVALID 这两种"丢"必须分开 —— MISSING 根因通常在采集侧
+    （网关读不到寄存器），INVALID 在数据侧。
     ADR-0010 再切一刀：可疑 ≠ 无效 ——
 
     | 判据 | kind | stored | 处置 |
