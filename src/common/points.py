@@ -75,6 +75,16 @@ class Point(NamedTuple):
     endian: str = "AB"              # 线上字节序：16 位 AB/BA；32 位 ABCD/CDAB/BADC/DCBA
     addr_notation: str = "0-based"  # address 的记法：0-based / 40001-style / 1-based
 
+    # ---- 南向第二种协议：OPC UA 节点地址（2026-10-14 新增，默认空 = 不参与）----
+    # 为什么放在契约里而不是网关的环境变量里：测点地址的唯一真源必须是 points.py。
+    # 若把 NodeId 放到 .env，同一个测点就会有两份"地址"（寄存器地址在契约、节点地址在环境），
+    # addr_notation/dtype 当初加进来就是为了避免这种分裂（见 ADR-0001 后续修订）。
+    #
+    # 格式：OPC UA 标准的 NodeId 字符串，"ns=<命名空间索引>;<类型>=<标识>"，
+    # 类型取 i(数值)/s(字符串)/g(GUID)/b(字节串)，例如 "ns=2;s=Boiler1.Temp"。
+    # 空字符串表示"这个测点不来自 OPC UA"，parse_node_id() 会拒绝空值。
+    opcua_node_id: str = ""
+
 
 # ---- 全链路唯一真源：加/改测点只改这里 ----
 #
@@ -133,6 +143,10 @@ DTYPES: Final[dict[str, str]] = {point.name: point.dtype for point in POINTS}
 ENDIANS: Final[dict[str, str]] = {point.name: point.endian for point in POINTS}
 ADDR_NOTATIONS: Final[dict[str, str]] = {
     point.name: point.addr_notation for point in POINTS
+}
+#: 测点 → OPC UA NodeId。只收非空的（空 = 该测点不走 OPC UA），所以 Modbus-only 部署下是空表。
+OPCUA_NODE_IDS: Final[dict[str, str]] = {
+    point.name: point.opcua_node_id for point in POINTS if point.opcua_node_id
 }
 REG_COUNT: Final[int] = max(point.address for point in POINTS) + 1
 
@@ -447,6 +461,9 @@ def over_limit(name: str, value: float) -> bool:
 #: 而告警事件表已经单独存了 judge_version，两者各管各的。）
 _CONTRACT_FINGERPRINT_FIELDS: Final[tuple[str, ...]] = (
     "name", "address", "column", "low", "high", "scale", "dtype", "endian",
+    # opcua_node_id 也进指纹：它决定"这一列的数从哪个节点来"，
+    # 改错 NodeId 会把 A 测点的值写进 B 测点的列 —— 与改错寄存器地址同性质的错误。
+    "opcua_node_id",
 )
 
 
@@ -467,4 +484,54 @@ def contract_version() -> str:
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+# ---- OPC UA NodeId 解析（南向第二种协议用；纯函数，不依赖 asyncua）----
+
+#: 合法的 NodeId 标识类型：i=数值 s=字符串 g=GUID b=字节串
+NODE_ID_KINDS: Final[tuple[str, ...]] = ("i", "s", "g", "b")
+
+
+def parse_node_id(raw: str) -> tuple[int, str, str]:
+    """把 OPC UA 的 NodeId 字符串拆成 (命名空间索引, 标识类型, 标识)。
+
+    只接受标准写法 `ns=<n>;<类型>=<标识>`：
+        "ns=2;s=Boiler1.Temp"  → (2, "s", "Boiler1.Temp")
+        "ns=0;i=2258"          → (0, "i", "2258")
+
+    为什么自己解析、不直接丢给 asyncua：`NodeId.from_string()` 在格式错时抛的异常
+    信息很含糊，而**配置错必须能被测试逐条盯住**。这里是纯函数、零依赖，格式与取值
+    范围可以单独断言；真正的连接发生在这步校验通过之后。
+
+    严格拒绝（宁可抛错，也不要把错的 NodeId 当合法 —— 错的 NodeId 会把 A 测点的值
+    写进 B 测点的列，而且看起来完全正常）：
+    空串 / 缺 `ns=` 前缀 / 缺 `;` / 缺 `=` / 类型不是 i,s,g,b / 标识为空 /
+    命名空间为负 / `i` 类型的标识不是非负整数。
+    """
+    if not raw or not raw.strip():
+        raise ValueError("NodeId 为空：空串代表「该测点不走 OPC UA」，不是合法 NodeId")
+    text = raw.strip()
+    if not text.startswith("ns=") or ";" not in text:
+        raise ValueError(f"NodeId 格式非法（应为 ns=<n>;<类型>=<标识>）: {raw!r}")
+
+    ns_text, _, rest = text[3:].partition(";")
+    try:
+        namespace = int(ns_text)
+    except ValueError as exc:
+        raise ValueError(f"NodeId 的命名空间不是整数: {raw!r}") from exc
+    if namespace < 0:
+        raise ValueError(f"NodeId 的命名空间不能为负: {raw!r}")
+
+    kind, sep, identifier = rest.partition("=")
+    if not sep:
+        raise ValueError(f"NodeId 缺少 '=': {raw!r}")
+    if kind not in NODE_ID_KINDS:
+        raise ValueError(
+            f"NodeId 标识类型只支持 {list(NODE_ID_KINDS)}，收到 {kind!r}: {raw!r}"
+        )
+    if not identifier:
+        raise ValueError(f"NodeId 的标识为空: {raw!r}")
+    if kind == "i" and (not identifier.isdigit()):
+        raise ValueError(f"NodeId 的 i 类型标识必须是非负整数: {raw!r}")
+    return namespace, kind, identifier
 

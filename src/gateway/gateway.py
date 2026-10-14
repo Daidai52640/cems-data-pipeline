@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.common.logging import setup_logging                # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT, contract_version   # noqa: E402
+from src.gateway.opcua_south import OpcUaReader             # noqa: E402
 from src.gateway.upstream_modbus import (                   # noqa: E402
     Snapshot,
     UpstreamServer,
@@ -54,6 +55,21 @@ MQTT_CLIENT_ID: Final[str] = os.getenv("MQTT_CLIENT_ID", "cems-gateway-plant1")
 # ---- 采集节奏与重连 ----
 POLL_INTERVAL: Final[float] = float(os.getenv("POLL_INTERVAL", "5.0"))                  # 轮询周期（秒）
 MODBUS_RETRY_INTERVAL: Final[float] = float(os.getenv("MODBUS_RETRY_INTERVAL", "5.0"))  # 断线重连间隔（秒）
+
+# ---- 南向协议选择（默认 modbus，既有部署行为零变化）----
+# 两条路径在各自模块里收敛成同一个形状（{测点名: 工程量}），所以下游一行不用改：
+#   modbus → read_device() 同步读（见本文件）
+#   opcua  → OpcUaReader 后台线程刷新 + 本进程取快照（见 src/gateway/opcua_south.py）
+# 为什么 OPC UA 用后台线程而不是同步读：它的建连/握手是秒级，放主循环会直接撑爆
+# 采集节拍。形态与设备层读真机温湿度的 RealDeviceReader 完全一致。
+SOUTH_PROTOCOL: Final[str] = os.getenv("SOUTH_PROTOCOL", "modbus").strip().lower()
+
+#: OPC UA 快照超过这个时长没刷新就当"没有数据"（不冒充新鲜值）。
+#: 取轮询周期的 3 倍，与全项目其余陈旧判据同口径（上游直读的 UPSTREAM_STALE_FACTOR 也是 3）。
+OPCUA_STALE_AFTER: Final[float] = POLL_INTERVAL * 3
+
+#: OPC UA 读取器（只有 SOUTH_PROTOCOL=opcua 时非 None）。主循环只读它的 snapshot()。
+OPCUA_READER: Optional[OpcUaReader] = None
 
 # ---- 断网缓存：单写者所有权模型（相对项目根目录推导，换机器不用改）----
 # cache.jsonl          只由采集主循环追加写：新采集到的数据
@@ -349,20 +365,21 @@ def _backlog_bytes() -> int:
     return total
 
 
-def heartbeat_payload(*, modbus_ok: bool, mqtt_ok: bool) -> dict[str, Any]:
+def heartbeat_payload(*, south_ok: bool, mqtt_ok: bool) -> dict[str, Any]:
     """心跳快照的内容（独立成纯函数，单测可直接断言，不必读盘）。"""
     return {
         "ts": time.time(),
         "pid": os.getpid(),
         "cfg": CFG_VERSION,
-        "modbus_ok": modbus_ok,
+        "south_protocol": SOUTH_PROTOCOL,
+        "south_ok": south_ok,
         "mqtt_ok": mqtt_ok,
         "backlog_bytes": _backlog_bytes(),
         **STATS,
     }
 
 
-def touch_heartbeat(*, modbus_ok: bool, mqtt_ok: bool) -> None:
+def touch_heartbeat(*, south_ok: bool, mqtt_ok: bool) -> None:
     """刷新心跳：采集主循环每转一圈写一次，内容是**一份 JSON 状态快照**。
 
     一次写入同时承担两件事：
@@ -381,7 +398,7 @@ def touch_heartbeat(*, modbus_ok: bool, mqtt_ok: bool) -> None:
     try:
         tmp.write_text(
             json.dumps(
-                heartbeat_payload(modbus_ok=modbus_ok, mqtt_ok=mqtt_ok),
+                heartbeat_payload(south_ok=south_ok, mqtt_ok=mqtt_ok),
                 ensure_ascii=False,
                 separators=(",", ":"),
             ),
@@ -390,7 +407,6 @@ def touch_heartbeat(*, modbus_ok: bool, mqtt_ok: bool) -> None:
         os.replace(tmp, HEARTBEAT_FILE)
     except OSError as exc:
         LOGGER.debug("写心跳文件失败（忽略）: %s", exc)
-
 
 def _publish_async(client: mqtt.Client, payload: str, tag: str) -> Optional[mqtt.MQTTMessageInfo]:
     """把消息交给 paho 发送队列并返回消息句柄；入队失败返回 None。
@@ -742,7 +758,9 @@ def build_payload(values: dict[str, float]) -> str:
 
 
 def main() -> None:
-    """网关主流程：连 MQTT → 连设备 → 循环"读→换算→加时间戳→（直发/缓存）"。"""
+    """网关主流程：连 MQTT → 连南向设备（Modbus 或 OPC UA）→ 循环"读→换算→加时间戳→（直发/缓存）"。"""
+    global OPCUA_READER
+
     setup_logging()
     check_data_dir_writable()     # 断网缓存目录不可写要立刻喊出来，别等丢数据才发现
     LOGGER.info(
@@ -766,16 +784,33 @@ def main() -> None:
     except Exception as exc:
         LOGGER.error("MQTT 初始化失败: %s，数据将先写本地缓存", exc)
 
-    # ---- 连 Modbus：连不上不退出进程，进主循环后持续重试 ----
-    modbus_client = connect_modbus()
+    # ---- 南向建链：按 SOUTH_PROTOCOL 二选一 ----
+    modbus_client = None
+    if SOUTH_PROTOCOL == "opcua":
+        # OPC UA：后台线程维持连接。**配置错或依赖缺失就拒绝启动** ——
+        # 与下面 Modbus 的"从站读不到就退出"同一纪律：这类问题重试一万次也不会好，
+        # 只会让容器一直 healthy 却永远不出数。而"服务器暂时没起来"由线程自身退避重连处理。
+        reader = OpcUaReader(poll_interval=POLL_INTERVAL)
+        if not reader.start():
+            LOGGER.critical(
+                "南向 OPC UA 启动失败（NodeId 配置非法，或未安装 asyncua）——拒绝启动。"
+                "检查 points.py 的 opcua_node_id 与 requirements.txt"
+            )
+            raise SystemExit(1)
+        OPCUA_READER = reader
+        LOGGER.info("南向协议: OPC UA（端点 %s，%d 个测点）", reader.endpoint, len(reader.node_map))
+    else:
+        # ---- 连 Modbus：连不上不退出进程，进主循环后持续重试 ----
+        modbus_client = connect_modbus()
 
-    # ---- 启动预检：本实例的从站必须真的读得到，否则拒绝启动 ----
-    # 与"连不上设备"的处置故意不同：连不上（设备还没起）是暂时状态，值得重试；
-    # 而"连上了但读不到本从站"是配置错（MODBUS_UNIT 不在设备层 SLAVE_IDS 里），
-    # 重试一万次也不会好，只会让容器一直 healthy 却永远不出数（只能去日志里挖）。
-    if modbus_client is not None and not verify_unit_readable(modbus_client):
-        close_modbus(modbus_client)
-        raise SystemExit(1)
+        # ---- 启动预检：本实例的从站必须真的读得到，否则拒绝启动 ----
+        # 与"连不上设备"的处置故意不同：连不上（设备还没起）是暂时状态，值得重试；
+        # 而"连上了但读不到本从站"是配置错（MODBUS_UNIT 不在设备层 SLAVE_IDS 里），
+        # 重试一万次也不会好，只会让容器一直 healthy 却永远不出数（只能去日志里挖）。
+        if modbus_client is not None and not verify_unit_readable(modbus_client):
+            close_modbus(modbus_client)
+            raise SystemExit(1)
+        LOGGER.info("南向协议: Modbus（%s:%d 从站 %d）", MODBUS_HOST, MODBUS_PORT, MODBUS_UNIT)
 
     # ---- 上游直读服务（默认关）：把最新快照以只读 Modbus TCP 暴露给 SCADA / DCS ----
     # 与 HJ212 北向出口同一条纪律：新增对外接口不随默认部署一起开。
@@ -788,13 +823,16 @@ def main() -> None:
         LOGGER.info("上游直读服务未启用（UPSTREAM_MODBUS_ENABLE=0），网关只做 MQTT 上报")
 
     count = 0
+    #: 南向链路是否正常。心跳在循环开头写，此时还没做本轮读取，所以它反映的是
+    #: **上一轮的结论**（初始值按建链结果给）——这正是我们想要的：心跳是"最近已知状态"。
+    south_ok = OPCUA_READER is None and modbus_client is not None
     try:
         while True:
             # 每圈刷一次心跳。healthcheck 判的是文件 mtime（与内容无关），所以
             # 从"一行时间戳"换成 JSON 快照是向后兼容的；多出来的是计数与两条链路的
             # 状态 —— 读的人能区分"循环在转"和"真的在出数"。
             touch_heartbeat(
-                modbus_ok=modbus_client is not None,
+                south_ok=south_ok,
                 mqtt_ok=mqtt_client.is_connected(),
             )
 
@@ -811,21 +849,41 @@ def main() -> None:
             if mqtt_client.is_connected() and has_backlog():
                 RESEND_WORKER.trigger_if_due(mqtt_client, RESEND_RETRY_INTERVAL)
 
-            if modbus_client is None:
-                STATS["modbus_reconnects"] += 1      # 本实例的重连次数（含首次连上失败后的每一轮）
-                time.sleep(MODBUS_RETRY_INTERVAL)
-                modbus_client = connect_modbus()
-                continue
+            if OPCUA_READER is not None:
+                # ---- 南向 OPC UA：后台线程持续刷新，这里只取快照 ----
+                # 取不到（没连上 / 快照已陈旧）就跳过本轮 —— **不发旧值**。
+                # 这一轮不进库，覆盖率会掉，那正是"这段时间真没采到"的诚实信号；
+                # 把旧值当新值发出去才是本项目的禁忌（宁缺勿假）。
+                data = OPCUA_READER.snapshot(max_age=OPCUA_STALE_AFTER)
+                if data is None:
+                    STATS["read_failures"] += 1
+                    south_ok = False
+                    LOGGER.warning(
+                        "OPC UA 本轮无可用快照（未连上或已陈旧超过 %.0f 秒），跳过本轮",
+                        OPCUA_STALE_AFTER,
+                    )
+                    time.sleep(POLL_INTERVAL)
+                    continue
+                south_ok = True
+            else:
+                # ---- 南向 Modbus：同步读，失败就重建连接 ----
+                if modbus_client is None:
+                    STATS["modbus_reconnects"] += 1      # 本实例的重连次数（含首次连上失败后的每一轮）
+                    time.sleep(MODBUS_RETRY_INTERVAL)
+                    modbus_client = connect_modbus()
+                    continue
 
-            data = read_device(modbus_client)
-            if data is None:
-                STATS["read_failures"] += 1
-                # 读失败：重建连接后重试，不退出进程
-                LOGGER.error("本轮采集失败，重建 Modbus 连接")
-                close_modbus(modbus_client)
-                modbus_client = None
-                time.sleep(MODBUS_RETRY_INTERVAL)
-                continue
+                data = read_device(modbus_client)
+                if data is None:
+                    STATS["read_failures"] += 1
+                    south_ok = False
+                    # 读失败：重建连接后重试，不退出进程
+                    LOGGER.error("本轮采集失败，重建 Modbus 连接")
+                    close_modbus(modbus_client)
+                    modbus_client = None
+                    time.sleep(MODBUS_RETRY_INTERVAL)
+                    continue
+                south_ok = True
 
             count += 1
             STATS["samples"] += 1
@@ -862,7 +920,9 @@ def main() -> None:
     finally:
         if upstream is not None:
             upstream.stop()       # daemon 线程，这里只是把刷新循环叫停，不阻塞退出
-        RESEND_WORKER.stop()      # 先让补传把未确认的数据落回盘，再断开
+        if OPCUA_READER is not None:
+            OPCUA_READER.stop()   # 同上：OPC UA 采集线程也是 daemon，叫停即可
+        RESEND_WORKER.stop()      # 先让补传把未确认的数据写回盘，再断开
         close_modbus(modbus_client)
         try:
             mqtt_client.disconnect()

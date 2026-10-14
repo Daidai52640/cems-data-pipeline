@@ -39,3 +39,14 @@ redis>=5.0,<6.0
 # 注意：gmssl 自身依赖 pycryptodomex（pip 自动安装），属传递依赖，
 #      不是本项目主动引入的第二个库。
 gmssl>=3.2.2,<4.0
+
+# ---- 南向第二种协议：OPC UA（**默认不装**，见 docs/adr/0012）----
+# 只有把 SOUTH_PROTOCOL 设成 opcua 时才需要它。刻意**注释掉**，理由两条：
+#   1. 默认部署（Modbus）不该因为一个用不到的可选能力承担镜像体积与依赖风险；
+#      这样 `pip install -r requirements.txt` 的行为与改造前一致。
+#   2. 本模块的 asyncua 路径**还没在真实 OPC UA 服务器上跑过**（见 ADR-0012
+#      的诚实清单），不适合把一个未验证的版本约束写进默认安装。
+# 要用时：取消下面这行的注释并重新构建镜像（在容器里 pip install 不会持久）。
+# 代码侧已做兼容：asyncua 缺失时 opcua_south.start() 返回 False 并打 CRITICAL；
+# 纯逻辑（质量映射 / NodeId 解析 / 快照语义）不依赖它，测试照常跑。
+# asyncua>=1.1,<2.0

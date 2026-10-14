@@ -172,9 +172,9 @@ def test_snapshot_copy_is_independent():
 def test_heartbeat_payload_shape():
     from src.gateway import gateway as G
 
-    hb = G.heartbeat_payload(modbus_ok=True, mqtt_ok=False)
+    hb = G.heartbeat_payload(south_ok=True, mqtt_ok=False)
     assert hb["cfg"] == G.CFG_VERSION
-    assert hb["modbus_ok"] is True and hb["mqtt_ok"] is False
+    assert hb["south_ok"] is True and hb["mqtt_ok"] is False
     assert isinstance(hb["backlog_bytes"], int)
     for key in ("samples", "published", "cached", "read_failures", "modbus_reconnects"):
         assert key in hb, f"心跳快照缺计数 {key}"
@@ -187,11 +187,11 @@ def test_touch_heartbeat_writes_json_atomically(tmp_path, monkeypatch):
     monkeypatch.setattr(G, "HEARTBEAT_FILE", target)
     G.STATS.update({"samples": 7, "published": 6, "cached": 1})
 
-    G.touch_heartbeat(modbus_ok=True, mqtt_ok=True)
+    G.touch_heartbeat(south_ok=True, mqtt_ok=True)
 
     parsed = json.loads(target.read_text(encoding="utf-8"))
     assert parsed["samples"] == 7 and parsed["cached"] == 1
-    assert parsed["modbus_ok"] is True
+    assert parsed["south_ok"] is True
     # 原子写：不留临时文件，否则读的人可能撞见写了一半的内容
     assert not (tmp_path / (target.name + ".tmp")).exists()
 
@@ -202,7 +202,7 @@ def test_heartbeat_mtime_still_fresh_for_healthcheck(tmp_path, monkeypatch):
 
     target = tmp_path / ".gateway_alive"
     monkeypatch.setattr(G, "HEARTBEAT_FILE", target)
-    G.touch_heartbeat(modbus_ok=True, mqtt_ok=True)
+    G.touch_heartbeat(south_ok=True, mqtt_ok=True)
     assert time.time() - target.stat().st_mtime < 1.0
 
 
