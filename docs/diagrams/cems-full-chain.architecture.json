@@ -10,7 +10,7 @@
       "url": "https://github.com/Daidai52640/cems-data-pipeline.git",
       "provider": "github",
       "link_mode": "local-only",
-      "revision": "bb97c1b0afaa3302107c3ea8c6dac915613b7a27"
+      "revision": "f5b714c7434cc94f24ff38d542f58e41d791ccf0"
     }
   },
   "components": [
@@ -479,6 +479,37 @@
           "label": "两实例共用会拿自己的标签写对方的报文"
         }
       ]
+    },
+    {
+      "id": "opcua_src",
+      "type": "external",
+      "label": "现场 OPC UA 服务器",
+      "sublabel": "PLC / DCS / 数采软件 —— 南向另一种源",
+      "pos": [
+        40,
+        650
+      ],
+      "size": [
+        200,
+        105
+      ],
+      "sources": [
+        {
+          "path": "src/gateway/opcua_south.py",
+          "line": 195,
+          "label": "class OpcUaReader（南向客户端）"
+        },
+        {
+          "path": "src/common/points.py",
+          "line": 86,
+          "label": "Point.opcua_node_id（契约里的节点地址）"
+        },
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 65,
+          "label": "SOUTH_PROTOCOL（二选一开关）"
+        }
+      ]
     }
   ],
   "boundaries": [
@@ -614,6 +645,16 @@
       "to": "td",
       "label": "",
       "variant": "emphasis"
+    },
+    {
+      "from": "opcua_src",
+      "to": "gw1",
+      "label": "OPC UA 只读（与 Modbus 二选一）"
+    },
+    {
+      "from": "opcua_src",
+      "to": "gw2",
+      "label": "同上"
     }
   ],
   "cards": [
