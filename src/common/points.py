@@ -47,6 +47,8 @@ SO2 35、NOx 50（mg/m3，标干、6% 基准氧）。限值比量程小一两个
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import struct
 from typing import Final, NamedTuple
@@ -429,4 +431,40 @@ def over_limit(name: str, value: float) -> bool:
     """
     limit = LIMITS[name]
     return value > limit
+
+
+# ---- 契约版本：让数据能回答"我是按哪一版契约采出来的" ----
+# 为什么需要它：本项目的数据链路本身可追溯（血缘脚本、恒等式对账），但**样本自己
+# 不知道自己是按哪版契约采的**。后果有两个，都是静默的：
+#   1. 改了 scale 或量程之后回查历史，无法判断某段数据属于改前还是改后；
+#   2. 网关与接入层各自构建镜像时可能"一边改了契约、另一边没改"，而两边都不报错
+#      —— 网关发的值仍落在旧量程内，接入层照收，数值含义已经不同了。
+# 所以给数据加一个指纹，随报文上送，接入层比对，不一致就喊出来。
+
+#: 参与指纹的字段：只取"决定线上数值含义"的那些。
+#: 故意不含 unit / code / limit —— 它们不改变"这个数字是什么"，
+#: 改它们不该让全部历史数据变成"另一版契约"。（limit 变化影响的是告警口径，
+#: 而告警事件表已经单独存了 judge_version，两者各管各的。）
+_CONTRACT_FINGERPRINT_FIELDS: Final[tuple[str, ...]] = (
+    "name", "address", "column", "low", "high", "scale", "dtype", "endian",
+)
+
+
+def contract_version() -> str:
+    """测点契约的短指纹（8 位十六进制），回答"这条数据是按哪版契约采的"。
+
+    性质（都有测试盯着）：
+    - 纯函数：同进程内多次调用恒定，无时间/随机/环境成分。
+    - 灵敏：任何影响数值含义的字段变化都改变它（量程、地址、列名、scale、线格式）。
+    - 稳定：unit / code / limit 变了它不变（这些不决定"数字是什么"）。
+
+    为什么用 sha256 而不是内置 hash()：内置 hash 对 str 带进程级随机盐，
+    跨进程、跨容器不可比 —— 那恰好毁掉本函数唯一的用途。
+    """
+    payload = json.dumps(
+        [[getattr(point, field) for field in _CONTRACT_FINGERPRINT_FIELDS] for point in POINTS],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
 

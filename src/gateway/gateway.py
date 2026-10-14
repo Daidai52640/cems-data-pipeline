@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -20,7 +21,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common.logging import setup_logging                # noqa: E402
-from src.common.points import POINTS, REG_BASE, REG_COUNT   # noqa: E402
+from src.common.points import POINTS, REG_BASE, REG_COUNT, contract_version   # noqa: E402
+from src.gateway.upstream_modbus import (                   # noqa: E402
+    Snapshot,
+    UpstreamServer,
+    enabled as upstream_enabled,
+)
 
 # ==================== 配置区（要改参数只动这里） ====================
 # 所有连接参数都支持用环境变量覆盖，默认值与"本机直接运行"完全一致；
@@ -119,6 +125,26 @@ RESEND_RETRY_INTERVAL: Final[float] = float(os.getenv("RESEND_RETRY_INTERVAL", "
 # 级别/格式/时间格式统一在 src/common/logging.py（唯一真源）；
 # 这里只留本进程的 LOGGER —— 4 个进程的日志靠 getLogger 的名字区分来源。
 LOGGER: Final[logging.Logger] = logging.getLogger("gateway")
+
+# ---- 契约指纹：随每条报文上送，让数据能回答"我是按哪版契约采的" ----
+# 动机与字段选择见 src/common/points.py 的 contract_version()。
+# 进程启动时算一次就够：契约是编译进镜像的常量，运行期不会变。
+CFG_VERSION: Final[str] = contract_version()
+
+# ---- 运行态计数（写进心跳快照，供上游/healthcheck 判断"活着"还是"健康"）----
+# 只在采集主循环里改（单线程写），读的一方拿的是某一瞬间的一致视图，
+# 所以不加锁 —— 加锁反而会把热点路径变复杂。
+STATS: Final[dict[str, int]] = {
+    "samples": 0,            # 成功采集并构造出报文的条数
+    "published": 0,          # 收到 PUBACK 的条数（在线直发成功）
+    "cached": 0,             # 转入本地缓存的条数（断网 / 未收到 PUBACK / 补传中）
+    "read_failures": 0,      # 读设备失败次数
+    "modbus_reconnects": 0,  # 重建 Modbus 连接的次数
+}
+
+# ---- 最近一次成功采集的快照：上游只读 Modbus 服务的数据源 ----
+# 与"发给 MQTT 的那一份"同源，所以上游直读与入库数据必然一致（见 docs/adr/0011）。
+SNAPSHOT: Final[Snapshot] = Snapshot()
 
 
 # ==================== 日志 ====================
@@ -310,14 +336,58 @@ def check_data_dir_writable() -> bool:
         return False
 
 
-def touch_heartbeat() -> None:
-    """刷新存活心跳：采集主循环每转一圈写一次，容器 healthcheck 靠它判断循环有没有卡死。
-
-    比"端口在不在听"更有意义 —— 网关没有监听端口，进程活着但循环卡死时
-    只有心跳文件能反映出来。写失败不致命（比如磁盘满），降级成 debug。
-    """
+def _backlog_bytes() -> int:
+    """缓存积压字节数（cache.jsonl + 所有在途段）。统计失败报 0，不抛。"""
+    total = 0
     try:
-        HEARTBEAT_FILE.write_text(str(time.time()), encoding="utf-8")
+        if CACHE_FILE.exists():
+            total += CACHE_FILE.stat().st_size
+        for seg in _in_flight_segments():
+            total += seg.stat().st_size
+    except OSError as exc:
+        LOGGER.debug("统计缓存积压失败（忽略）: %s", exc)
+    return total
+
+
+def heartbeat_payload(*, modbus_ok: bool, mqtt_ok: bool) -> dict[str, Any]:
+    """心跳快照的内容（独立成纯函数，单测可直接断言，不必读盘）。"""
+    return {
+        "ts": time.time(),
+        "pid": os.getpid(),
+        "cfg": CFG_VERSION,
+        "modbus_ok": modbus_ok,
+        "mqtt_ok": mqtt_ok,
+        "backlog_bytes": _backlog_bytes(),
+        **STATS,
+    }
+
+
+def touch_heartbeat(*, modbus_ok: bool, mqtt_ok: bool) -> None:
+    """刷新心跳：采集主循环每转一圈写一次，内容是**一份 JSON 状态快照**。
+
+    一次写入同时承担两件事：
+
+    1. **保活**（原用途）：刷新文件 mtime。容器 healthcheck 判的是 `mtime < 30s`，
+       与文件内容无关，所以从"一行时间戳"换成 JSON 是**向后兼容**的。
+    2. **报状态**（本次新增）：把计数与两条链路的状态写进去。原来只有一个时间戳，
+       于是"循环在转但每条都读失败"和"一切正常"在文件里长得一模一样 ——
+       前者 mtime 同样新鲜，healthcheck 一样判健康。现在读的人能分辨了。
+
+    原子写（临时文件 + os.replace）：读的人永远不会撞见写了一半的 JSON。
+    这条纪律与缓存文件的"原子改名交接"同源。写失败不致命（磁盘满等），降级成 debug
+    —— 心跳写不进去不该把采集主循环带停。
+    """
+    tmp = HEARTBEAT_FILE.with_name(HEARTBEAT_FILE.name + ".tmp")
+    try:
+        tmp.write_text(
+            json.dumps(
+                heartbeat_payload(modbus_ok=modbus_ok, mqtt_ok=mqtt_ok),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        os.replace(tmp, HEARTBEAT_FILE)
     except OSError as exc:
         LOGGER.debug("写心跳文件失败（忽略）: %s", exc)
 
@@ -651,12 +721,24 @@ def on_disconnect(
 # ==================== 主流程 ====================
 
 def build_payload(values: dict[str, float]) -> str:
-    """把全部测点值组装成上送报文：时间戳 + 各测点 K=V + 数据标记。
+    """把全部测点值组装成上送报文：时间戳 + 各测点 K=V + 数据标记 + 契约指纹。
 
-    格式: "2026-09-10 12:00:00 SO2=35.2 NOx=18.5 ... Pressure=101.3 Flag=N"
+    格式: "2026-09-10 12:00:00 SO2=35.2 NOx=18.5 ... Pressure=101.3 Flag=N Cfg=326b8111"
+
+    `Cfg=` 是**契约指纹**（`points.contract_version()`），本次新增。它回答的是
+    "这条数据是按哪一版测点契约采出来的" —— 本项目的数据链路本来就能追溯数据从哪来，
+    但样本自己不知道自己是按什么规则采的：改了 scale 或量程之后回查历史，无法判断
+    某段数据属于改前还是改后；网关与接入层各自构建镜像时，也可能一边改了契约、
+    另一边没改，而两边都不报错（网关发的值仍落在旧量程内，接入层照收）。
+
+    接入层收到后会与自己的指纹比对，不一致就打 WARNING —— 见
+    `subscriber_to_td.check_contract_version()`。
+
+    放在末尾而不是开头：报文的前两个字段是时间戳，位置固定；附加字段一律后缀，
+    这样既有的按位置切分的调用方（如 `scripts/loadgen_devices.py`）不受影响。
     """
     body = " ".join(f"{point.name}={values[point.name]}" for point in POINTS)
-    return f"{time.strftime(TS_FORMAT)} {body} Flag=N"
+    return f"{time.strftime(TS_FORMAT)} {body} Flag=N Cfg={CFG_VERSION}"
 
 
 def main() -> None:
@@ -695,10 +777,26 @@ def main() -> None:
         close_modbus(modbus_client)
         raise SystemExit(1)
 
+    # ---- 上游直读服务（默认关）：把最新快照以只读 Modbus TCP 暴露给 SCADA / DCS ----
+    # 与 HJ212 北向出口同一条纪律：新增对外接口不随默认部署一起开。
+    # 起不来只记 CRITICAL，不让网关退出 —— 上游读不到是可降级能力，采集主链路不该被拖死。
+    upstream: Optional[UpstreamServer] = None
+    if upstream_enabled():
+        upstream = UpstreamServer(SNAPSHOT, poll_interval=POLL_INTERVAL)
+        upstream.start()
+    else:
+        LOGGER.info("上游直读服务未启用（UPSTREAM_MODBUS_ENABLE=0），网关只做 MQTT 上报")
+
     count = 0
     try:
         while True:
-            touch_heartbeat()      # 每圈刷一次：healthcheck 靠它判断循环还活着
+            # 每圈刷一次心跳。healthcheck 判的是文件 mtime（与内容无关），所以
+            # 从"一行时间戳"换成 JSON 快照是向后兼容的；多出来的是计数与两条链路的
+            # 状态 —— 读的人能区分"循环在转"和"真的在出数"。
+            touch_heartbeat(
+                modbus_ok=modbus_client is not None,
+                mqtt_ok=mqtt_client.is_connected(),
+            )
 
             # 本迭代"触发补传之前"的在途状态快照 —— 这是本轮该不该入队的唯一依据。
             # 必须在这里取：下面的 trigger_if_due 只是启动一个补传线程，它不该反过来
@@ -714,12 +812,14 @@ def main() -> None:
                 RESEND_WORKER.trigger_if_due(mqtt_client, RESEND_RETRY_INTERVAL)
 
             if modbus_client is None:
+                STATS["modbus_reconnects"] += 1      # 本实例的重连次数（含首次连上失败后的每一轮）
                 time.sleep(MODBUS_RETRY_INTERVAL)
                 modbus_client = connect_modbus()
                 continue
 
             data = read_device(modbus_client)
             if data is None:
+                STATS["read_failures"] += 1
                 # 读失败：重建连接后重试，不退出进程
                 LOGGER.error("本轮采集失败，重建 Modbus 连接")
                 close_modbus(modbus_client)
@@ -728,15 +828,22 @@ def main() -> None:
                 continue
 
             count += 1
+            STATS["samples"] += 1
             payload = build_payload(data)
-
+            # 快照**只在成功采集后**更新：失败不刷新时间戳，上游的 stale 位才会亮。
+            # 与"发出去的那一份"同源，所以上游直读与入库数据必然一致。
+            SNAPSHOT.update(data, modbus_ok=True, mqtt_ok=mqtt_client.is_connected())
 
             if mqtt_client.is_connected() and not resend_in_flight:
                 # 在线且本轮开始前没有在途补传批次：直接发；没收到 PUBACK 就落盘，绝不静默丢
-                if not publish(mqtt_client, payload, tag=f"第{count}条 在线直发"):
+                if publish(mqtt_client, payload, tag=f"第{count}条 在线直发"):
+                    STATS["published"] += 1
+                else:
+                    STATS["cached"] += 1
                     save_to_cache(payload, reason="未收到 PUBACK")
             elif not mqtt_client.is_connected():
                 # 断网：写缓存，数据不丢
+                STATS["cached"] += 1
                 save_to_cache(payload, reason="断网")
             else:
                 # 本轮开始前已有在途补传批次（那批数据比本轮旧）：新数据先排队。
@@ -744,6 +851,7 @@ def main() -> None:
                 #    批次"会让本轮样本排队；被 RESEND_RETRY_INTERVAL 节流挡在队列里、
                 #    尚未取批的旧行，以及本轮自己刚触发的批次，都不会让本轮排队。
                 #    （改动前同样不满足全局 FIFO：实测 58 条逆序全部是补传行。）
+                STATS["cached"] += 1
                 save_to_cache(payload, reason="补传中")
 
             time.sleep(POLL_INTERVAL)
@@ -752,6 +860,8 @@ def main() -> None:
     except Exception:
         LOGGER.exception("网关异常退出")
     finally:
+        if upstream is not None:
+            upstream.stop()       # daemon 线程，这里只是把刷新循环叫停，不阻塞退出
         RESEND_WORKER.stop()      # 先让补传把未确认的数据落回盘，再断开
         close_modbus(modbus_client)
         try:

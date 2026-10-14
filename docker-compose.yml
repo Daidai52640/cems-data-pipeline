@@ -378,6 +378,17 @@ services:
       MQTT_CLIENT_ID: cems-gateway-plant1
       # 缓存目录：不设 GATEWAY_DATA_DIR ⇒ 用默认值 PROJECT_ROOT/data（= 容器内 /app/data）。
       # 第二套实例必须显式另指一处，否则两个实例会共用 cache.jsonl / inflight-* 段文件。
+      #
+      # ---- 上游直读服务（只读 Modbus TCP 从站，默认关；ADR-0011）----
+      # ⚠️ 这里默认绑 0.0.0.0 而不是 127.0.0.1：绑回环的话，连同一 compose 网络里的
+      #    别的容器都连不上，发布端口也白搭 —— 本服务的用途就是"被上游读"。
+      #    真正的访问控制在两层：① ENABLE 默认 0；② compose **不发布**这个端口。
+      #    要让现场 SCADA 读，除了把 ENABLE 改成 1，还要给本服务加一行 ports
+      #    （并把宿主机侧的绑定地址限制到现场网段，别用 0.0.0.0）。
+      UPSTREAM_MODBUS_ENABLE: ${UPSTREAM_MODBUS_ENABLE:-0}
+      UPSTREAM_MODBUS_HOST: ${UPSTREAM_MODBUS_HOST:-0.0.0.0}
+      UPSTREAM_MODBUS_PORT: ${UPSTREAM_MODBUS_PORT:-5022}
+      UPSTREAM_STALE_FACTOR: ${UPSTREAM_STALE_FACTOR:-3.0}
     volumes:
       # 断网缓存落到宿主机，重启容器数据不丢，也方便直接看 cache.jsonl
       - ./data:/app/data
@@ -408,6 +419,12 @@ services:
       #    所以网关、接入各用一个独立变量，别共用同一个名字。
       MQTT_CLIENT_ID: ${GATEWAY2_CLIENT_ID:-cems-gateway-plant2}
       GATEWAY_DATA_DIR: /app/data-plant2                       # ★ 缓存每实例一份（见 gateway.py 配置区）
+      # 上游直读（ADR-0011）：端口**必须与 plant1 不同** —— 同一宿主上不能两个进程听同一端口。
+      # 独立变量名 UPSTREAM_MODBUS2_PORT，避免两套实例共用同一个 .env 变量而撞端口。
+      UPSTREAM_MODBUS_ENABLE: ${UPSTREAM_MODBUS_ENABLE:-0}
+      UPSTREAM_MODBUS_HOST: ${UPSTREAM_MODBUS_HOST:-0.0.0.0}
+      UPSTREAM_MODBUS_PORT: ${UPSTREAM_MODBUS2_PORT:-5023}
+      UPSTREAM_STALE_FACTOR: ${UPSTREAM_STALE_FACTOR:-3.0}
     volumes:
       - ./data/plant2:/app/data-plant2
     depends_on: *gateway-depends

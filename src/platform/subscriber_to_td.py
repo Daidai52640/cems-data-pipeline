@@ -95,6 +95,7 @@ from src.common.points import (   # noqa: E402
     RANGES,
     ZS_TARGETS,
     ZS_UNAVAILABLE_SENTINEL,
+    contract_version,
     to_reference_o2,
     to_transmit_value,
 )
@@ -269,6 +270,10 @@ STATS: Final[dict[str, int]] = {
     "spooled": 0,        # 写库失败 → 已落本地队列（有持久副本，等补传）
     "spool_lost": 0,     # 写库失败且落盘也失败 → 真丢（伴随 CRITICAL 日志）
     "drained": 0,        # 由落盘队列补传成功入库的条数
+    # 契约指纹与网关不一致的报文条数（见 check_contract_version）——
+    #   它涨起来不代表数据坏了，代表"网关和接入层不是同一版契约"，
+    #   同一列的数据含义可能已经不同。这条必须有人看，否则会静默混库。
+    "cfg_mismatch": 0,
 }
 
 # ---- 排放超标告警（ADR-0002 方案乙：接入层逐条判折算值）----
@@ -510,6 +515,59 @@ def parse_payload(
             )
 
     return ts, values, invalid
+
+
+# ---- 契约指纹比对：网关与接入层必须"按同一版契约"解读同一列 ----
+# 报文末尾带 `Cfg=<8 位十六进制>`（见 gateway.build_payload）。这里取出来跟自己的比。
+#
+# 为什么值得单独做一步：网关和接入层是两个镜像、两个发布节奏，完全可能
+# "一边改了测点契约、另一边没改"。这种漂移**两边都不报错** —— 网关发的值仍落在
+# （旧的）量程内，接入层照收照存，但同一个列名的物理含义已经变了。等发现的时候，
+# 库里已经混了两版含义的数据，而且分不出哪段是哪版。指纹把这个静默故障变成一行日志。
+#
+# 只记不拦：指纹不一致不等于这条数据不能用（比如只改了 unit），而且拦掉会把
+# "配置没对齐"升级成"数据断了"—— 那比漂移本身更糟。喊出来，让人去查。
+CFG_VERSION: Final[str] = contract_version()
+
+#: 不一致告警只打第一次（之后靠 STATS["cfg_mismatch"] 体现规模），免得一次部署错刷满日志
+_CFG_MISMATCH_WARNED: bool = False
+
+
+def check_contract_version(payload: str) -> Optional[str]:
+    """取报文里的 `Cfg=` 并与本进程的契约指纹比对；返回报文里的指纹（无则 None）。
+
+    契约不一致时打一条 ERROR 并把 `STATS["cfg_mismatch"]` +1 ——
+    运维从计数就能看出漂移规模，不必翻全量日志。
+    """
+    global _CFG_MISMATCH_WARNED
+    found: Optional[str] = None
+    for item in payload.split():
+        key, sep, value = item.partition("=")
+        if sep and key == "Cfg":
+            found = value
+            break
+
+    if found is None:
+        # 老网关（未升级）不发这个字段：不算错，但要说一次，否则"没人发指纹"
+        # 会被误读成"契约一致"。
+        if not _CFG_MISMATCH_WARNED:
+            _CFG_MISMATCH_WARNED = True
+            LOGGER.warning(
+                "报文里没有契约指纹（Cfg=），无法核对网关与接入层是否同一版契约。"
+                "若网关已升级仍出现本提示，说明网关的 build_payload 没带上 Cfg。"
+            )
+        return None
+
+    if found != CFG_VERSION:
+        STATS["cfg_mismatch"] += 1
+        if not _CFG_MISMATCH_WARNED:
+            _CFG_MISMATCH_WARNED = True
+            LOGGER.error(
+                "契约指纹不一致：报文=%s 本机=%s —— 网关与接入层的测点契约不是同一版，"
+                "同一列的数据含义可能已经不同（先查两边镜像是否为同一次构建）。",
+                found, CFG_VERSION,
+            )
+    return found
 
 
 #: 算折算值 / 跑告警判据所需的那几个测点（必须同帧齐全）。
@@ -1617,6 +1675,10 @@ def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> Non
     """
     payload = msg.payload.decode("utf-8", errors="replace")
     STATS["received"] += 1
+
+    # 先核对契约指纹（只记不拦）：网关与接入层不是同一版契约时，
+    # 这条日志是唯一的可见信号 —— 两边都不报错，但同一列的含义可能已经不同。
+    check_contract_version(payload)
 
     try:
         ts, values, invalid = parse_payload(payload)
