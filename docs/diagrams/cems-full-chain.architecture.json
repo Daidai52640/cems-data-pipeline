@@ -50,7 +50,7 @@
       "id": "gw1",
       "type": "backend",
       "label": "网关 1 · plant1",
-      "sublabel": "轮询取数 · 换算 + 打时间戳",
+      "sublabel": "Modbus / OPC UA 取数 · 换算 · 打时间戳",
       "pos": [
         250,
         150
@@ -479,37 +479,6 @@
           "label": "两实例共用会拿自己的标签写对方的报文"
         }
       ]
-    },
-    {
-      "id": "opcua_src",
-      "type": "external",
-      "label": "现场 OPC UA 服务器",
-      "sublabel": "PLC / DCS / 数采软件 —— 南向另一种源",
-      "pos": [
-        40,
-        650
-      ],
-      "size": [
-        200,
-        105
-      ],
-      "sources": [
-        {
-          "path": "src/gateway/opcua_south.py",
-          "line": 195,
-          "label": "class OpcUaReader（南向客户端）"
-        },
-        {
-          "path": "src/common/points.py",
-          "line": 86,
-          "label": "Point.opcua_node_id（契约里的节点地址）"
-        },
-        {
-          "path": "src/gateway/gateway.py",
-          "line": 65,
-          "label": "SOUTH_PROTOCOL（二选一开关）"
-        }
-      ]
     }
   ],
   "boundaries": [
@@ -645,16 +614,6 @@
       "to": "td",
       "label": "",
       "variant": "emphasis"
-    },
-    {
-      "from": "opcua_src",
-      "to": "gw1",
-      "label": "OPC UA 只读（与 Modbus 二选一）"
-    },
-    {
-      "from": "opcua_src",
-      "to": "gw2",
-      "label": "同上"
     }
   ],
   "cards": [
@@ -663,7 +622,7 @@
       "title": "图上每一块在干什么（按数据流向）",
       "items": [
         "① Modbus 仿真设备 —— 代替现场仪表：9 个测点，每 5 秒变一个数（值 ×10 存进寄存器）",
-        "② 网关 —— 每 5 秒去设备取一次数，换算成工程量 + 打时间戳，发到消息总线",
+        "② 网关 —— 每 5 秒去设备取一次数（南向二选一：Modbus / OPC UA），换算成工程量 + 打时间戳，发到消息总线",
         "③ 断网缓存（网关本地文件）—— 发不出去就先落盘，恢复后自动补传；这是网关侧的兜底",
         "④ EMQX（消息总线）—— 按订阅关系统一分发；订阅方离线时替它存着，重连后补投",
         "⑤ 接入层 —— 订阅报文 → 校验（量程/字段）→ 写库 → 逐条判超标告警",
@@ -733,6 +692,7 @@
       "items": [
         "北向出口：一套接口三条出口（HJ212/TCP 含 SM4、HTTP-JSON、Modbus-TCP），含心跳与超时重连",
         "三条出口均已本地回环 + 官方向量独立验证；是否接进主链路按项目需要决定（当前为演示脚本调用）",
+        "只读被直读：网关另可开一个只读 Modbus TCP 从站（:5022，默认关），供厂里既有的 SCADA / DCS 直接读当前值",
         "部署形态：单机 Docker Compose 一键起（10 个容器），端口默认只绑 127.0.0.1",
         "扩展方式：多设备 = 多实例（每台炉子一套网关 + 接入，各自库表与缓存目录），已按两实例验证",
         "镜像是具体版本号，不用 latest：同一份编排在任何时候重建都得到同一套软件"
