@@ -10,7 +10,7 @@
       "url": "https://github.com/Daidai52640/cems-data-pipeline.git",
       "provider": "github",
       "link_mode": "local-only",
-      "revision": "f5b714c7434cc94f24ff38d542f58e41d791ccf0"
+      "revision": "5a1ab244172a68558c0e5d70c1fe8d30f4e81ecb"
     }
   },
   "components": [

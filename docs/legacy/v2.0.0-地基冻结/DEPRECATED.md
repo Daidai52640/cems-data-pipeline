@@ -11,7 +11,7 @@
 
 | 指纹 | 快照里的值 | 现行值 | 核对方式 |
 |---|---|---|---|
-| 冻结提交 | 2402de0（main） | 7791e17 | git log --oneline -1 |
+| 冻结提交 | 0f7a1b5（main） | 9e3e60d | git log --oneline -1 |
 | 部署形态 | 8 个容器 | 10 个（8 基础 + --profile plant2 2 个） | 根 README「当前形态」、docker-compose.yml |
 | 测点 | 9 个 | 9 个（未变） | src/common/points.py |
 | ADR 范围 | 0001~0005 | 0001~0008 | docs/adr/ |
