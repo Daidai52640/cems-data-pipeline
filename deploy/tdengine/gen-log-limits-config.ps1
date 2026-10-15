@@ -11,7 +11,7 @@
 #
 #  NOTE: this file is pure ASCII on purpose. Chinese explanations are written
 #        INTO the generated config files at runtime (as data), not into this
-#        script. See ~/.dsh/AGENTS.md: .ps1/.bat must stay ASCII.
+#        script. Local convention: .ps1/.bat must stay ASCII.
 # ============================================================================
 
 $ErrorActionPreference = 'Stop'
