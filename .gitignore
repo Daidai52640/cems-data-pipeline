@@ -13,6 +13,7 @@ venv/
 data/*
 !data/.gitkeep
 
+# 运行时日志一律不入库（容器 stderr、逐行确认之类的体量最大、信息量最低）
 *.log
 
 # 编辑器

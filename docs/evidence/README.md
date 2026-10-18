@@ -5,21 +5,32 @@
 
 ## 目录与归档判据
 
-共 **157 份入库**（2026-10-12 清点；⚠️ 本地另有 3 份被 `.gitignore` 排除的采证运行产物，故文件系统上会看到 160 份），分布如下：
+共 **196 份入库**（2026-10-18 重新清点；⚠️ `edge/` 下另有 3 份被 `.gitignore` 排除的采证运行产物），分布如下：
 
 | 子目录 | 份数 | 放什么 | 判据（按文件名 + 内容双重确认） |
 |---|---|---|---|
 | `perf/` | 68 | 端到端延迟、数据完整率、容器时钟一致性、吞吐/背压、插入基准 | `latency_*`、`completeness_*`、`clock_consistency.json`、`loadgen_*`（初版 `_n<N>_` 与复测 `_acc_n<N>_` 各一组）、`backpressure_*`（含 `bp02s-30` / `slowdrain` 跟进实验）、`raw_insert_bench.json` |
-| `drill/` | 43 | 补传 / 恢复 / 时区演练的逐次台账与汇总 | `resend_*`（对账台账 + 缓存快照，含 before/after）、`gateway_resend_*`（滞后与占比）、`tdengine_restore_drill_*`（单设备逐次 + 汇总）、`emqx_restart_*`（1A/1B 对账，**含 `_run{1,2,3}_logs_*.txt` 原始日志导出**）、`dual_device_*`、`gateway_preflight_*` |
+| `drill/` | 42 | 补传 / 恢复 / 时区演练的逐次台账与汇总 | `resend_*`（对账台账 + 缓存快照，含 before/after）、`gateway_resend_*`（滞后与占比）、`tdengine_restore_drill_*`（单设备逐次 + 汇总）、`emqx_restart_*`（1A/1B 对账，**含 `_run{1,2,3}_logs_*.txt` 原始日志导出**）、`dual_device_*`、`gateway_preflight_*` |
 | `cache/` | 8 | nginx + redis 缓存与一次真实数据错位的留档 | `nginx_redis_run1.json`、`cache_invalidation_drill.json`、`atomic_handover_probe.json`、`_incident_20261001_timestamp_shift_repair.py`、`_show_ab.py` |
-| `backup/` | 16 | 备份自检标定 + **2026-10-03 双设备复验批次** | `backup_selfcheck_scope_*.json`（`scripts/verify_backup_selfcheck_scope.py` 的产出落点）、`dual_device_restore_drill_*`（双设备 RTO 复验 n=3）、`tdengine_restore_drill_*_dual_*`（改名/物理/整表级复验）、`tz_misconfig_drill_*`（时区演练）、`verify_sim_*_tzfix/diurnal_*`（时区修复后的仿真复验）、`emqx_status_watch_*.csv`（§10.6 broker 状态采样） |
+| `backup/` | 17 | 备份自检标定 + **2026-10-03 双设备复验批次** | `backup_selfcheck_scope_*.json`（`scripts/verify_backup_selfcheck_scope.py` 的产出落点）、`dual_device_restore_drill_*`（双设备 RTO 复验 n=3）、`tdengine_restore_drill_*_dual_*`（改名/物理/整表级复验）、`tz_misconfig_drill_*`（时区演练）、`verify_sim_*_tzfix/diurnal_*`（时区修复后的仿真复验）、`emqx_status_watch_*.csv`（§10.6 broker 状态采样） |
 | ⭐ `acceptance/` | 1 | **验收的机器产出** | `acceptance_min.json`（`scripts/acceptance_min.py` 的落点；2026-10-12 前此目录**整目录漏登**，见下） |
 | ⭐ `baseline-v2/` | 4 | **基线 v2 冻结时的原始产物** | 大屏"数据新鲜度"正常态 / 超时态截图 + 逐项证据文本（`runbooks/真机接入-基线冻结v2.md` §5.2 引用） |
 | `coverage/` | 1 | 报表覆盖率标定 | `report_coverage_calibration.json` |
 | ⭐ `edge/` | 13 | **边缘侧部署形态证据**（2026-10-11 新增；⚠️ 本地另有 6 份运行产物） | `resource-24h.csv`（**跨夜 12.93 小时**的容器资源采样，每 30 s 一点）、`resource-summary.json`（汇总）、`stability_soak.md`（稳定性长跑结论）、`edge_autonomy_linkcut_*.{txt,json}`（断链自治原始输出 + 逐条对账）、`edge_autonomy_crash_*.{txt,json}`（崩溃自愈）、`edge_linkcut_queue_snapshot_*.txt`（断链期间落盘队列原文） |
 | `logs/` | 3 | 网关日志导出与演练运行日志 | `_gateway_log_dump.txt`、`resend_drill*_run.log` |
+| `linux-deploy-20261018/` | 1 | Linux 宿主部署（`runbooks/跨平台部署.md`）的部署自检原始输出 | `deploy-check.txt`（容器健康、端口、网关补传、接入层入库、HTTP、TDengine 条数） |
+| `physical-layer-20261018/` | 8 | 485 物理层取证的仪器原始输出（`runbooks/物理层取证.md`） | 逻辑分析仪导出的波形/解码原始文件与 CRC 复算输入 |
+| ⭐ `serial-20261018/` | 19 | **device 进程内直读 485** 的原始证据（`runbooks/直读串口.md`） | `ev_02_probe.txt`（真机 5 次连读的原始请求/应答帧）、`ev_07_success_rate.txt`（20 连读）、`ev_04_mixed_flow.txt`（2 真 + 7 仿真）、`ev_03/05/06`（总线干扰下的状态位与越界值、进程存活、恢复）、`ev_09_pty_*`（**模拟对端**，pty）、`ev_10/11/12/13`（Mint 上 `:5020` 换成直读实例前后：TDengine 条数、`/api/data`、网关与接入层日志）；3 个证据脚本 `read_registers.py` / `noise_on_rtu_bus.py` / `sim_peer_rtu_slave.py` |
+| ⭐ `nginx-20261018/` | 11 | **nginx 对外入口在 Linux 宿主启动**的原始输出（`runbooks/nginx-对外入口.md`） | `02-healthz.txt`、`03-proxy-root-apidata.txt`、`04-403-api-cache.txt`（403 原始响应头 + 直连 5000 的 200 对照）、`05-static-cache-headers.txt`（304 / gzip）、`07-x-real-ip-probe-from-lan.txt`（伪造头被丢弃）、`08-why-web-name-required.txt`（`web` 名解析失败的原始日志）、`10-lan-client-final.txt`（跨机逐项状态码） |
 
-> 加上本 `README.md`，本目录共 **158** 个入库条目。
+> 加上本 `README.md`，本目录共 **197** 个入库条目。
+
+> ⚠️ **2026-10-18 重新清点**：上一版写"共 157 份（2026-10-12 清点）"—— 那个数字当时是对的，
+> 但此后新增 `linux-deploy-20261018/`(1)、`physical-layer-20261018/`(8)、`serial-20261018/`(19)、
+> `nginx-20261018/`(11)，同时 `drill/` 实为 42（原写 43）、`backup/` 实为 17（原写 16）。
+> ⇒ 196 份文件 + 本 `README.md` = 197。
+> 本次顺带纠正一处口径：`docs/evidence/` 下的日志导出**用 `.txt` 后缀**（`*.log` 被 `.gitignore`
+> 整体排除，写成 `.log` 会静默入库失败、导致 runbook 引用的证据在仓库里不存在）。
 
 > ⚠️ **2026-10-12 修正**：上一版写"共 140 份（2026-10-03 清点）"—— 那个数字**当时是对的**，
 > 但此后新增了 `edge/`(13)、`baseline-v2/`(4)、`acceptance/`(1)，`drill/` 也 +1，

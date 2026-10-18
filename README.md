@@ -42,6 +42,8 @@
 - 寄存器值按正弦 + 日变化相位 + 小幅噪声生成，各测点有独立量程与编码（如 SO2 = `a21026`）。
 - 支持多从站：`.env` 中 `SLAVE_IDS=1,2` 即同时仿真两台设备（unit id 严格分派，见下文「双设备 / 高并发」）。
 - 端口 **5020**。
+- ⭐ 真机接入有两种形态：容器部署用宿主上的 `scripts/serial_bridge.py`（RTU→Modbus TCP，`REAL_DEVICE_SOURCE=tcp`，**默认**）；
+  设备进程与串口在同一台宿主时可**进程内直读**（`REAL_DEVICE_SOURCE=serial`），见 [`直读串口.md`](docs/runbooks/直读串口.md)。
 
 ### 2. 网关层（数据采集 + 断网缓存 + 补传）
 
@@ -200,6 +202,8 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
 - [故障台账](docs/runbooks/故障台账.md) —— 历次故障的现象、排查、根因、修复与数据影响
 - [恢复演练与对账口径](docs/runbooks/恢复演练与对账口径.md) —— 备份/恢复步骤、RTO 台账、对账恒等式
 - [全链路验收设计](docs/runbooks/全链路验收设计.md) —— 启动顺序、C1–C19 验收契约、冻结常量表
+- [直读串口](docs/runbooks/直读串口.md) —— device 进程内直读 RS485：两种形态取舍、越界值语义、真机实测帧与端到端
+- [nginx 对外入口](docs/runbooks/nginx-对外入口.md) —— Linux 宿主上把 80 端口跑起来：403 口径、`web` 占位转发、与 compose 形态的差异
 
 **参考指标（reference）**
 - [性能与可靠性指标](docs/reference/性能与可靠性指标.md) —— 延迟分位、完整率、补传成功率
@@ -245,12 +249,18 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
 4. **单机部署**：所有容器在一台宿主上，未验证多机部署、集群与高可用（HA）。
 5. **网关采集上限**：单网关实例节拍硬上限约 **1.05 条/秒**（采集周期从 5 s 压到 0.05 s 不再提升），
    扩容方式是增加网关实例，而非压单实例。
-6. ⚠️ **串口侧是宿主辅助脚本**（`scripts/serial_bridge.py`），不在容器里；重启电脑后需重跑，
-   或走 `scripts/up.ps1` 一条命令拉起。细节与已知限制见 `真机接入-基线冻结v2.md`。
-7. ⭐ **平台**：已在 **x86 Linux 宿主**（Mint 22.3）跑通，但形态是**容器 + 宿主机 venv 混合**
-   （基础设施用容器、4 个 Python 服务用 venv），**与上面"Docker Compose 统一启动"不完全一致**；
-   ⚠️ **应用镜像的构建路径未在 Linux 上验证**（离线包里的 `cems-pipeline` 是空镜像）。
-   ⚠️ **未在 ARM 边缘设备上验证**。详见 [`docs/runbooks/跨平台部署.md`](docs/runbooks/跨平台部署.md)。
+6. ⭐ **串口两种形态并存**：容器部署仍是"宿主辅助脚本"形态（`scripts/serial_bridge.py` 把 RS485/RTU 转成
+   Modbus TCP，重启电脑后需重跑，或走 `scripts/up.ps1` 一条命令拉起）；设备进程与串口同宿主时可让 **device
+   进程自己直读**（`REAL_DEVICE_SOURCE=serial`），已在 Linux 宿主的 `/dev/ttyUSB0` 上实测（原始帧与
+   《物理层取证》逐字节一致）。默认值仍是 `tcp`，容器形态行为不变；取舍、越界值语义与 10 条未验证项见
+   [`直读串口.md`](docs/runbooks/直读串口.md)，旧形态细节见 `真机接入-基线冻结v2.md`。
+7. ⭐ **平台**：已在 **x86 Linux 宿主**（Mint 22.3）跑通；nginx 也在该宿主上以容器形态跑起来，验过 80 端口、
+   `/api/cache/*` 403 口径、静态缓存与 `X-Real-IP`。但形态是**容器 + 宿主机 venv 混合**（基础设施与 nginx 用
+   容器、4 个 Python 服务用 venv），**与上面"Docker Compose 统一启动"不完全一致**，且宿主形态需要一个
+   `web` 占位转发容器（[`nginx-对外入口.md`](docs/runbooks/nginx-对外入口.md) §七）。
+   ⚠️ **应用镜像的构建路径未在 Linux 上验证**（离线包里的 `cems-pipeline` 是空镜像）；
+   ⚠️ **服务未由 systemd 托管**（`nohup` / 容器 `restart` 策略拉起，掉电自愈与重启后自动拉起未验证）；
+   ⚠️ **未在 ARM 边缘设备上验证**。详见 [`跨平台部署.md`](docs/runbooks/跨平台部署.md)。
 
 ---
 
