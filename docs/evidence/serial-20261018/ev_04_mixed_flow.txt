@@ -1,0 +1,23 @@
+== read 1 (t0)
+[2026-10-18 22:52:44] mixed-1 unit=1 raw_registers=[29744, 288, 299, 321, 50, 119, 242, 573, 968]
+    Flow      raw=29744  value= 29744.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=299    value=    29.9 mg/m3  range=[0,200] ok
+    NOx       raw=321    value=    32.1 mg/m3  range=[0,400] ok
+    O2        raw=50     value=     5.0 %      range=[0,25] ok
+    Velocity  raw=119    value=    11.9 m/s    range=[0,30] ok
+    Temp      raw=242    value=    24.2 degC   range=[0,300] ok
+    Humidity  raw=573    value=    57.3 %      range=[0,100] ok
+    Pressure  raw=968    value=    96.8 kPa    range=[85,105] ok
+
+== read 2 (t0+4s)
+[2026-10-18 22:52:49] mixed-2 unit=1 raw_registers=[29862, 288, 294, 321, 51, 119, 242, 575, 968]
+    Flow      raw=29862  value= 29862.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=294    value=    29.4 mg/m3  range=[0,200] ok
+    NOx       raw=321    value=    32.1 mg/m3  range=[0,400] ok
+    O2        raw=51     value=     5.1 %      range=[0,25] ok
+    Velocity  raw=119    value=    11.9 m/s    range=[0,30] ok
+    Temp      raw=242    value=    24.2 degC   range=[0,300] ok
+    Humidity  raw=575    value=    57.5 %      range=[0,100] ok
+    Pressure  raw=968    value=    96.8 kPa    range=[85,105] ok

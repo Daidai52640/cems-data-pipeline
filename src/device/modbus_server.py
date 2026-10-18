@@ -20,7 +20,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Final, Mapping, Optional, Sequence
+from typing import Final, Mapping, Optional, Protocol, Sequence
 
 from pymodbus.datastore import (
     ModbusSequentialDataBlock,
@@ -36,6 +36,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.common.logging import setup_logging                       # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT, SCALE   # noqa: E402
+from src.common.points_transmitter import BAUD_RATE as TRANSMITTER_BAUD_RATE  # noqa: E402
 from src.device.simulator import (                                 # noqa: E402
     SIM_CLOCK_SKEW_SECONDS,
     SIM_EPOCH,
@@ -141,6 +142,44 @@ REAL_DEVICE_POLL_INTERVAL: Final[float] = float(os.getenv("REAL_DEVICE_POLL_INTE
 #: 若只依赖桥的状态位，旧值会一直带着"新鲜"标记被发出去。
 REAL_DEVICE_STALE_AFTER_FAILURES: Final[int] = int(
     os.getenv("REAL_DEVICE_STALE_AFTER_FAILURES", "3")
+)
+
+# ---- 真机数据来源：tcp = 宿主上的 serial_bridge.py（默认，改造前行为）；serial = 本进程直读串口 ----
+#
+# 为什么要有第二个来源：`scripts/serial_bridge.py` 扮演的是现场那台"串口服务器"
+# （RS485 转 Modbus TCP）。但 device 进程与串口在同一台宿主时（现场数采一体机的常见形态），
+# 中间那一跳可以省掉：device 进程自己就是 RTU 主站，直接打开串口读 FC03。
+#
+# 默认值必须是 "tcp"：现有部署（容器、.env、文档与验收）全按"桥在宿主、device 按 TCP 读"
+# 组织，切默认值等于悄悄改掉既有部署行为。本开关只在显式写了 REAL_DEVICE_SOURCE=serial
+# 时生效，且此时仍要求 REAL_DEVICE_ENABLE=1。
+REAL_DEVICE_SOURCES: Final[tuple[str, ...]] = ("tcp", "serial")
+
+
+def parse_real_device_source(raw: str) -> str:
+    """校验 REAL_DEVICE_SOURCE 取值；非法值在启动阶段就抛错，不静默回落到默认来源。
+
+    与 `parse_slave_ids` 同一条纪律：配置写错要立刻可见，而不是等"真机值怎么没进来"才发现。
+    """
+    source = (raw or "").strip().lower()
+    if source not in REAL_DEVICE_SOURCES:
+        raise ValueError(
+            f"REAL_DEVICE_SOURCE={raw!r} 非法，只支持 {REAL_DEVICE_SOURCES}"
+            "（tcp = 读宿主上的 scripts/serial_bridge.py；serial = 本进程直读串口）"
+        )
+    return source
+
+
+REAL_DEVICE_SOURCE: Final[str] = parse_real_device_source(os.getenv("REAL_DEVICE_SOURCE", "tcp"))
+#: 直读形态的串口名。默认 COM3（Windows 宿主上实测口）；Linux 上写 /dev/ttyUSB0。
+REAL_DEVICE_SERIAL_PORT: Final[str] = os.getenv("REAL_DEVICE_SERIAL_PORT", "COM3").strip()
+#: 直读形态的波特率。默认取 points_transmitter 的设备事实（4800），不在这里另写魔数。
+REAL_DEVICE_SERIAL_BAUD: Final[int] = int(
+    os.getenv("REAL_DEVICE_SERIAL_BAUD", str(TRANSMITTER_BAUD_RATE))
+)
+#: 单帧读超时（秒）。超时即判读失败 → 状态位陈旧 + 越界值，进程不崩、恢复后自愈。
+REAL_DEVICE_SERIAL_TIMEOUT: Final[float] = float(
+    os.getenv("REAL_DEVICE_SERIAL_TIMEOUT", "1.0")
 )
 
 
@@ -406,8 +445,75 @@ def _stale_raw(point_name: str) -> int:
 STALE_TEMP_RAW: Final[int] = _stale_raw("Temp")
 STALE_HUMIDITY_RAW: Final[int] = _stale_raw("Humidity")
 
+
+class RealDeviceSource(Protocol):
+    """真机读取器的统一接口。
+
+    两种形态都满足它：
+    - `RealDeviceReader`：读宿主上的 `scripts/serial_bridge.py`（Modbus TCP）
+    - `RtuMaster`（`src/device/rtu_master.py`）：本进程直读串口（Modbus RTU）
+
+    接口一致是刻意的：混流逻辑（`overlay_real_values`）与降级启动只关心"真机值从哪来"，
+    不关心是 TCP 还是 RTU —— 换来源不改混流语义。
+    """
+
+    def read_once(self) -> Optional[tuple[int, int, bool]]:
+        """读一次并更新内部状态：成功返回 (湿度×10, 温度×10, 是否陈旧)，失败返回 None。"""
+
+    def snapshot(self) -> Optional[tuple[int, int, bool]]:
+        """最近一次成功读数 + 当前陈旧标志；从未读到返回 None。"""
+
+    def poll_forever(self) -> None:
+        """后台轮询循环（任何失败只记日志、不退出）。"""
+
+
+def build_real_reader() -> tuple[RealDeviceSource, str]:
+    """按 REAL_DEVICE_SOURCE 建读取器，返回 (读取器, 人读的目标描述)。
+
+    ⚠️ 直读模块**延迟导入**：串口主站要 pyserial，而容器里不装 pyserial（见
+    requirements.txt）。纯仿真 / TCP 形态的 device 进程不能因为一个可选外设的依赖起不来。
+    """
+    if REAL_DEVICE_SOURCE == "serial":
+        from src.device.rtu_master import RtuMaster  # noqa: PLC0415 - 见 docstring
+
+        master = RtuMaster(
+            port=REAL_DEVICE_SERIAL_PORT,
+            baud=REAL_DEVICE_SERIAL_BAUD,
+            slave=REAL_DEVICE_UNIT,
+            interval=REAL_DEVICE_POLL_INTERVAL,
+            timeout=REAL_DEVICE_SERIAL_TIMEOUT,
+        )
+        return master, (
+            f"串口 {REAL_DEVICE_SERIAL_PORT} @ {REAL_DEVICE_SERIAL_BAUD} 8N1 "
+            f"从站{REAL_DEVICE_UNIT}（进程内 RTU 直读）"
+        )
+    reader = RealDeviceReader(
+        REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT, REAL_DEVICE_POLL_INTERVAL
+    )
+    return reader, (
+        f"串口服务器 {REAL_DEVICE_HOST}:{REAL_DEVICE_PORT} 从站{REAL_DEVICE_UNIT}"
+        "（scripts/serial_bridge.py）"
+    )
+
+
+def real_reader_troubleshooting() -> str:
+    """降级启动时按来源给排查顺序 —— 两种形态的排查项不同，别给错的提示。"""
+    if REAL_DEVICE_SOURCE == "serial":
+        return (
+            "① 串口名是否写对（Windows 是 COM3 这种；Linux 是 /dev/ttyUSB0），"
+            "且没被别的进程（宿主上的读表脚本 / scripts/serial_bridge.py）占着；"
+            "② 变送器供电与 A/B 接线；③ 波特率是否 4800（填 9600 会完全静默）；"
+            "④ pyserial 是否已装（本形态需要它）"
+        )
+    return (
+        "① 宿主上 scripts/serial_bridge.py 是否在跑；"
+        "② REAL_DEVICE_HOST/PORT 是否指对（容器里应是 host.docker.internal）；"
+        "③ 变送器供电与 A/B 接线；④ 桥的 5021 端口是否在监听"
+    )
+
+
 #: 真机读取器（仅 REAL_DEVICE_ENABLE=1 时创建，其余情况保持 None）
-_REAL_READER: Optional[RealDeviceReader] = None
+_REAL_READER: Optional[RealDeviceSource] = None
 
 
 def overlay_real_values(values: list[int], slave_id: int) -> list[int]:
@@ -514,29 +620,26 @@ def main() -> None:
     # 坚持"宁可少数据，也不要假数据"，只是把"小数据"的表达方式从"不启动"改成"如实报告"。
     global _REAL_READER  # noqa: PLW0603 - 模块级单例，供 overlay_real_values 读取
     if REAL_DEVICE_ENABLE:
-        reader = RealDeviceReader(
-            REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT, REAL_DEVICE_POLL_INTERVAL
-        )
+        reader, target = build_real_reader()
         # 先挂上再读：否则读失败时 _REAL_READER 仍是 None，
         # overlay_real_values 会走"未启用"分支，把仿真值原样发出去。
         _REAL_READER = reader
         first = reader.read_once()
         if first is None:
             LOGGER.critical(
-                "REAL_DEVICE_ENABLE=1 但读不到真机（%s:%d 从站%d）—— 降级启动："
+                "REAL_DEVICE_ENABLE=1 但读不到真机（%s）—— 降级启动："
                 "Temp/Humidity 将持续写越界值、被接入层拒收，其余 7 个测点不受影响；"
-                "桥上线后会自动恢复正常，不需要重启容器。\n"
-                "  排查顺序：① 宿主上 scripts/serial_bridge.py 是否在跑；"
-                "② REAL_DEVICE_HOST/PORT 是否指对（容器里应是 host.docker.internal）；"
-                "③ 变送器供电与 A/B 接线；④ 桥的 5021 端口是否在监听。\n"
+                "恢复后会自动回新鲜，不需要重启设备层进程。\n"
+                "  排查顺序：%s。\n"
                 "  刻意不回落仿真值 —— 那会让大屏显示假数据而无人察觉。",
-                REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT,
+                target, real_reader_troubleshooting(),
             )
         else:
             temp_display = first[1] - 65536 if first[1] > 32767 else first[1]
             LOGGER.info(
-                "真机接入已启用：%s:%d 从站%d → 覆盖从站%d 的 %s（首次读数 湿度%.1f%%RH / 温度%.1f degC）",
-                REAL_DEVICE_HOST, REAL_DEVICE_PORT, REAL_DEVICE_UNIT, REAL_DEVICE_SLAVE,
+                "真机接入已启用（来源=%s）：%s → 覆盖从站%d 的 %s"
+                "（首次读数 湿度%.1f%%RH / 温度%.1f degC）",
+                REAL_DEVICE_SOURCE, target, REAL_DEVICE_SLAVE,
                 "/".join(REAL_DEVICE_POINTS), first[0] / SCALE, temp_display / SCALE,
             )
         threading.Thread(target=reader.poll_forever, name="real-device-poller", daemon=True).start()

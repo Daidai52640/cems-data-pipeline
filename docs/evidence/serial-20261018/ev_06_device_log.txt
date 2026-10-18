@@ -1,0 +1,58 @@
+2026-10-18 22:52:24 [INFO] device.modbus_server: 真机接入已启用（来源=serial）：串口 /dev/ttyUSB0 @ 4800 8N1 从站1（进程内 RTU 直读） → 覆盖从站1 的 Temp/Humidity（首次读数 湿度58.1%RH / 温度24.3 degC）
+2026-10-18 22:52:24 [WARNING] device.modbus_server: 语义边界：Temp/Humidity 两列装的是环境温湿度，不是烟气参数；本部署只用于数据链路演示，不作环保口径依据。
+2026-10-18 22:52:24 [INFO] device.modbus_server: Modbus 仿真设备启动: 0.0.0.0:15021 从站=1（按 unit id 严格分派：请求未登记的从站会收到异常响应，不会拿到本从站的数据（见 build_server_context 的说明））
+2026-10-18 22:52:24 [INFO] device.modbus_server: 从站1: 仿真种子=20261001 相位偏移=+0s
+2026-10-18 22:52:24 [INFO] device.modbus_server: 寄存器地图(×10): 地址0=Flow, 地址1=Dust, 地址2=SO2, 地址3=NOx, 地址4=O2, 地址5=Velocity, 地址6=Temp, 地址7=Humidity, 地址8=Pressure
+2026-10-18 22:52:24 [INFO] device.modbus_server: 仿真信号已启用: 种子=默认(20261001) 刷新=2.0s 时间基准=2026-01-01T00:00:00+00:00 时钟偏移=0s
+2026-10-18 22:52:24 [INFO] device.modbus_server: 污染物尖峰: 开关=True 概率=0.0040/周期 幅度=0.30~0.55 限值（只作用于 Dust/SO2/NOx）
+2026-10-18 22:52:24 [INFO] pymodbus.logging: Server listening.
+2026-10-18 22:52:24 [INFO] device.rtu_master: 串口直读：湿度 58.1 %RH ｜ 温度 24.3 degC ｜ 状态位=0
+2026-10-18 22:52:25 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.3 degC ｜ 状态位=0
+2026-10-18 22:52:26 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.3 degC ｜ 状态位=0
+2026-10-18 22:52:27 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.3 degC ｜ 状态位=0
+2026-10-18 22:52:28 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.3 degC ｜ 状态位=0
+2026-10-18 22:52:29 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:30 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:31 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:33 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:34 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:35 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:36 [INFO] device.rtu_master: 串口直读：湿度 57.8 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:37 [INFO] device.rtu_master: 串口直读：湿度 57.6 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:38 [INFO] device.rtu_master: 串口直读：湿度 57.6 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:39 [INFO] device.rtu_master: 串口直读：湿度 57.3 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:40 [INFO] device.rtu_master: 串口直读：湿度 57.3 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:41 [INFO] device.rtu_master: 串口直读：湿度 57.3 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:42 [INFO] device.rtu_master: 串口直读：湿度 57.3 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:43 [INFO] device.rtu_master: 串口直读：湿度 57.3 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:44 [INFO] device.rtu_master: 串口直读：湿度 57.3 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:45 [INFO] device.rtu_master: 串口直读：湿度 57.4 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:46 [INFO] device.rtu_master: 串口直读：湿度 57.4 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:47 [INFO] device.rtu_master: 串口直读：湿度 57.5 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:48 [INFO] device.rtu_master: 串口直读：湿度 57.5 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:49 [INFO] device.rtu_master: 串口直读：湿度 57.7 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:50 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:51 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:52 [INFO] device.rtu_master: 串口直读：湿度 58.1 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:53 [INFO] device.rtu_master: 串口直读：湿度 58.1 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:54 [INFO] device.rtu_master: 串口直读：湿度 58.1 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:52:56 [ERROR] device.rtu_master: 串口直读失败（连续第 1 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：RtuTimeout: 应答超时：只收到 0/3 字节帧头
+2026-10-18 22:52:57 [ERROR] device.rtu_master: 串口直读失败（连续第 2 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：RtuTimeout: 应答超时：只收到 0/3 字节帧头
+2026-10-18 22:52:59 [ERROR] device.rtu_master: 串口直读失败（连续第 3 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：RtuTimeout: 应答超时：只收到 0/3 字节帧头
+2026-10-18 22:53:00 [ERROR] device.rtu_master: 串口直读失败（连续第 4 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：RtuTimeout: 应答超时：只收到 0/3 字节帧头
+2026-10-18 22:53:02 [ERROR] device.rtu_master: 串口直读失败（连续第 5 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：RtuTimeout: 应答超时：只收到 0/3 字节帧头
+2026-10-18 22:53:03 [WARNING] device.rtu_master: 串口直读恢复（此前连续失败 5 次）
+2026-10-18 22:53:03 [INFO] device.rtu_master: 串口直读：湿度 58.1 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:04 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:53:05 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.2 degC ｜ 状态位=0
+2026-10-18 22:53:06 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:07 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:08 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:09 [INFO] device.rtu_master: 串口直读：湿度 58.0 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:10 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:11 [INFO] device.rtu_master: 串口直读：湿度 57.9 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:12 [INFO] device.rtu_master: 串口直读：湿度 57.7 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:13 [INFO] device.rtu_master: 串口直读：湿度 57.7 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:15 [INFO] device.rtu_master: 串口直读：湿度 57.7 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:16 [INFO] device.rtu_master: 串口直读：湿度 57.7 %RH ｜ 温度 24.1 degC ｜ 状态位=0
+2026-10-18 22:53:17 [INFO] device.rtu_master: 串口直读：湿度 57.7 %RH ｜ 温度 24.1 degC ｜ 状态位=0

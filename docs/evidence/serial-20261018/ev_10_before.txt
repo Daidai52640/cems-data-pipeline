@@ -1,0 +1,35 @@
+== import check
+OK tcp RtuMaster
+
+== py file hashes (synced code)
+b85ecf48d08d92df56c9f1465513f389462db9cffc51f0e1f5c2dbda76276aff  src/device/modbus_server.py
+82bdb39023bd1a7c6cc08b0496a64d4f321245f8e9acf6583d832db0d3229133  src/device/rtu_master.py
+
+== docker
+cems-nginx Up About a minute (healthy)
+cems-nginx-web Up About a minute
+cems-redis Up 55 minutes (healthy)
+tdengine Up 55 minutes (healthy)
+emqx Up 55 minutes (healthy)
+
+== tdengine count BEFORE switch
+       count(*)        |
+========================
+                   646 |
+Query OK, 1 row(s) in set (0.002118s)
+
+
+== tdengine recent rows BEFORE switch
+taos> select ts, temp, humidity from cems.cems_data order by ts desc limit 3;
+           ts            |         temp         |       humidity       |
+========================================================================
+ 2026-10-18 22:55:48.000 |                  175 |                 40.6 |
+ 2026-10-18 22:55:43.000 |                174.8 |                 40.4 |
+ 2026-10-18 22:55:38.000 |                175.1 |                 40.2 |
+Query OK, 3 row(s) in set (0.002414s)
+
+
+== gateway heartbeat BEFORE switch
+{"ts":1792335348.8144085,"pid":9655,"cfg":"359aac47","south_protocol":"modbus","south_ok":true,"mqtt_ok":true,"backlog_bytes":0,"samples":646,"published":645,"cached":1,"read_failures":0,"modbus_reconnects":0}
+== api/data BEFORE switch
+{"dust":[2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.96,3.07,3.14,3.25,3.33,3.44,3.51,3.62,3.7,3.81,3.88,3.99,4.07,4.18,4.25,4.36,4.44,4.55,4.62,4.73,4.81,4.92,4.99,5.1,5.03,4.92,4.84,4.73,4.77,4.88,4.96,5.07,5.07,4.96,4.88,4.77,4.7,4.59,4.51,4.4,4.33,4.22,4.14,4.03,3.96,3.85,3.77,3.66,3.59,3.48,3.4,3.29,3.22,3.11,3.03,2.92,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88],"flow":[31152,31159,31182,31070,31198,31100,31016,30960,31066,30958,31268,31122,31033,31098,311

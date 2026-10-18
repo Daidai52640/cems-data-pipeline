@@ -1,0 +1,22 @@
+[2026-10-18 22:54:07] peer up: simulated RTU slave link=/tmp/ttyV0 -> /dev/pts/0 slave=1 humidity=561 temperature=273 response=01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:12] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:12] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:13] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:14] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:15] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:16] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:17] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:17] peer: SIGUSR1 -> PAUSED (no answers)
+[2026-10-18 22:54:18] peer: request 01 03 00 00 00 02 c4 0b -> SILENT (paused)
+[2026-10-18 22:54:19] peer: request 01 03 00 00 00 02 c4 0b -> SILENT (paused)
+[2026-10-18 22:54:21] peer: request 01 03 00 00 00 02 c4 0b -> SILENT (paused)
+[2026-10-18 22:54:21] peer: SIGUSR2 -> RESUMED
+[2026-10-18 22:54:22] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:23] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:24] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:25] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:26] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:27] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:28] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:29] peer: SIGTERM -> exit
+[2026-10-18 22:54:29] peer down

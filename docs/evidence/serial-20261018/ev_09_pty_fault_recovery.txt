@@ -1,0 +1,70 @@
+== pty peer MIXED FLOW (simulated peer, NOT real hardware)
+2026-10-18T22:54:17+08:00
+[2026-10-18 22:54:17] pty-mixed-1 unit=1 raw_registers=[29936, 288, 196, 362, 49, 120, 273, 561, 967]
+    Flow      raw=29936  value= 29936.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=196    value=    19.6 mg/m3  range=[0,200] ok
+    NOx       raw=362    value=    36.2 mg/m3  range=[0,400] ok
+    O2        raw=49     value=     4.9 %      range=[0,25] ok
+    Velocity  raw=120    value=    12.0 m/s    range=[0,30] ok
+    Temp      raw=273    value=    27.3 degC   range=[0,300] ok
+    Humidity  raw=561    value=    56.1 %      range=[0,100] ok
+    Pressure  raw=967    value=    96.7 kPa    range=[85,105] ok
+
+== pause peer (SIGUSR1): reads must time out -> sentinels
+[2026-10-18 22:54:21] pty-paused unit=1 raw_registers=[29815, 288, 196, 370, 50, 119, 3010, 1010, 967]
+    Flow      raw=29815  value= 29815.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=196    value=    19.6 mg/m3  range=[0,200] ok
+    NOx       raw=370    value=    37.0 mg/m3  range=[0,400] ok
+    O2        raw=50     value=     5.0 %      range=[0,25] ok
+    Velocity  raw=119    value=    11.9 m/s    range=[0,30] ok
+    Temp      raw=3010   value=   301.0 degC   range=[0,300] OUT_OF_RANGE
+    Humidity  raw=1010   value=   101.0 %      range=[0,100] OUT_OF_RANGE
+    Pressure  raw=967    value=    96.7 kPa    range=[85,105] ok
+
+== device alive?
+ 145872 Ssl        00:09
+ALIVE
+
+== resume peer (SIGUSR2): must recover automatically
+[2026-10-18 22:54:25] pty-resumed unit=1 raw_registers=[29724, 288, 197, 378, 50, 120, 273, 561, 968]
+    Flow      raw=29724  value= 29724.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=197    value=    19.7 mg/m3  range=[0,200] ok
+    NOx       raw=378    value=    37.8 mg/m3  range=[0,400] ok
+    O2        raw=50     value=     5.0 %      range=[0,25] ok
+    Velocity  raw=120    value=    12.0 m/s    range=[0,30] ok
+    Temp      raw=273    value=    27.3 degC   range=[0,300] ok
+    Humidity  raw=561    value=    56.1 %      range=[0,100] ok
+    Pressure  raw=968    value=    96.8 kPa    range=[85,105] ok
+
+== kill simulated peer (SIGTERM): serial path disappears (dangling /tmp/ttyV0)
+ttyV0 -> /dev/pts/0
+[2026-10-18 22:54:34] peer-gone unit=1 raw_registers=[29799, 288, 196, 399, 50, 119, 3010, 1010, 968]
+    Flow      raw=29799  value= 29799.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=196    value=    19.6 mg/m3  range=[0,200] ok
+    NOx       raw=399    value=    39.9 mg/m3  range=[0,400] ok
+    O2        raw=50     value=     5.0 %      range=[0,25] ok
+    Velocity  raw=119    value=    11.9 m/s    range=[0,30] ok
+    Temp      raw=3010   value=   301.0 degC   range=[0,300] OUT_OF_RANGE
+    Humidity  raw=1010   value=   101.0 %      range=[0,100] OUT_OF_RANGE
+    Pressure  raw=968    value=    96.8 kPa    range=[85,105] ok
+
+== device alive after serial link loss?
+ 145872 Ssl        00:22
+ALIVE
+
+== restart simulated peer on a new pty: device should reconnect without restart
+new ttyV0 -> /dev/pts/0
+[2026-10-18 22:54:39] peer-restarted unit=1 raw_registers=[29846, 288, 196, 407, 49, 121, 273, 561, 967]
+    Flow      raw=29846  value= 29846.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=196    value=    19.6 mg/m3  range=[0,200] ok
+    NOx       raw=407    value=    40.7 mg/m3  range=[0,400] ok
+    O2        raw=49     value=     4.9 %      range=[0,25] ok
+    Velocity  raw=121    value=    12.1 m/s    range=[0,30] ok
+    Temp      raw=273    value=    27.3 degC   range=[0,300] ok
+    Humidity  raw=561    value=    56.1 %      range=[0,100] ok
+    Pressure  raw=967    value=    96.7 kPa    range=[85,105] ok

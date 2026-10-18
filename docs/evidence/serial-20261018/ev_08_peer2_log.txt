@@ -1,0 +1,24 @@
+[2026-10-18 22:54:34] peer up: simulated RTU slave link=/tmp/ttyV0 -> /dev/pts/0 slave=1 humidity=561 temperature=273 response=01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:34] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:35] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:36] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:37] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:38] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:39] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:40] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:41] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:42] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:43] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:44] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:45] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:46] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:47] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:48] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:49] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:50] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:51] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:52] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:53] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:54] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:55] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8
+[2026-10-18 22:54:56] peer: request 01 03 00 00 00 02 c4 0b -> response 01 03 04 02 31 01 11 6b d8

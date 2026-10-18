@@ -1,0 +1,29 @@
+== real-hardware link disturbance: bus noise injected by a second process on /dev/ttyUSB0
+2026-10-18T22:53:37+08:00
+
+== probe DURING noise: expect status=1 + out-of-range sentinels
+# 探针启动：port=/dev/ttyUSB0 baud=4800 8N1 从站=1 请求帧=01 03 00 00 00 02 c4 0b
+# 编号 | 读成功 | 湿度原始/工程值 | 温度原始(int16)/工程值 | 状态位 | 累计失败 | 最近失败原因
+  1 | 失败 | 湿度 1010(101.0) | 温度 3010(301.0) | 状态=1 | 累计失败=1 | RtuTimeout: 应答超时：只收到 0/3 字节帧头 | 1002 ms
+  2 | 失败 | 湿度 1010(101.0) | 温度 3010(301.0) | 状态=1 | 累计失败=2 | RtuTimeout: 应答超时：只收到 0/3 字节帧头 | 1002 ms
+  3 | 失败 | 湿度 1010(101.0) | 温度 3010(301.0) | 状态=1 | 累计失败=3 | RtuTimeout: 应答超时：只收到 0/3 字节帧头 | 1002 ms
+  4 | 失败 | 湿度 1010(101.0) | 温度 3010(301.0) | 状态=1 | 累计失败=4 | RtuTimeout: 应答超时：只收到 0/3 字节帧头 | 1002 ms
+
+== noise log
+[noise] start /dev/ttyUSB0 seconds=9.0 period=0.02s
+[noise] stop /dev/ttyUSB0 frames=448
+
+== probe AFTER noise stops: expect status=0 + real values
+# 探针启动：port=/dev/ttyUSB0 baud=4800 8N1 从站=1 请求帧=01 03 00 00 00 02 c4 0b
+# 编号 | 读成功 | 湿度原始/工程值 | 温度原始(int16)/工程值 | 状态位 | 累计失败 | 最近失败原因
+  1 | 成功 | 湿度 577(57.7) | 温度 240(24.0) | 状态=0 | 累计失败=0 | 46 ms
+      请求帧=01 03 00 00 00 02 c4 0b
+      应答帧=01 03 04 02 41 00 f0 ab db
+  2 | 成功 | 湿度 577(57.7) | 温度 240(24.0) | 状态=0 | 累计失败=0 | 45 ms
+      请求帧=01 03 00 00 00 02 c4 0b
+      应答帧=01 03 04 02 41 00 f0 ab db
+  3 | 成功 | 湿度 577(57.7) | 温度 240(24.0) | 状态=0 | 累计失败=0 | 45 ms
+      请求帧=01 03 00 00 00 02 c4 0b
+      应答帧=01 03 04 02 41 00 f0 ab db
+
+2026-10-18T22:53:49+08:00

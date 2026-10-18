@@ -1,0 +1,79 @@
+== time
+2026-10-18T22:56:10+08:00
+
+== 5020 readback #1 (direct-read instance now serving 5020)
+[2026-10-18 22:56:10] 5020-mixed-1 unit=1 raw_registers=[30163, 288, 196, 541, 48, 120, 237, 589, 967]
+    Flow      raw=30163  value= 30163.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=196    value=    19.6 mg/m3  range=[0,200] ok
+    NOx       raw=541    value=    54.1 mg/m3  range=[0,400] ok
+    O2        raw=48     value=     4.8 %      range=[0,25] ok
+    Velocity  raw=120    value=    12.0 m/s    range=[0,30] ok
+    Temp      raw=237    value=    23.7 degC   range=[0,300] ok
+    Humidity  raw=589    value=    58.9 %      range=[0,100] ok
+    Pressure  raw=967    value=    96.7 kPa    range=[85,105] ok
+
+== device.log: same-seconds RTU direct-read lines (the 2 real points source)
+2026-10-18 22:56:05 [INFO] device.rtu_master: 串口直读：湿度 58.9 %RH ｜ 温度 23.8 degC ｜ 状态位=0
+2026-10-18 22:56:07 [INFO] device.rtu_master: 串口直读：湿度 58.9 %RH ｜ 温度 23.7 degC ｜ 状态位=0
+2026-10-18 22:56:09 [INFO] device.rtu_master: 串口直读：湿度 59.0 %RH ｜ 温度 23.7 degC ｜ 状态位=0
+
+== 5020 readback #2 (+4s)
+[2026-10-18 22:56:14] 5020-mixed-2 unit=1 raw_registers=[30164, 288, 196, 533, 49, 121, 237, 590, 967]
+    Flow      raw=30164  value= 30164.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=196    value=    19.6 mg/m3  range=[0,200] ok
+    NOx       raw=533    value=    53.3 mg/m3  range=[0,400] ok
+    O2        raw=49     value=     4.9 %      range=[0,25] ok
+    Velocity  raw=121    value=    12.1 m/s    range=[0,30] ok
+    Temp      raw=237    value=    23.7 degC   range=[0,300] ok
+    Humidity  raw=590    value=    59.0 %      range=[0,100] ok
+    Pressure  raw=967    value=    96.7 kPa    range=[85,105] ok
+
+== device.log: same-seconds RTU lines
+2026-10-18 22:56:09 [INFO] device.rtu_master: 串口直读：湿度 59.0 %RH ｜ 温度 23.7 degC ｜ 状态位=0
+2026-10-18 22:56:11 [INFO] device.rtu_master: 串口直读：湿度 59.0 %RH ｜ 温度 23.7 degC ｜ 状态位=0
+2026-10-18 22:56:13 [INFO] device.rtu_master: 串口直读：湿度 59.0 %RH ｜ 温度 23.7 degC ｜ 状态位=0
+
+== wait 15s for gateway poll + TDengine write
+
+== TDengine count AFTER switch
+========================
+                   652 |
+Query OK, 1 row(s) in set (0.002518s)
+
+
+== TDengine recent rows AFTER switch (temp/humidity must be environmental values)
+
+taos> select ts, temp, humidity from cems.cems_data order by ts desc limit 8;
+           ts            |         temp         |       humidity       |
+========================================================================
+ 2026-10-18 22:56:28.000 |                 23.7 |                 59.2 |
+ 2026-10-18 22:56:23.000 |                 23.7 |                 59.2 |
+ 2026-10-18 22:56:18.000 |                 23.7 |                 59.1 |
+ 2026-10-18 22:56:13.000 |                 23.7 |                   59 |
+ 2026-10-18 22:56:08.000 |                 23.8 |                 58.9 |
+ 2026-10-18 22:55:53.000 |                175.1 |                 40.5 |
+ 2026-10-18 22:55:48.000 |                  175 |                 40.6 |
+ 2026-10-18 22:55:43.000 |                174.8 |                 40.4 |
+Query OK, 8 row(s) in set (0.002380s)
+
+
+== gateway heartbeat AFTER switch
+{"ts":1792335388.8339179,"pid":9655,"cfg":"359aac47","south_protocol":"modbus","south_ok":true,"mqtt_ok":true,"backlog_bytes":0,"samples":652,"published":651,"cached":1,"read_failures":1,"modbus_reconnects":1}
+== /api/data (5000 direct) temp+humidity tails
+keys ['dust', 'flow', 'humidity', 'nox', 'o2', 'pressure', 'scope', 'so2', 'temp', 'ts', 'velocity']
+temp_tail [175.1, 23.8, 23.7, 23.7, 23.7, 23.7]
+humidity_tail [40.5, 58.9, 59, 59.1, 59.2, 59.2]
+
+== gateway.log tail
+2026-10-18 22:01:56 [INFO] gateway: [补传完成] broker 已确认 1 条
+2026-10-18 22:55:58 [ERROR] gateway: 读 Modbus 设备异常: Modbus Error: [Connection] ModbusTcpClient localhost:5020: Connection unexpectedly closed 0.000 seconds into read of unbounded read bytes without response from slave before it closed connection
+2026-10-18 22:55:58 [ERROR] gateway: 本轮采集失败，重建 Modbus 连接
+2026-10-18 22:56:08 [INFO] gateway: Modbus 已连接: localhost:5020 从站1
+
+== subscriber.log tail
+2026-10-18 22:55:53 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=start point=nox judge_type=instant event_id=nox|instant|2026-10-18 22:55:43 ts=2026-10-18 22:55:43 trigger_ts=2026-10-18 22:55:53 converted=50.0311 raw_value=53.7000 limit_value=50.0000 o2=4.9000 o2_reference=6.0000 over_samples=3 window_seconds=0.0000 judge_version=v1.0.0 reason=滑窗触发：最近 6/6 条有效样本里 3 条越限 >= 3（触发时刻 2026-10-18 22:55:53）
+2026-10-18 22:56:08 [WARNING] platform.subscriber_to_td: [事件表] 2026-10-18 22:56:08 Temp kind=jump stored=1 raw=23.8: 测点 Temp 跳变可疑（值已入库）: 上次 175.1 → 本次 23.8，|Δ|=151.3 > 量程宽度 300×0.25=75
+
+2026-10-18T22:56:29+08:00

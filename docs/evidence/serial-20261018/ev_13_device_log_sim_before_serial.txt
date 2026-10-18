@@ -1,0 +1,6 @@
+2026-10-18 22:01:54 [INFO] device.modbus_server: Modbus 仿真设备启动: 0.0.0.0:5020 从站=1（按 unit id 严格分派：请求未登记的从站会收到异常响应，不会拿到本从站的数据（见 build_server_context 的说明））
+2026-10-18 22:01:54 [INFO] device.modbus_server: 从站1: 仿真种子=20261001 相位偏移=+0s
+2026-10-18 22:01:54 [INFO] device.modbus_server: 寄存器地图(×10): 地址0=Flow, 地址1=Dust, 地址2=SO2, 地址3=NOx, 地址4=O2, 地址5=Velocity, 地址6=Temp, 地址7=Humidity, 地址8=Pressure
+2026-10-18 22:01:54 [INFO] device.modbus_server: 仿真信号已启用: 种子=默认(20261001) 刷新=2.0s 时间基准=2026-01-01T00:00:00+00:00 时钟偏移=0s
+2026-10-18 22:01:54 [INFO] device.modbus_server: 污染物尖峰: 开关=True 概率=0.0040/周期 幅度=0.30~0.55 限值（只作用于 Dust/SO2/NOx）
+2026-10-18 22:01:54 [INFO] pymodbus.logging: Server listening.

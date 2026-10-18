@@ -1,0 +1,48 @@
+== t0 noise start
+2026-10-18T22:52:55+08:00
+
+== read during noise (t0+2s)
+[2026-10-18 22:52:57] during-noise-1 unit=1 raw_registers=[29990, 288, 285, 321, 50, 120, 3010, 1010, 968]
+    Flow      raw=29990  value= 29990.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=285    value=    28.5 mg/m3  range=[0,200] ok
+    NOx       raw=321    value=    32.1 mg/m3  range=[0,400] ok
+    O2        raw=50     value=     5.0 %      range=[0,25] ok
+    Velocity  raw=120    value=    12.0 m/s    range=[0,30] ok
+    Temp      raw=3010   value=   301.0 degC   range=[0,300] OUT_OF_RANGE
+    Humidity  raw=1010   value=   101.0 %      range=[0,100] OUT_OF_RANGE
+    Pressure  raw=968    value=    96.8 kPa    range=[85,105] ok
+
+== read during noise (t0+4s)
+[2026-10-18 22:52:59] during-noise-2 unit=1 raw_registers=[29890, 288, 283, 321, 50, 119, 3010, 1010, 968]
+    Flow      raw=29890  value= 29890.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=283    value=    28.3 mg/m3  range=[0,200] ok
+    NOx       raw=321    value=    32.1 mg/m3  range=[0,400] ok
+    O2        raw=50     value=     5.0 %      range=[0,25] ok
+    Velocity  raw=119    value=    11.9 m/s    range=[0,30] ok
+    Temp      raw=3010   value=   301.0 degC   range=[0,300] OUT_OF_RANGE
+    Humidity  raw=1010   value=   101.0 %      range=[0,100] OUT_OF_RANGE
+    Pressure  raw=968    value=    96.8 kPa    range=[85,105] ok
+
+== noise stopped
+2026-10-18T22:53:03+08:00
+
+[noise] start /dev/ttyUSB0 seconds=8.0 period=0.02s
+[noise] stop /dev/ttyUSB0 frames=399
+
+== read after recovery
+[2026-10-18 22:53:07] recovered unit=1 raw_registers=[29942, 288, 274, 321, 50, 120, 242, 580, 968]
+    Flow      raw=29942  value= 29942.0 m3/h   range=[0,65000] ok
+    Dust      raw=288    value=     2.9 mg/m3  range=[0,100] ok
+    SO2       raw=274    value=    27.4 mg/m3  range=[0,200] ok
+    NOx       raw=321    value=    32.1 mg/m3  range=[0,400] ok
+    O2        raw=50     value=     5.0 %      range=[0,25] ok
+    Velocity  raw=120    value=    12.0 m/s    range=[0,30] ok
+    Temp      raw=242    value=    24.2 degC   range=[0,300] ok
+    Humidity  raw=580    value=    58.0 %      range=[0,100] ok
+    Pressure  raw=968    value=    96.8 kPa    range=[85,105] ok
+
+== device process:
+ 140993 Ssl        00:43 .venv/bin/python -m src.device.modbus_server
+ALIVE
