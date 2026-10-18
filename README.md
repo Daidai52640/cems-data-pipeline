@@ -247,6 +247,10 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
    扩容方式是增加网关实例，而非压单实例。
 6. ⚠️ **串口侧是宿主辅助脚本**（`scripts/serial_bridge.py`），不在容器里；重启电脑后需重跑，
    或走 `scripts/up.ps1` 一条命令拉起。细节与已知限制见 `真机接入-基线冻结v2.md`。
+7. ⭐ **平台**：已在 **x86 Linux 宿主**（Mint 22.3）跑通，但形态是**容器 + 宿主机 venv 混合**
+   （基础设施用容器、4 个 Python 服务用 venv），**与上面"Docker Compose 统一启动"不完全一致**；
+   ⚠️ **应用镜像的构建路径未在 Linux 上验证**（离线包里的 `cems-pipeline` 是空镜像）。
+   ⚠️ **未在 ARM 边缘设备上验证**。详见 [`docs/runbooks/跨平台部署.md`](docs/runbooks/跨平台部署.md)。
 
 ---
 

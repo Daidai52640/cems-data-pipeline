@@ -1,0 +1,61 @@
+=== 环境 ===
+host: admin  user: ddf  date: 2026-10-18T22:27:58+08:00
+os: Linux Mint 22.3
+kernel: 6.14.0-37-generic
+docker: Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2
+compose: 2.40.3+ds1-0ubuntu1~24.04.1
+python: Python 3.12.3
+
+=== 容器 ===
+cems-redis | Up 27 minutes (healthy) | redis:7.4.11-alpine
+emqx | Up 27 minutes (healthy) | emqx/emqx:6.3.0
+tdengine | Up 27 minutes (healthy) | tdengine/tdengine:3.3.6.13
+
+=== 镜像 ===
+nginx:1.31.6-alpine 94.4MB
+redis:7.4.11-alpine 57.8MB
+emqx/emqx:6.3.0 484MB
+tdengine/tdengine:3.3.6.13 1.47GB
+cems-pipeline:latest 2.27kB
+
+=== 宿主机进程 ===
+9605
+9655
+9679
+9897
+
+=== 端口 ===
+127.0.0.1:6041
+127.0.0.1:6030
+0.0.0.0:5020
+0.0.0.0:5000
+127.0.0.1:1883
+
+=== 网关日志：断网缓存与补传 ===
+2026-10-18 22:01:56 [INFO] gateway: 断网续传已启用，缓存目录: /home/ddf/cems-data-pipeline/data（GATEWAY_DATA_DIR=未设置，用默认 PROJECT_ROOT/data）
+2026-10-18 22:01:56 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-18 22:01:56 Flow=32383.0 Dust=2.88 SO2=21.5 NOx=51.8 O2=5.3 Velocity=12.3 Temp=179.0 Humidity=40.1 Pressure=97.0 Flag=N Cfg=359aac47
+2026-10-18 22:01:56 [INFO] gateway: MQTT 已连接: localhost:1883
+2026-10-18 22:01:56 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+2026-10-18 22:01:56 [INFO] gateway: [补传完成] broker 已确认 1 条
+
+=== 接入层日志：订阅与入库 ===
+2026-10-18 22:02:00 [INFO] platform.subscriber_to_td: MQTT 已连接: localhost:1883（会话恢复=False）
+2026-10-18 22:02:00 [INFO] platform.subscriber_to_td: 已订阅主题: cems/plant1/data (QoS=1)
+2026-10-18 22:02:01 [INFO] platform.subscriber_to_td: 折算值抽样（第 1 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-18 22:02:01 O2=5.3000 -> dust=2.7516 so2=21.2102 nox=50.6369
+2026-10-18 22:03:36 [INFO] platform.subscriber_to_td: 折算值抽样（第 20 条，已按 HJ 212-2025 §8.1.1 d) 的规则处理：无法折算时传缺省类型最大值哨兵 9999.99；注意这是【规则对齐】，本项目出站报文体仍是内部简化格式，不是 HJ212 报文）: 标干 ts=2026-10-18 22:03:36 O2=5.2000 -> dust=2.7342 so2=31.4241 nox=38.7342
+
+=== 接入层日志：告警 ===
+2026-10-18 22:02:00 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=dust judge_type=hourly event_id=dust|hourly|2026-10-18 20:00:00 ts=2026-10-18 20:00:00 trigger_ts=2026-10-18 20:00:00 converted=nan raw_value=nan limit_value=5.0000 o2=nan o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.000 < 门限 0.75）
+2026-10-18 22:02:00 [INFO] platform.subscriber_to_td: ALARM_PUSH channel=log status=recorded phase=invalid point=so2 judge_type=hourly event_id=so2|hourly|2026-10-18 20:00:00 ts=2026-10-18 20:00:00 trigger_ts=2026-10-18 20:00:00 converted=nan raw_value=nan limit_value=35.0000 o2=nan o2_reference=6.0000 over_samples=0 window_seconds=3600.0000 judge_version=v1.0.0 reason=小时数据不足，不判达标也不判超标（覆盖率 0.000 < 门限 0.75）
+
+=== web 启动 ===
+2026-10-18 22:02:00 [INFO] web.dashboard: 数据源: http://localhost:6041 库=cems 超级表=cems_data 最近 10 分钟
+2026-10-18 22:02:00 [INFO] web.dashboard: 使用 waitress 启动（生产级 WSGI，线程数 8）
+2026-10-18 22:02:00 [INFO] waitress: Serving on http://0.0.0.0:5000
+
+=== TDengine 数据量 ===
+                   312 |
+
+=== HTTP 自检 ===
+  /        200
+  /api/data 200
