@@ -1,0 +1,35 @@
+$ curl -sS -i -o /dev/null -D - http://127.0.0.1/ | head -8
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sun, 18 Oct 2026 14:57:37 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 16737
+Connection: keep-alive
+Vary: Accept-Encoding
+
+
+$ curl -sS -o /dev/null -w "status=%{http_code} bytes=%{size_download} time=%{time_total}" http://127.0.0.1/
+status=200 bytes=16737 time=0.000961
+
+$ curl -sS http://127.0.0.1/ | head -c 200
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>CEMS 监测数据（9 测点）</title>
+<style>
+  body { background:#0f172a; color:#e2e8f0; font-family:system-ui,-apple-system,"S
+
+$ curl -sS -o /dev/null -w "status=%{http_code} bytes=%{size_download}" http://127.0.0.1/api/data
+status=200 bytes=7797
+
+$ curl -sS http://127.0.0.1/api/data | head -c 300
+{"dust":[3.44,3.51,3.62,3.7,3.81,3.88,3.99,4.07,4.18,4.25,4.36,4.44,4.55,4.62,4.73,4.81,4.92,4.99,5.1,5.03,4.92,4.84,4.73,4.77,4.88,4.96,5.07,5.07,4.96,4.88,4.77,4.7,4.59,4.51,4.4,4.33,4.22,4.14,4.03,3.96,3.85,3.77,3.66,3.59,3.48,3.4,3.29,3.22,3.11,3.03,2.92,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2.88,2
+
+$ curl -sS -o /dev/null -w "status=%{http_code}" http://127.0.0.1/api/health
+status=200
+
+# contrast: direct backend on the host (bypassing nginx)
+$ curl -sS -o /dev/null -w "status=%{http_code}" http://127.0.0.1:5000/
+status=200
+

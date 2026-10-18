@@ -1,0 +1,52 @@
+=== 反代头实测：后端看到的 X-Real-IP 是连接的真实对端 ===
+
+# 做法：把 `web` 这个名字临时指到一个"回显探针"上（一次性容器，不是仓库文件），
+# 由探针把外层 nginx 送来的请求头原样回显；业务进程与仓库配置均不改动。
+# 探针只占 cems-net 内部的 5000（容器内端口），不新增宿主监听端口。
+# 本窗口内 `web` 指向探针，所以 / 返回的是探针文本（不是大屏页面）。
+
+# 一次性探针配置（宿主 /tmp/probedir/probe-echo.conf）：
+# one-off probe: echo the request headers the outer nginx sends (NOT part of the repo)
+events { worker_connections 64; }
+http {
+    access_log off;
+    server {
+        listen 5000;
+        default_type text/plain;
+        location / {
+            return 200 "direct_peer=$remote_addr\nx_real_ip=$http_x_real_ip\nx_forwarded_for=$http_x_forwarded_for\nx_forwarded_proto=$http_x_forwarded_proto\nhost=$http_host\nrequest_uri=$request_uri\n";
+        }
+    }
+}
+
+# 客户端：局域网内另一台机器（Windows），不是 Docker 宿主本身。
+$ ipconfig | findstr /i "IPv4"
+   IPv4 Address. . . . . . . . . . . : 192.168.31.76
+
+# 客户端自带伪造的 X-Real-IP / X-Forwarded-For，验证本层不信任客户端声明，
+# 而是用连接的真实对端重写（口径见 cems.conf 的转发头注释）：
+$ curl.exe -sS --noproxy "*" -H "X-Real-IP: 1.2.3.4" -H "X-Forwarded-For: 1.2.3.4" http://192.168.31.18/probe-from-lan
+direct_peer=172.18.0.6 x_real_ip=192.168.31.76 x_forwarded_for=192.168.31.76 x_forwarded_proto=http host=192.168.31.18 request_uri=/probe-from-lan
+
+$ curl.exe -sS --noproxy "*" -o NUL -w "root=%{http_code} bytes=%{size_download}" http://192.168.31.18/
+root=200 bytes=133
+
+$ curl.exe -sS --noproxy "*" -i http://192.168.31.18/api/cache/stats
+HTTP/1.1 403 Forbidden
+Server: nginx
+Date: Sun, 18 Oct 2026 14:59:46 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 146
+Connection: keep-alive
+
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+
+# 边缘侧访问日志（客户端地址为 192.168.31.76；探针前后跑过两轮，这里取最后一轮）：
+$ docker logs cems-nginx 2>&1 | grep "probe-from-lan" | tail -1
+192.168.31.76 - - [18/Oct/2026:22:59:46 +0800] "GET /probe-from-lan HTTP/1.1" 200 147 "-" "curl/8.21.0" rt=0.000 urt=0.001

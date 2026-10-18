@@ -1,0 +1,34 @@
+=== 终态：局域网客户端经 80 端口的实测（真实后端，非探针） ===
+
+# 客户端是局域网内另一台机器（Windows 192.168.31.76），不是 Docker 宿主。
+
+$ ipconfig | findstr /i "IPv4"
+   IPv4 Address. . . . . . . . . . . : 192.168.31.76
+
+$ curl.exe -sS --noproxy "*" -o NUL -w "healthz=%{http_code} type=%{content_type}" http://192.168.31.18/healthz
+healthz=200 type=text/plain; charset=utf-8
+
+$ curl.exe -sS --noproxy "*" -o NUL -w "root=%{http_code} bytes=%{size_download}" http://192.168.31.18/
+root=200 bytes=16737
+
+$ curl.exe -sS --noproxy "*" -o NUL -w "api_data=%{http_code} bytes=%{size_download}" http://192.168.31.18/api/data
+api_data=200 bytes=7820
+
+$ curl.exe -sS --noproxy "*" -o NUL -w "api_health=%{http_code}" http://192.168.31.18/api/health
+api_health=200
+
+$ curl.exe -sS --noproxy "*" -i http://192.168.31.18/api/cache/stats
+HTTP/1.1 403 Forbidden
+Server: nginx
+Date: Sun, 18 Oct 2026 14:59:19 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 146
+Connection: keep-alive
+
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>

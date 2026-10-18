@@ -1,0 +1,52 @@
+$ date -Is
+2026-10-18T22:57:36+08:00
+
+$ uname -a
+Linux admin 6.14.0-37-generic #37~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Thu Nov 20 10:25:38 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+
+$ head -3 /etc/os-release
+NAME="Linux Mint"
+VERSION="22.3 (Zena)"
+ID=linuxmint
+
+$ docker --version
+Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2
+
+$ docker compose version
+Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1
+
+$ docker image inspect nginx:1.31.6-alpine --format "RepoDigests= Id="
+RepoDigests=[nginx@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2] Id=sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2
+
+$ docker exec cems-nginx nginx -v
+nginx version: nginx/1.31.6
+
+$ docker ps --format table (full stack)
+NAMES            IMAGE                        STATUS                    PORTS
+cems-nginx       nginx:1.31.6-alpine          Up 2 minutes (healthy)    0.0.0.0:80->80/tcp
+cems-nginx-web   nginx:1.31.6-alpine          Up 2 minutes              80/tcp
+cems-redis       redis:7.4.11-alpine          Up 57 minutes (healthy)   6379/tcp
+tdengine         tdengine/tdengine:3.3.6.13   Up 57 minutes (healthy)   127.0.0.1:6030->6030/tcp, 127.0.0.1:6041->6041/tcp
+emqx             emqx/emqx:6.3.0              Up 57 minutes (healthy)   4370/tcp, 5369/tcp, 8083-8084/tcp, 127.0.0.1:1883->1883/tcp, 127.0.0.1:18083->18083/tcp, 8883/tcp
+
+$ ss -ltnp | grep -E ":80 |:5000 |:5020 "
+LISTEN 0      4096         0.0.0.0:80         0.0.0.0:*                                       
+LISTEN 0      100          0.0.0.0:5020       0.0.0.0:*    users:(("python",pid=151915,fd=11))
+LISTEN 0      1024         0.0.0.0:5000       0.0.0.0:*    users:(("python",pid=9897,fd=6))   
+
+$ docker network inspect cems-net --format "containers"
+cems-nginx-web 172.18.0.5/16
+tdengine 172.18.0.4/16
+cems-redis 172.18.0.2/16
+emqx 172.18.0.3/16
+cems-nginx 172.18.0.6/16
+
+
+
+# Log plumbing: access/error logs are symlinks to the container's stdout/stderr,
+# so they are read with `docker logs`. (Reading access.log with tail inside the
+# container blocks forever - a plain `tail` on a symlink to a pipe.)
+$ docker exec cems-nginx ls -l /var/log/nginx/
+total 0
+lrwxrwxrwx    1 root     root            11 Sep 23 05:19 access.log -> /dev/stdout
+lrwxrwxrwx    1 root     root            11 Sep 23 05:19 error.log -> /dev/stderr

@@ -1,0 +1,18 @@
+$ curl -sS -i http://127.0.0.1/healthz
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sun, 18 Oct 2026 14:57:37 GMT
+Content-Type: text/plain; charset=utf-8
+Content-Length: 3
+Connection: keep-alive
+
+ok
+
+$ curl -sS http://127.0.0.1/healthz | od -An -c
+   o   k  \n
+
+$ docker logs cems-nginx-web --tail 3   (forwarder must NOT see /healthz: handled by nginx itself)
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+/docker-entrypoint.sh: Configuration complete; ready for start up
+

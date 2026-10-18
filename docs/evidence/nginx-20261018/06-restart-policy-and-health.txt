@@ -1,0 +1,18 @@
+$ docker inspect cems-nginx --format "{{.HostConfig.RestartPolicy.Name}}"
+unless-stopped
+
+$ docker inspect cems-nginx-web --format "{{.HostConfig.RestartPolicy.Name}}"
+unless-stopped
+
+$ docker inspect cems-nginx --format "{{json .State.Health}}"
+{"Status":"healthy","FailingStreak":0,"Log":[{"Start":"2026-10-18T22:56:51.296149336+08:00","End":"2026-10-18T22:56:51.339861864+08:00","ExitCode":0,"Output":""},{"Start":"2026-10-18T22:57:01.340732707+08:00","End":"2026-10-18T22:57:01.389720009+08:00","ExitCode":0,"Output":""},{"Start":"2026-10-18T22:57:11.390401396+08:00","End":"2026-10-18T22:57:11.437989826+08:00","ExitCode":0,"Output":""},{"Start":"2026-10-18T22:57:21.439199305+08:00","End":"2026-10-18T22:57:21.487185685+08:00","ExitCode":0,"Output":""},{"Start":"2026-10-18T22:57:31.488170142+08:00","End":"2026-10-18T22:57:31.538909878+08:00","ExitCode":0,"Output":""}]}
+
+$ systemctl is-active docker
+active
+
+$ systemctl list-units --type=service --all | grep -i cems || echo "(no cems unit)"
+(no cems systemd unit)
+
+$ cat /proc/1/comm   (pid 1 of the host)
+systemd
+

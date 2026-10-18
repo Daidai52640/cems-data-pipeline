@@ -1,0 +1,55 @@
+# =============================================================================
+# Host-form helper: a stand-in for the `web` container of the main compose file.
+#
+# Why this file exists (measured, see docs/evidence/nginx-20261018/):
+#   deploy/nginx/conf.d/cems.conf proxies to `http://web:5000` through a
+#   variable, so nginx resolves the name via `resolver 127.0.0.11` (Docker
+#   embedded DNS) and never reads the container's /etc/hosts. In the
+#   container-first form `web` is a real container and that is fine. In the
+#   host-venv form the web service is a host process, so nothing in Docker DNS
+#   answers to `web` and every proxied request ends as 502:
+#       recv() failed (111: Connection refused) while resolving, resolver: 127.0.0.11:53
+#       web could not be resolved (110: Operation timed out)
+#
+# This file starts exactly one container: a plain TCP forwarder that owns the
+# name `web` on the existing cems-net network and forwards 5000 -> host:5000,
+# where src/web/web_dashboard.py listens. It never speaks HTTP, so the outer
+# nginx still sets X-Real-IP from the real client connection and this hop does
+# not rewrite proxied headers.
+#
+# Usage (from the repository root, cems-net must already exist):
+#   docker compose -f deploy/nginx/host/web-forward.compose.yml up -d
+#   docker compose -f deploy/nginx/host/web-forward.compose.yml down
+#
+# The forwarder's own config is the neighbouring web-forward.conf; it is mounted
+# as a single file, so the image's default nginx.conf and conf.d stay untouched.
+# =============================================================================
+name: cems-nginx-web-forward
+
+services:
+  web:
+    image: nginx:1.31.6-alpine
+    container_name: cems-nginx-web
+    restart: unless-stopped
+    # Run the forwarder config directly: no /etc/nginx/conf.d scan, no default
+    # site, nothing that could shadow the single stream server below.
+    command: ["nginx", "-c", "/etc/nginx/web-forward.conf", "-g", "daemon off;"]
+    volumes:
+      # Relative to this file (the compose project directory is the file's dir).
+      - ./web-forward.conf:/etc/nginx/web-forward.conf:ro
+    extra_hosts:
+      # Docker 20.10+ on Linux: the name resolves to the bridge gateway, i.e. the
+      # host that runs the venv processes. Resolved once at forwarder start-up.
+      - "host.docker.internal:host-gateway"
+    networks:
+      cems-net:
+        # This alias is the whole point of the file: it makes `web` resolvable
+        # through the Docker embedded DNS, exactly like the web container would be.
+        aliases:
+          - web
+
+networks:
+  # Reuse the network of the running stack instead of creating another one.
+  cems-net:
+    external: true
+    name: cems-net

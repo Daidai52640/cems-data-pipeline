@@ -1,0 +1,45 @@
+# Tear the nginx layer down without touching the rest of the stack.
+
+$ docker compose stop nginx
+ Container cems-nginx  Stopping
+ Container cems-nginx  Stopped
+[exit=0]
+
+$ ss -ltn | grep -E ":80 " || echo "port 80 free"
+port 80 free
+
+$ curl -sS --max-time 3 -o /dev/null -w "status=%{http_code}" http://127.0.0.1/
+curl: (7) Failed to connect to 127.0.0.1 port 80 after 0 ms: Couldn't connect to server
+status=000
+connection refused (expected)
+
+$ docker compose -f deploy/nginx/host/web-forward.compose.yml down
+ Container cems-nginx-web  Stopping
+ Container cems-nginx-web  Stopped
+ Container cems-nginx-web  Removing
+ Container cems-nginx-web  Removed
+[exit=0]
+
+$ docker ps -a --filter name=cems-nginx --format "{{.Names}} {{.Status}}"
+cems-nginx Exited (0) Less than a second ago
+
+# Bring it back up (two commands; cems-net is external and must already exist):
+$ docker compose -f deploy/nginx/host/web-forward.compose.yml up -d
+ Container cems-nginx-web  Creating
+ Container cems-nginx-web  Created
+ Container cems-nginx-web  Starting
+ Container cems-nginx-web  Started
+[exit=0]
+
+$ BIND_ADDR=0.0.0.0 docker compose up -d --no-deps nginx
+ Container cems-nginx  Starting
+ Container cems-nginx  Started
+[exit=0]
+
+$ docker ps --filter name=cems-nginx --format "{{.Names}} {{.Status}} {{.Ports}}"
+cems-nginx-web Up 4 seconds 80/tcp
+cems-nginx Up 4 seconds (health: starting) 0.0.0.0:80->80/tcp
+
+$ curl -sS -o /dev/null -w "status=%{http_code}" http://127.0.0.1/
+status=200
+

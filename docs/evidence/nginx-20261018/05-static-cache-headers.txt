@@ -1,0 +1,38 @@
+$ curl -sS -D - -o /dev/null http://127.0.0.1/static/echarts.min.js
+HTTP/1.1 200 OK
+Server: nginx
+Date: Sun, 18 Oct 2026 14:57:37 GMT
+Content-Type: application/javascript; charset=utf-8
+Content-Length: 1024695
+Last-Modified: Sun, 18 Oct 2026 13:26:42 GMT
+Connection: keep-alive
+Vary: Accept-Encoding
+ETag: "6ad4c912-fa2b7"
+Expires: Mon, 18 Oct 2027 14:57:37 GMT
+Cache-Control: max-age=31536000
+Cache-Control: public, max-age=31536000, immutable
+Accept-Ranges: bytes
+
+
+$ curl -sS -o /dev/null -w "status=%{http_code} bytes=%{size_download}" http://127.0.0.1/static/echarts.min.js
+status=200 bytes=1024695
+
+# second request with If-None-Match -> 304 from nginx, file never enters Python
+etag="6ad4c912-fa2b7"
+$ curl -sS -o /dev/null -D - -H "If-None-Match: $etag" http://127.0.0.1/static/echarts.min.js
+HTTP/1.1 304 Not Modified
+Server: nginx
+Date: Sun, 18 Oct 2026 14:57:37 GMT
+Last-Modified: Sun, 18 Oct 2026 13:26:42 GMT
+Connection: keep-alive
+ETag: "6ad4c912-fa2b7"
+Expires: Mon, 18 Oct 2027 14:57:37 GMT
+Cache-Control: max-age=31536000
+Cache-Control: public, max-age=31536000, immutable
+
+
+# gzip: Accept-Encoding triggers Content-Encoding: gzip for the 1 MB js (gzip_types in nginx.conf)
+$ curl -sS -o /dev/null -D - -H "Accept-Encoding: gzip" http://127.0.0.1/static/echarts.min.js | grep -i -E "content-encoding|content-length|vary"
+Vary: Accept-Encoding
+Content-Encoding: gzip
+

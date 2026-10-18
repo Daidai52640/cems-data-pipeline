@@ -1,0 +1,26 @@
+$ docker exec cems-nginx nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+[exit=0]
+
+$ docker exec cems-nginx nginx -T | grep -c ""  (effective config line count)
+284
+
+$ docker exec cems-nginx nginx -T | grep -A3 "upstream"  (only comment/format lines match: no extra upstream block was added)
+    # 访问日志不含请求体；上游耗时单独记（$upstream_response_time），
+    # 这样"客户端感知的慢"与"后端真的慢"可以分开看。
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" rt=$request_time urt=$upstream_response_time';
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile        on;
+--
+    # 后端地址：用变量 + Docker 内置 DNS，而不是 upstream 块。
+    # 原因：upstream 块在 nginx 启动时解析一次服务名并永久缓存 IP；
+    # web 容器一旦重建（改代码后的常规操作）IP 会变，nginx 若不重启就会 502。
+    # 用 resolver + 变量后，TTL 到期自动重新解析。代价是丢掉了 upstream 的
+    # keepalive 连接池 —— 本场景（单机、个位数 QPS）不值得为它牺牲可运维性。
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    resolver_timeout 3s;
+
