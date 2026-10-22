@@ -261,7 +261,7 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
    [`边缘节点下板.md`](docs/runbooks/边缘节点下板.md)）；
    ✅ **nginx 已在 x86 Linux 宿主以容器形态验过** 80 端口与 `/api/cache/*` 403 口径。
    ⚠️ **ARM 上只跑了南向两层**（device + 网关），web / 接入层 / 时序库仍在 x86，"整栈上 ARM"未验证；
-   ⚠️ **没有应用级看门狗**（只有 `Restart=always`），**断电自愈未验证**；
+   ⚠️ **看门狗只覆盖"循环卡住"**（`Type=notify` + `WatchdogSec=60`，采集循环每圈发 `WATCHDOG=1`）；`kill -STOP` 冻结进程 60 s 后被 systemd 杀掉重启已实测。**断电自愈未验证**（`reboot` 验过）；
    ⚠️ **MQTT 无认证**（broker 只靠网络边界）；**单机，无 HA**。详见
    [`跨平台部署.md`](docs/runbooks/跨平台部署.md)、[`边缘节点下板.md`](docs/runbooks/边缘节点下板.md)。
 

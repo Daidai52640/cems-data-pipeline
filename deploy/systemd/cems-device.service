@@ -5,7 +5,10 @@ Description=CEMS Modbus device server (dual-slave, real RTU sensor)
 After=network.target
 
 [Service]
-Type=simple
+Type=notify
+# 应用必须每圈发 WATCHDOG=1；超时未发 = 活着但不出数 → systemd 杀掉并重启
+WatchdogSec=60
+NotifyAccess=main
 User=ddf
 WorkingDirectory=/home/ddf/cems
 Environment=SERVER_HOST=0.0.0.0

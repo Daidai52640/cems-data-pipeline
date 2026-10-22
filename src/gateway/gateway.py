@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.common.logging import setup_logging                # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT, contract_version   # noqa: E402
+from src.common.sd_notify import notify_ready, notify_watchdog  # noqa: E402
 from src.gateway.opcua_south import OpcUaReader             # noqa: E402
 from src.gateway.upstream_modbus import (                   # noqa: E402
     Snapshot,
@@ -822,6 +823,11 @@ def main() -> None:
     else:
         LOGGER.info("上游直读服务未启用（UPSTREAM_MODBUS_ENABLE=0），网关只做 MQTT 上报")
 
+    # 初始化与启动预检都过了：告诉 systemd "启动完成"（Type=notify 必须发）。
+    # 注意：到这一步 MQTT 可能还没连上 —— 那属于运行期可恢复状态（进缓存、后台补传），
+    # 不是启动失败，所以不该让 unit 因此超时。
+    notify_ready()
+
     count = 0
     #: 南向链路是否正常。心跳在循环开头写，此时还没做本轮读取，所以它反映的是
     #: **上一轮的结论**（初始值按建链结果给）——这正是我们想要的：心跳是"最近已知状态"。
@@ -835,6 +841,9 @@ def main() -> None:
                 south_ok=south_ok,
                 mqtt_ok=mqtt_client.is_connected(),
             )
+            # 看门狗心跳：每圈一次。它证明的是"采集循环还在转"，而不是"进程还在"——
+            # 卡在读请求 / 卡在 broker 等待时这行就不会执行，systemd 会按 WatchdogSec 重启。
+            notify_watchdog()
 
             # 本迭代"触发补传之前"的在途状态快照 —— 这是本轮该不该入队的唯一依据。
             # 必须在这里取：下面的 trigger_if_due 只是启动一个补传线程，它不该反过来

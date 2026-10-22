@@ -37,6 +37,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.common.logging import setup_logging                       # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT, SCALE   # noqa: E402
 from src.common.points_transmitter import BAUD_RATE as TRANSMITTER_BAUD_RATE  # noqa: E402
+from src.common.sd_notify import notify_ready, notify_watchdog      # noqa: E402
 from src.device.simulator import (                                 # noqa: E402
     SIM_CLOCK_SKEW_SECONDS,
     SIM_EPOCH,
@@ -593,6 +594,9 @@ def update_data(context: ModbusServerContext, simulators: Mapping[int, CemsSimul
     """
     next_tick = time.monotonic()
     while True:
+        # 看门狗心跳挂在"刷新循环"里而不是单独起一个打点线程：
+        # 判据是"寄存器还在被刷新"，不是"进程还活着"（后者 Restart=always 已经覆盖）。
+        notify_watchdog()
         refresh_once(context, simulators)
         next_tick += UPDATE_INTERVAL
         time.sleep(max(0.0, next_tick - time.monotonic()))
@@ -686,6 +690,9 @@ def main() -> None:
         "Dust/SO2/NOx",
     )
 
+    # 已走到这里：从站数据块与后台刷新线程都就绪，可以告诉 systemd "启动完成"。
+    # 放在 StartTcpServer 之前是有意的 —— 它一返回就阻塞，而端口绑定失败会抛 OSError 直接退出。
+    notify_ready()
     try:
         StartTcpServer(context=context, address=(SERVER_HOST, SERVER_PORT))
     except OSError as exc:

@@ -1,0 +1,27 @@
+# cmd: kill -STOP 主进程（模拟进程活着但采集循环卡住），WatchdogSec=60 生效
+=== unit ===
+Type=notify
+WatchdogUSec=1min
+NRestarts=1
+
+=== SIGSTOP 后的 systemd 记录 ===
+Oct 22 18:40:37 cems-edge systemd[1]: Started cems-gateway-plant1.service - CEMS gateway plant1 (slave 1 -> MQTT).
+Oct 22 18:41:37 cems-edge systemd[1]: cems-gateway-plant1.service: Watchdog timeout (limit 1min)!
+Oct 22 18:41:37 cems-edge systemd[1]: cems-gateway-plant1.service: Killing process 883 (python) with signal SIGABRT.
+Oct 22 18:41:37 cems-edge systemd[1]: cems-gateway-plant1.service: Main process exited, code=killed, status=6/ABRT
+Oct 22 18:41:37 cems-edge systemd[1]: cems-gateway-plant1.service: Failed with result 'watchdog'.
+Oct 22 18:41:44 cems-edge systemd[1]: Started cems-gateway-plant1.service - CEMS gateway plant1 (slave 1 -> MQTT).
+
+=== 重启后仍在出数 ===
+Oct 22 18:41:44 cems-edge python[905]: 2026-10-22 18:41:44 [INFO] gateway: 网关启动: 设备 127.0.0.1:5020 从站1 → MQTT 192.168.31.18:1883 主题 cems/plant1/data (QoS=1) client_id=cems-gateway-plant1
+Oct 22 18:41:44 cems-edge python[905]: 2026-10-22 18:41:44 [INFO] gateway: 断网续传已启用，缓存目录: /home/ddf/cems/data（GATEWAY_DATA_DIR=未设置，用默认 PROJECT_ROOT/data）
+Oct 22 18:41:44 cems-edge python[905]: 2026-10-22 18:41:44 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-22 18:41:44 Flow=31639.0 Dust=2.88 SO2=20.0 NOx=36.0 O2=5.6 Velocity=12.1 Temp=301.0 Humidity=101.0 Pressure=97.8 Flag=N Cfg=359aac47
+Oct 22 18:41:44 cems-edge python[905]: 2026-10-22 18:41:44 [INFO] gateway: MQTT 已连接: 192.168.31.18:1883
+Oct 22 18:41:44 cems-edge python[905]: 2026-10-22 18:41:44 [INFO] gateway: [补传] 开始补传 1 条，在途窗口 100 条
+Oct 22 18:41:44 cems-edge python[905]: 2026-10-22 18:41:44 [INFO] gateway: [补传完成] broker 已确认 1 条
+
+=== 三个服务 ===
+active
+active
+active
+
