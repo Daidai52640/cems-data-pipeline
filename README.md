@@ -16,13 +16,13 @@
 > 容器里连 `/dev/ttyS*` 都没有，**且 WSL2 内核没有 ch341 模块**（所以光装 `usbipd` 也不够）。
 > 这条路径恰好等价于现场那台**串口服务器**。
 >
-> **当前形态**：平台侧 **6 个容器**（emqx / tdengine / redis / subscriber / nginx / web）；`--profile sim` 再加设备层 + 网关（本机全仿真 = 8）；再带 `--profile plant2` = 10（双设备）。边缘部署时南向两层在树莓派上，平台侧**不带** `sim`（见 `docs/runbooks/边缘节点下板.md`）。
+> **当前形态**：平台侧 **6 个容器**（emqx / tdengine / redis / subscriber / nginx / web）；`--profile sim` 再加设备层 + 网关（本机全仿真 = 8）；再叠加 `--profile plant2`（gateway2 / subscriber2 / web2）= **11**（双设备，含二号炉大屏）。边缘部署时南向两层在树莓派上，平台侧**不带** `sim`（见 `docs/runbooks/边缘节点下板.md`）。
 >
 > ⚠️ **语义边界（必须说清，否则会被误读）**：真机**只接 1 号炉**；`Temp`/`Humidity` 两列承载的是
 > **环境**温湿度、**不是烟气参数**（本部署只作**数据链路演示**，不作环保口径依据）。
 > **尚未做现场联调**（未与真实监测平台/环保平台对拍）。完整清单见文末「已知边界」。
 
-> ✅ **最小验收 25 项全通过**（`python scripts\acceptance_min.py`，退出码 0；本机全仿真形态，即 `--profile sim`。边缘部署时 A7 的两项网关缓存判据会自动 SKIP）。
+> ✅ **最小验收 25 项全通过**（`python scripts\acceptance_min.py`，退出码 0）。**适用拓扑**：它要求仿真数据源 device 可达，故针对本机全仿真形态；要跑满 A1/A3 的双设备判据需 `--profile sim --profile plant2` 且 `.env` 设 `SLAVE_IDS=1,2`（11 个容器）。⚠️ 平台默认面只有 6 个容器、不含 device，**不能**跑这套验收；边缘部署（南向在树莓派 systemd）时 A7 的两项网关缓存判据会自动 SKIP。
 > v4.0 首验于 2026-10-03；⭐ **2026-10-11 真机接入后重跑，仍 25/25**。
 > ⚠️ 但它**不专门覆盖真机链路**（判据看的是链路整体健康，真机只占其中 2 个测点）。
 > 验收单与边界声明见 [`ACCEPTANCE.md`](ACCEPTANCE.md)。
@@ -101,6 +101,10 @@ docker compose --profile sim up -d --build
 #    ⚠️ 不要带 --profile sim：那会在这台机器上另起一个仿真从站 1，与真机数据混写同一张子表
 docker compose up -d --build
 
+# ③ 双设备全仿真（再加第二套网关 + 接入 + 二号炉大屏）：11 个容器
+#    先在 .env 设 SLAVE_IDS=1,2；gateway2 依赖 sim 的 device，两个 profile 必须一起带
+# docker compose --profile sim --profile plant2 up -d --build
+
 # 查看运行状态
 docker compose ps
 
@@ -175,7 +179,7 @@ docker compose --profile sim up -d --build   # 本机全仿真；基础层已在
 ## 双设备 / 高并发
 
 双设备能力**已具备，配置即可**：开关一在 `.env` 设 `SLAVE_IDS=1,2`（设备层双从站），
-开关二用 `docker compose --profile sim --profile plant2 up -d` 拉起第二套网关 + 接入实例（共 10 个容器；`plant2` 依赖 `sim` 里的设备层，两个 profile 要一起带）；
+开关二用 `docker compose --profile sim --profile plant2 up -d` 拉起第二套网关 + 接入实例 + 二号炉大屏（共 **11** 个容器：平台 6 + 仿真 device/gateway + gateway2/subscriber2/web2；`plant2` 依赖 `sim` 里的设备层，两个 profile 要一起带）；
 两个开关缺一不可，且必须做"同一时刻逐值对比"验收。
 高并发实测 N=50 下端到端 52.59 条/秒、missing=0；注意网关节拍硬上限约 1.05 条/秒/实例，扩容靠加实例。
 
@@ -281,7 +285,7 @@ docker compose --profile sim up -d --build   # 本机全仿真；基础层已在
 
 ## 源文件
 
-- `docker-compose.yml` —— 8 基础 + 2 profile 共 10 个服务/容器、端口、环境变量、nginx 403 口径
+- `docker-compose.yml` —— 平台侧 6 个服务；`--profile sim` 加 device/gateway = 8；再 `--profile plant2` 加 gateway2/subscriber2/web2 = 11；含端口、环境变量、nginx 403 口径
 - `src/common/points.py` —— 9 个测点、量程、编码、限值与基准氧
 - `README.md`（原有版本） —— 架构分层、启动命令、端口暴露、构建鉴权处理等正确内容
 - `docs/runbooks/双设备启用与验证.md` —— 两个开关、逐值对比验收、回退

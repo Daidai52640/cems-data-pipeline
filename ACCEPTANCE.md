@@ -136,7 +136,7 @@
 |---|---|
 | **本次最小验收：通过** | 25 项判据全部通过，无未通过、无跳过 |
 | **可以交付使用** | 在本机（单机 Docker）环境下，采集→传输→入库→展示→告警→报表全链路可用 |
-| **可以对外演示** | 本机全仿真形态下 `docker compose --profile sim --profile plant2 up -d` 一键起 10 个服务，两台设备同时跑，界面与报表均已成版 |
+| **可以对外演示** | 本机全仿真形态下 `docker compose --profile sim --profile plant2 up -d` 一键起 **11** 个服务（平台 6 + 仿真 device/网关 + 第二套网关/接入/二号炉大屏 web2），两台设备同时跑，界面与报表均已成版 |
 
 ### 但下面这些，我不能替你宣称"已经具备"
 
@@ -161,13 +161,14 @@
 ## 四、怎么复验（任何人都能跑）
 
 ```powershell
-# 1) 起系统（首次会构建镜像）—— 本机全仿真形态
-docker compose --profile sim up -d --build
-#    双设备演示再加 plant2（两个 profile 必须一起带）：
-# docker compose --profile sim --profile plant2 up -d --build
+# 1) 起系统（首次会构建镜像）。本脚本 25 项判据要查 1 号/2 号炉两路数据，
+#    故用双设备全仿真（先在 .env 设 SLAVE_IDS=1,2；gateway2 依赖 sim 的 device，两个 profile 必须一起带）：
+docker compose --profile sim --profile plant2 up -d --build
+#    只跑单设备全仿真（8 个服务）：docker compose --profile sim up -d --build
+#    平台侧（南向在边缘节点，不带任何 profile）：docker compose up -d --build（6 个服务，不含 device）
 
-# 2) 确认 8 个服务（双设备 10 个）都健康
-docker compose --profile sim ps
+# 2) 确认容器都健康（单设备全仿真 8 个；双设备 11 个；平台默认 6 个）
+docker compose --profile sim --profile plant2 ps
 
 # 3) 跑这份验收单（只读，不改任何东西）
 python scripts\acceptance_min.py

@@ -345,8 +345,10 @@ docker compose -f deploy/nginx/host/web-forward.compose.yml up -d
 
 | 本文当时的边界 | 现状 |
 |---|---|
-| §九 边界 1：systemd 未接管 | **已在边缘节点上做完**：树莓派 2B 的 device + 双网关由 systemd 托管，`Type=notify` + `WatchdogSec=60`，`kill -STOP` 验证（见 `边缘节点下板.md`）。平台侧的 nginx/web 仍由容器 `restart: unless-stopped` 拉起，**未** systemd 化 |
-| §九 边界 5：应用镜像构建路径未验证 | **已验证**：`cems-pipeline:latest` 在 Linux 本机离线构建成功（222 MB），容器以 compose 项目 `cems` 运行（见 `边缘节点下板.md` §五、`evidence/edge-arm-20261022/08-platform-image.txt`） |
-| §七：web 容器化后必须拆占位替身 | 已拆（2026-10-22），并补了实测记录：不拆时 `web:5000` 12 次中 7 次打到死端口 |
+| §九 边界 1：systemd 未接管 | **已在边缘节点上做完**：树莓派 2B（armv7，主机名 `cems-edge`，192.168.31.236）的 device + 双网关由 systemd 托管，`Type=notify` + `WatchdogSec=60`，reboot 自启 / `kill -9` 自愈 / 看门狗均实测（见 `边缘节点下板.md`）。平台侧的 nginx/web 仍由容器 `restart: unless-stopped` 拉起，**未** systemd 化 |
+| §九 边界 5：应用镜像构建路径未验证 | **已验证**：`cems-pipeline:latest` 在 Linux 本机（Mint，192.168.31.18）离线构建成功（约 222 MB，未走 Docker Hub），平台侧容器以 compose 项目 `cems` 运行（见 `边缘节点下板.md` §五、`evidence/edge-arm-20261022/08-platform-image.txt`） |
+| §七：web 容器化后必须拆占位替身 | 已拆（2026-10-22）。⭐ 这条最实用，务必记住：web 一旦进容器、替身不拆，`cems-web` 与 `cems-nginx-web` 会在 `cems-net` 上**同时持别名字 `web`**，Docker DNS 交替返回两个地址。实测从 nginx 容器连 `http://web:5000/` 12 次：**5 次成功、7 次打到替身转发的死端口**（宿主 5000 已无进程）；外层 nginx 连测 30 次恰好都命中真 web，只是因为 resolver 缓存 `valid=10s`——容器一重建就会变整段 502。拆除后 12/12 成功、20/20 200 |
+| §二/§四：跨机验收临时 `BIND_ADDR=0.0.0.0` | **暴露面已收口到回环**：现网里 nginx 80、web 5001/5002、TDengine 6030/6041、EMQX 管理台 18083 全部只绑 `127.0.0.1`；唯一对局域网开放的是 MQTT `1883`（用单独的 `MQTT_BIND_ADDR=0.0.0.0`），且该端口**已开账号认证**（匿名连接被拒），仍为明文、无 TLS。端口矩阵与认证实测见 `evidence/edge-arm-20261022/14-security-hardening.txt` |
+| §二：宿主机 venv 跑 web 的形态 | **现网部署形态已变**：南向两层（device + 双网关）跑在树莓派 systemd 上，平台侧（emqx / tdengine / subscriber / redis / nginx / web，6 个容器）跑在 Linux Mint 的 Docker 里；容器形态的 device/gateway 已移入 `profiles: ["sim"]`，只用于"无真机的本机全仿真演示"，不再与边缘真机混写（见 `边缘节点下板.md`） |
 
-⚠️ 本文其余内容（如 `BIND_ADDR=0.0.0.0` 的跨机验收写法）保持不变；当前默认部署里 nginx 只绑回环，跨机验收要么临时放开 `BIND_ADDR`，要么走 SSH 隧道。
+⚠️ 本文其余内容（如 §三 `BIND_ADDR=0.0.0.0` 的跨机验收写法、宿主 venv 形态的一手实测过程）**保持不变**——那是 2026-10-18 的当时证据。当前默认部署里 nginx 只绑回环，跨机验收要么临时放开 `BIND_ADDR`，要么走 SSH 隧道。
