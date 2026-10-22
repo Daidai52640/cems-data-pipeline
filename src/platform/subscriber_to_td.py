@@ -87,6 +87,7 @@ from src.common.errors import (   # noqa: E402
     PointInvalidKind,
 )
 from src.common.logging import setup_logging   # noqa: E402
+from src.common.mqtt_auth import apply_mqtt_credentials  # noqa: E402
 from src.common.points import (   # noqa: E402
     COLUMNS,
     NAMES,
@@ -116,6 +117,9 @@ TOPIC: Final[str] = os.getenv("MQTT_TOPIC", "cems/plant1/data")
 MQTT_QOS: Final[int] = int(os.getenv("MQTT_QOS", "1"))
 MQTT_KEEPALIVE: Final[int] = int(os.getenv("MQTT_KEEPALIVE", "60"))
 MQTT_CLIENT_ID: Final[str] = os.getenv("MQTT_CLIENT_ID", "cems-subscriber-plant1")
+# broker 打开认证后必须带凭据；默认空 = 行为不变（见 src/common/mqtt_auth.py）
+MQTT_USERNAME: Final[str] = os.getenv("MQTT_USERNAME", "")
+MQTT_PASSWORD: Final[str] = os.getenv("MQTT_PASSWORD", "")
 # 会话持久化：默认 False = 非干净会话（持久会话）。
 #   订阅端离线期间，broker 会为该 client_id 排队 QoS≥1 的消息，重连后自动补投；
 #   若置 True 变成干净会话，broker 不保留任何状态，离线期间的报文会被直接丢弃。
@@ -2000,6 +2004,8 @@ def main() -> None:
         client_id=MQTT_CLIENT_ID,
         clean_session=MQTT_CLEAN_SESSION,
     )
+    if apply_mqtt_credentials(client, MQTT_USERNAME, MQTT_PASSWORD):
+        LOGGER.info("MQTT 认证: 使用用户名口令（用户 %s）", MQTT_USERNAME)
     client.user_data_set({
         "writer": writer, "judge": judge, "alarm_writer": alarm_writer, "spool": SPOOL,
         # 逐点化（ADR-0009）：无效测点的证据写入器，按 (子表, ts) 幂等

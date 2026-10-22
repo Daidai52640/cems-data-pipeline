@@ -1,0 +1,24 @@
+# cmd: 收口后的整体健康检查
+=== 容器 ===
+cems-web-plant2 | Up 2 minutes | 127.0.0.1:5002->5000/tcp
+cems-nginx | Up 3 minutes (healthy) | 127.0.0.1:80->80/tcp
+cems-subscriber | Up 3 minutes (healthy) | 
+cems-subscriber-plant2 | Up 3 minutes (healthy) | 
+cems-web | Up 3 minutes (healthy) | 127.0.0.1:5001->5000/tcp
+tdengine | Up 3 minutes (healthy) | 127.0.0.1:6030->6030/tcp, 127.0.0.1:6041->6041/tcp
+emqx | Up 47 seconds (healthy) | 4370/tcp, 5369/tcp, 8083-8084/tcp, 0.0.0.0:1883->1883/tcp, 8883/tcp, 127.0.0.1:18083->18083/tcp
+
+=== 近 2 分钟入库 ===
+                    50 |
+Query OK, 1 row(s) in set (0.003111s)
+
+=== nginx(本机) ===
+root=200
+
+=== 边缘节点 ===
+active
+active
+active
+{"ts":1792666168.9411519,"pid":1076,"cfg":"359aac47","south_protocol":"modbus","south_ok":true,"mqtt_ok":true,"backlog_bytes":0,"samples":21,"published":18,"cached":3,"read_failures":0,"modbus_reconnects":0}
+{"ts":1792666168.9469829,"pid":1077,"cfg":"359aac47","south_protocol":"modbus","south_ok":true,"mqtt_ok":true,"backlog_bytes":0,"samples":21,"published":18,"cached":3,"read_failures":0,"modbus_reconnects":0}
+

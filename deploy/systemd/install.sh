@@ -15,12 +15,16 @@ set -euo pipefail
 REPO=/home/ddf/cems
 RUN_USER=ddf
 PLATFORM_HOST=192.168.31.18
+MQTT_USER=
+MQTT_PASS=
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
     --user) RUN_USER="$2"; shift 2 ;;
     --platform-host) PLATFORM_HOST="$2"; shift 2 ;;
+    --mqtt-user) MQTT_USER="$2"; shift 2 ;;
+    --mqtt-pass) MQTT_PASS="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -32,10 +36,20 @@ if [ ! -x "$PY" ]; then
   exit 1
 fi
 
+# MQTT 连接参数落在 /etc/cems/edge.env（600）：凭据不进仓库，也不进 unit 文件。
+install -d -m 755 /etc/cems
+cat > /etc/cems/edge.env <<EOF
+MQTT_HOST=$PLATFORM_HOST
+MQTT_PORT=1883
+MQTT_USERNAME=$MQTT_USER
+MQTT_PASSWORD=$MQTT_PASS
+EOF
+chmod 600 /etc/cems/edge.env
+echo "wrote /etc/cems/edge.env (600)"
+
 for unit in cems-device cems-gateway-plant1 cems-gateway-plant2; do
   sed -e "s#/home/ddf/cems#$REPO#g" \
       -e "s#^User=.*#User=$RUN_USER#" \
-      -e "s#^Environment=MQTT_HOST=.*#Environment=MQTT_HOST=$PLATFORM_HOST#" \
       "$SRC/$unit.service" > "/etc/systemd/system/$unit.service"
   echo "installed /etc/systemd/system/$unit.service"
 done

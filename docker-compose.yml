@@ -133,6 +133,9 @@ x-subscriber-env: &subscriber-env
   MQTT_QOS: "1"
   # 0 = 持久会话（默认）：订阅端离线期间 broker 会为 QoS≥1 的消息排队，重连后补投
   MQTT_CLEAN_SESSION: "0"
+  # broker 打开认证后必须带凭据；默认空 = 行为不变（见 src/common/mqtt_auth.py）
+  MQTT_USERNAME: ${MQTT_USERNAME:-}
+  MQTT_PASSWORD: ${MQTT_PASSWORD:-}
   TD_URL: http://tdengine:6041
   # 口令从 .env 读取，未配置时回落到本机演示默认值（见 .env.example）
   TD_USER: ${TD_USER:-root}
@@ -254,7 +257,10 @@ services:
       # 打开磁盘持久化后，会话与离线队列落到 /opt/emqx/data（已有 emqx-data 卷）。
       EMQX_DURABLE_SESSIONS__ENABLE: "true"
     ports:
-      - "${BIND_ADDR:-127.0.0.1}:1883:1883"      # MQTT 协议端口（网关发布、平台订阅）
+      # ⚠️ MQTT 单独一个绑定变量：**它是唯一可能面向局域网的应用端口**（边缘节点要从网外发布），
+      #   而 TDengine / 管理台 / nginx / web 都不该跟着一起暴露。默认仍然只绑回环地址。
+      #   对局域网开放时：MQTT_BIND_ADDR=0.0.0.0 + 先打开 broker 认证（见 .env.example）。
+      - "${MQTT_BIND_ADDR:-127.0.0.1}:1883:1883"      # MQTT 协议端口（网关发布、平台订阅）
       - "${BIND_ADDR:-127.0.0.1}:18083:18083"    # EMQX Dashboard 管理台
     volumes:
       - emqx-data:/opt/emqx/data

@@ -1,0 +1,21 @@
+# cmd: 暴露面收口（2026-10-22）
+# 目标：只有 MQTT 面向局域网；TDengine / 管理台 / nginx / web 全部回到回环。
+# 做法：compose 里 MQTT 单独用 MQTT_BIND_ADDR，其余沿用 BIND_ADDR（默认 127.0.0.1）；
+#      EMQX 打开 password_based(built_in_database) 认证，网关/接入层带凭据（凭据在
+#      /etc/cems/edge.env 与平台侧 .env，均为 600 且不入库）。
+
+=== 从 Windows(192.168.31.76) 探测 Mint(192.168.31.18) 的端口（收口前 BIND_ADDR=0.0.0.0，全部可连） ===
+1883   OPEN      <- 只保留 MQTT（边缘节点从网上发布）
+80     closed
+6041   closed
+6030   closed
+18083  closed
+5001   closed
+5002   closed
+=== authenticator === [{"id":"password_based:built_in_database","backend":"built_in_database","bootstrap_file":"${EMQX_ETC_DIR}/auth-built-in-db-bootstrap.csv","bootstrap_type":"plain","enable":true,"mechanism":"password_based","password_hash_algorithm":{"name":"sha256","salt_position":"suffix"},"precondition":"","user_id_type":"username"}] === users（口令不出现在输出里） === {"data":[{"is_superuser":false,"user_id":"cems-edge"}],"meta":{"count":1,"limit":100,"page":1,"hasnext":false}}
+
+=== 认证效果（树莓派上直接连 broker） ===
+anonymous          connack=135 connected=False with-credentials   connack=0 connected=False === 网关侧 === Oct 22 18:47:43 cems-edge python[1076]: 2026-10-22 18:47:43 [INFO] gateway: MQTT 已连接: 192.168.31.18:1883 Oct 22 18:48:54 cems-edge python[1076]: 2026-10-22 18:48:54 [INFO] gateway: MQTT 已连接: 192.168.31.18:1883
+
+=== 重启 broker 后认证配置仍在（持久化验证） ===
+authentication config 与 users 在 docker restart emqx 后仍然存在；数据持续入库（近 2 分钟 41 行）。

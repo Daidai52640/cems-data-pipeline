@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.common.logging import setup_logging                # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT, contract_version   # noqa: E402
+from src.common.mqtt_auth import apply_mqtt_credentials           # noqa: E402
 from src.common.sd_notify import notify_ready, notify_watchdog  # noqa: E402
 from src.gateway.opcua_south import OpcUaReader             # noqa: E402
 from src.gateway.upstream_modbus import (                   # noqa: E402
@@ -52,6 +53,9 @@ MQTT_TOPIC: Final[str] = os.getenv("MQTT_TOPIC", "cems/plant1/data")
 MQTT_QOS: Final[int] = int(os.getenv("MQTT_QOS", "1"))
 MQTT_KEEPALIVE: Final[int] = int(os.getenv("MQTT_KEEPALIVE", "60"))
 MQTT_CLIENT_ID: Final[str] = os.getenv("MQTT_CLIENT_ID", "cems-gateway-plant1")
+# broker 打开认证后必须带凭据；默认空 = 行为不变（见 src/common/mqtt_auth.py）
+MQTT_USERNAME: Final[str] = os.getenv("MQTT_USERNAME", "")
+MQTT_PASSWORD: Final[str] = os.getenv("MQTT_PASSWORD", "")
 
 # ---- 采集节奏与重连 ----
 POLL_INTERVAL: Final[float] = float(os.getenv("POLL_INTERVAL", "5.0"))                  # 轮询周期（秒）
@@ -777,6 +781,8 @@ def main() -> None:
 
     # ---- 连 MQTT：connect_async + loop_start，broker 暂时不可用也会后台自动重连 ----
     mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=MQTT_CLIENT_ID)
+    if apply_mqtt_credentials(mqtt_client, MQTT_USERNAME, MQTT_PASSWORD):
+        LOGGER.info("MQTT 认证: 使用用户名口令（用户 %s）", MQTT_USERNAME)
     mqtt_client.on_connect = on_connect
     mqtt_client.on_disconnect = on_disconnect
     try:

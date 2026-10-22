@@ -1,6 +1,6 @@
 [Unit]
 # 网关（1 号炉）：轮询 :5020 从站 1 → MQTT。断网时写本地缓存，恢复后补传。
-# MQTT_HOST 填平台侧（broker）地址；本文件按本次实测填 192.168.31.18。
+# MQTT 连接参数在 /etc/cems/edge.env（由 install.sh 写入、权限 600），凭据不进仓库。
 Description=CEMS gateway plant1 (slave 1 -> MQTT)
 After=network.target cems-device.service
 Wants=cems-device.service
@@ -14,7 +14,7 @@ User=ddf
 WorkingDirectory=/home/ddf/cems
 Environment=MODBUS_HOST=127.0.0.1
 Environment=MODBUS_PORT=5020
-Environment=MQTT_HOST=192.168.31.18
+EnvironmentFile=-/etc/cems/edge.env
 Environment=MQTT_PORT=1883
 Environment=MQTT_TOPIC=cems/plant1/data
 Environment=MQTT_CLIENT_ID=cems-gateway-plant1

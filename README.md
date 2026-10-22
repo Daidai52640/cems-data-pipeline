@@ -147,11 +147,17 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
 
 默认所有端口只绑定 `127.0.0.1`（本机访问）。如需局域网/外网访问：
 
-1. 在 `.env` 中设置 `BIND_ADDR=0.0.0.0`（或具体网卡 IP）；
-2. **改掉 TDengine 口令**：在 `.env` 里设 `TD_PASS`（默认 `root/taosdata` 是演示值）；
-3. ⚠️ **MQTT 目前没有任何认证**：EMQX 的 1883 默认允许匿名发布/订阅，网关与接入层都没有配置 MQTT 用户名口令（`admin/public` 只是 Dashboard 管理台口令）。把 1883 暴露到局域网等于让同网段任何主机都能读写监测数据——**要对外暴露，必须先给 EMQX 开认证并让网关/接入层带上凭据（属代码改动，当前未做）**。没做这件事之前，请保持默认的 `127.0.0.1` 绑定；
-4. 不要把 5020（Modbus 设备）、6041（TDengine REST）暴露到公网；
-5. 如需修改宿主机端口，设置 `NGINX_HOST_PORT`、`WEB_HOST_PORT` 等变量（见 `docker-compose.yml`）。
+1. **只有 MQTT 需要单独对外**：设 `MQTT_BIND_ADDR=0.0.0.0`（边缘节点要从网外发布数据）。
+   `BIND_ADDR` 仍保持默认，TDengine / 管理台 / nginx / web 不跟着暴露；
+2. ⚠️ **开 MQTT 认证**（已实现）：EMQX 用 `password_based` + `built_in_database`，
+   网关与接入层通过 `MQTT_USERNAME` / `MQTT_PASSWORD` 带凭据（见 `src/common/mqtt_auth.py`）。
+   实测：匿名连接被拒（CONNACK 135），带凭据连接成功（CONNACK 0）；凭证只在
+   `/etc/cems/edge.env`（600）与平台侧 `.env`（不入库），不进仓库；
+3. **改掉 TDengine 口令**：在 `.env` 里设 `TD_PASS`（默认 `root/taosdata` 是演示值）；
+4. ⚠️ **MQTT 目前是明文**：认证只解决"谁能连"，不解决"路上被看"。跨不可信网络必须再加 TLS
+   （当前未做）；局域网内也不要长期开放 1883 到公网；
+5. 不要把 5020（Modbus 设备）、6041（TDengine REST）暴露到公网；
+6. 如需修改宿主机端口，设置 `NGINX_HOST_PORT`、`WEB_HOST_PORT` 等变量（见 `docker-compose.yml`）。
 
 > **Docker Desktop 构建鉴权错误**：若 `docker compose up -d --build` 报
 > `unauthorized: authentication required` / `not authorized`，是 Docker 客户端把本机构建请求
@@ -262,7 +268,7 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
    ✅ **nginx 已在 x86 Linux 宿主以容器形态验过** 80 端口与 `/api/cache/*` 403 口径。
    ⚠️ **ARM 上只跑了南向两层**（device + 网关），web / 接入层 / 时序库仍在 x86，"整栈上 ARM"未验证；
    ⚠️ **看门狗只覆盖"循环卡住"**（`Type=notify` + `WatchdogSec=60`，采集循环每圈发 `WATCHDOG=1`）；`kill -STOP` 冻结进程 60 s 后被 systemd 杀掉重启已实测。**断电自愈未验证**（`reboot` 验过）；
-   ⚠️ **MQTT 无认证**（broker 只靠网络边界）；**单机，无 HA**。详见
+   ⚠️ **MQTT 已开认证但仍是明文**（无 TLS，跨不可信网络不行）；**单机，无 HA**。详见
    [`跨平台部署.md`](docs/runbooks/跨平台部署.md)、[`边缘节点下板.md`](docs/runbooks/边缘节点下板.md)。
 
 ---
