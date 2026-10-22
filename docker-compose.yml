@@ -27,8 +27,9 @@
 #   分两层，别只记住其中一层：
 #     ① 账号认证**不写在这份编排里**：认证是在 EMQX 侧开的 `password_based` +
 #        `built_in_database`（用 REST API / 管理台建用户），用户存在 EMQX 自己的数据里 ——
-#        换机器、或 `down -v` / 删掉 emqx 数据卷，用户就没了，必须照
-#        docs/runbooks/边缘节点下板.md §六 重开。仓库这边只提供**凭据注入**：
+#        换机器、或 `down -v` / 删掉 emqx 数据卷，用户就没了，得重新开户；当时的认证器配置
+#        与验证结果见 docs/evidence/edge-arm-20261022/14-security-hardening.txt
+#        （正式步骤尚未写成 runbook）。仓库这边只提供**凭据注入**：
 #        MQTT_USERNAME / MQTT_PASSWORD 进网关与接入层（见 src/common/mqtt_auth.py，
 #        默认空串 = 不带凭据、行为与改造前一致）。
 #     ② 现场状态（2026-10-22）：认证已开、匿名连接被拒（CONNACK 135）、两个客户端都带凭据；
