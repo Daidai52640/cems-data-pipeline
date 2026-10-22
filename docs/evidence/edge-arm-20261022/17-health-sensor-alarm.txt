@@ -1,0 +1,35 @@
+# cmd: 真机失效告警（/api/health 的 sensor_ok）——受控注入与恢复，2026-10-22 19:29~19:36
+# 注入方式：给 cems-device 加 systemd drop-in，把 REAL_DEVICE_SERIAL_PORT 指向不存在的
+#   /dev/ttyUSB_ABSENT（等价于 485 拔掉：SerialException → 状态位=1 → 写越界值 → 接入层拒收），
+#   不动硬件、不动接线；测试后删除 drop-in 并重启设备层恢复。
+
+## 1) 故障期间：链路仍在流（healthy=true），但 sensor_ok=false
+{"data_age_seconds":0.727,"healthy":true,"invalid_points_last_window":38,"invalid_points_threshold":12,
+ "invalid_points_window_seconds":300,"ok":true,"reason":"fresh","rows_last_1min":12,
+ "sensor_alert_after_seconds":300.0,"sensor_invalid_for_seconds":63.0,"sensor_ok":false,
+ "sensor_reason":"invalid_points","stale_after_seconds":15.0,"td":"up"}
+
+## 2) 首次越过阈值时的 WARNING（阈值命中即叫）
+2026-10-22 19:29:58 [WARNING] web.dashboard: 真机读数异常：最近 300 s 无效测点 12 条（阈值 12）
+—— 链路仍在流，但真机的Temp/Humidity 两个测点无效（设备层在写越界值、接入层已拒收）。
+排查顺序：① 485 的 USB/接线/供电 ② device 进程日志里的串口读失败 ③ 从站号与波特率
+
+## 3) 设备层同时刻的日志（越界值、不回落仿真、进程不退出）
+19:30:57 [ERROR] device.rtu_master: 串口直读失败（连续第 52 次）：/dev/ttyUSB_ABSENT @ 4800 8N1，
+  从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；
+  原因：SerialException: [Errno 2] could not open port /dev/ttyUSB_ABSENT
+（NRestarts=0：进程没崩，看门狗不误杀；这条边界由 sensor_ok 负责，不是重启）
+
+## 4) 恢复：删 drop-in → 重启设备层 → 真机读数回来
+19:31:17 [INFO] device.rtu_master: 串口直读：湿度 58.2 %RH ｜ 温度 26.0 degC ｜ 状态位=0
+19:35:45 [INFO] web.dashboard: 真机读数恢复：最近 300 s 无效测点 10 条（阈值 12）
+
+## 5) 恢复后 health（窗口过期后 sensor_ok 回 true）
+{"data_age_seconds":4.324,"healthy":true,"invalid_points_last_window":0,"invalid_points_threshold":12,
+ "invalid_points_window_seconds":300,"ok":true,"reason":"fresh","rows_last_1min":12,
+ "sensor_ok":true,"sensor_reason":"valid","stale_after_seconds":15.0,"td":"up"}
+
+## 口径说明
+- healthy 表示"链路在流"（数据新鲜度），sensor_ok 表示"真机读数有效"（最近 300 s 无效测点 < 12）。
+  两者分开是有意的：真机坏了不该让 nginx 的 depends_on=web healthy 起不来。
+- 恢复延迟上界 = INVALID_WINDOW_SECONDS（默认 300 s）：窗口里还留着历史无效事件，属预期。

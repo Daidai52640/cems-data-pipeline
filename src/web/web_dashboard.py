@@ -178,6 +178,30 @@ STALE_ALERT_SECONDS: Final[float] = float(os.getenv("STALE_ALERT_SECONDS", "300"
 #: 本轮"连续不健康"的起始时刻（健康一次就清空）。
 _stale_since: Optional[datetime] = None
 
+# ---- 真机有效性判据（2026-10-22）----
+# 原来的 /api/health 只判"数据还在流"。真机失效时链路**照常流**：
+#   device 读到的是越界哨兵（101/301）→ 网关照常 publish（read_device 不是 None）
+#   → 接入层拒收那两个测点（库里只是少两列）→ 停流判据完全看不出来。
+# 实测：485 断开 20 分钟，NRestarts=0、/api/health 全绿、小时结论 ok，只有日志和
+# cems_point_invalid 表留痕。这条判据把"留痕"变成"接口与日志都能看见"。
+#
+# 口径：查 cems_point_invalid 最近 INVALID_WINDOW_SECONDS 秒的行数。
+# 正常时该表 0 行；两个测点每 5 s 各记一条，失效时约 24 条/分钟。
+# 阈值 12 ≈ 失效 30 秒。查不到表/库不可用时返回 None（不把 health 判死）。
+#
+# ⚠️ **不改变 healthy 的语义**：healthy 仍表示"链路在流"，sensor_ok 表示"真机读数有效"。
+#    两者分开是有意的 —— nginx 的 depends_on 是 web healthy，真机坏了不该让展示层起不来。
+INVALID_WINDOW_SECONDS: Final[int] = int(os.getenv("INVALID_WINDOW_SECONDS", "300"))
+INVALID_POINTS_THRESHOLD: Final[int] = int(os.getenv("INVALID_POINTS_THRESHOLD", "12"))
+INVALID_SENSOR_ALERT_SECONDS: Final[float] = float(os.getenv("INVALID_SENSOR_ALERT_SECONDS", "300"))
+#: 无效测点表名（接入层写入的那张证据表；env 可覆盖，与 POINT_INVALID_STABLE 同名）
+POINT_INVALID_STABLE: Final[str] = os.getenv("POINT_INVALID_STABLE", "cems_point_invalid")
+
+#: 真机第一次被判"无效"的时刻（恢复即清空）
+_sensor_invalid_since: Optional[datetime] = None
+#: 上一次打 CRITICAL 的时刻（限流：持续无效时每 300 s 提醒一次，不刷屏）
+_sensor_critical_at: Optional[datetime] = None
+
 # ---- 报表导出 ----
 XLSX_MIME: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 # 给老浏览器用的 ASCII 兜底名；中文名走 Content-Disposition 的 filename*
@@ -247,6 +271,87 @@ def query_recent(minutes: int = QUERY_MINUTES, scope: str = "") -> list[tuple[An
             except Exception as exc:
                 LOGGER.debug("关闭 TDengine 连接时出错（忽略）: %s", exc)
     return rows
+
+
+def count_invalid_points(seconds: int = INVALID_WINDOW_SECONDS) -> Optional[int]:
+    """查最近 N 秒的无效测点事件数；表不存在或库不可用时返回 None。
+
+    这条查询**只服务健康判定**，失败不抛 TdQueryError：一张还不存在的证据表不该让
+    /api/health 变成 503（那样会把"没配好"误报成"链路坏了"）。
+    """
+    conn: Any = None
+    try:
+        conn = taosrest.connect(url=TD_URL, user=TD_USER, password=TD_PASS)
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT COUNT(*) FROM {TD_DB}.{POINT_INVALID_STABLE} "
+            f"WHERE ts >= now - {int(seconds)}s"
+        )
+        row = cur.fetchone()
+    except Exception as exc:   # noqa: BLE001 - 见 docstring：宁可返回 None 也不判死 health
+        LOGGER.warning("查询无效测点表失败（忽略，按 None 处理）: %s", exc)
+        return None
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception as exc:   # noqa: BLE001
+                LOGGER.debug("关闭 TDengine 连接时出错（忽略）: %s", exc)
+    try:
+        return int(row[0])
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def sensor_invalid_verdict(count: Optional[int]) -> dict[str, Any]:
+    """把"最近 N 秒无效测点数"转成健康字段，并按持续时间升级日志。
+
+    - count is None      → sensor_ok=None（无法判定，不当成故障）
+    - count < 阈值       → sensor_ok=True，恢复时打一条 INFO 并清空计时
+    - count >= 阈值      → sensor_ok=False，首次 WARNING；持续 ≥ INVALID_SENSOR_ALERT_SECONDS
+                           之后每 300 s CRITICAL（限流，不刷屏）
+    """
+    global _sensor_invalid_since, _sensor_critical_at
+    if count is None:
+        return {"sensor_ok": None, "sensor_reason": "invalid_count_unavailable"}
+
+    if count < INVALID_POINTS_THRESHOLD:
+        if _sensor_invalid_since is not None:
+            LOGGER.info(
+                "真机读数恢复：最近 %d s 无效测点 %d 条（阈值 %d）",
+                INVALID_WINDOW_SECONDS, count, INVALID_POINTS_THRESHOLD,
+            )
+        _sensor_invalid_since = None
+        _sensor_critical_at = None
+        return {"sensor_ok": True, "sensor_reason": "valid", "invalid_points_last_window": count}
+
+    now = datetime.now()
+    if _sensor_invalid_since is None:
+        _sensor_invalid_since = now
+        LOGGER.warning(
+            "真机读数异常：最近 %d s 无效测点 %d 条（阈值 %d）—— 链路仍在流，但真机的"
+            "Temp/Humidity 两个测点无效（设备层在写越界值、接入层已拒收）。"
+            "排查顺序：① 485 的 USB/接线/供电 ② device 进程日志里的串口读失败 ③ 从站号与波特率",
+            INVALID_WINDOW_SECONDS, count, INVALID_POINTS_THRESHOLD,
+        )
+    invalid_for = (now - _sensor_invalid_since).total_seconds()
+    if invalid_for >= INVALID_SENSOR_ALERT_SECONDS and (
+        _sensor_critical_at is None or (now - _sensor_critical_at).total_seconds() >= 300
+    ):
+        _sensor_critical_at = now
+        LOGGER.critical(
+            "⛔ 真机读数已连续 %.1f 分钟无效（最近 %d s 无效测点 %d 条）—— "
+            "链路在流、库里只是少两列，但**真实物理量已经没了**。"
+            "这不是抖动：请检查 485 接线/供电/串口占用。",
+            invalid_for / 60.0, INVALID_WINDOW_SECONDS, count,
+        )
+    return {
+        "sensor_ok": False,
+        "sensor_reason": "invalid_points",
+        "invalid_points_last_window": count,
+        "sensor_invalid_for_seconds": round(invalid_for, 1),
+        "sensor_alert_after_seconds": INVALID_SENSOR_ALERT_SECONDS,
+    }
 
 
 # ==================== 4. 接口 ====================
@@ -376,13 +481,17 @@ def latest_sample_age_seconds(rows: list[tuple[Any, ...]]) -> Optional[float]:
 
 @app.route("/api/health")
 def api_health() -> tuple[Response, int] | Response:
-    """接口2：健康检查——判据是数据新鲜度，不是"库连得上"。
+    """接口2：健康检查——判据是数据新鲜度 + 真机有效性，不是"库连得上"。
 
     原来的判据只探"能不能连上库"，导致网关 MQTT 断/补传堵/不入库/线程死/tag拼错
     全部 200 + 容器 healthy + 无告警。现在两条判据任一不满足即 503：
       ① rows_last_1min == 0          → reason=no_rows_last_1min
       ② 最近一条样本距今 > 阈值       → reason=stale_data
     查库失败仍是 503（reason=td_unreachable）。
+
+    ③ 真机失效（新增 2026-10-22）：最近 INVALID_WINDOW_SECONDS 秒的无效测点数
+       ≥ INVALID_POINTS_THRESHOLD ⇒ sensor_ok=false（**healthy 仍为 true**：
+       链路在流）。持续的无效会按 INVALID_SENSOR_ALERT_SECONDS 升级到 CRITICAL 日志。
     """
     global _stale_since   # "连续停流"计时（见 STALE_ALERT_SECONDS）
     threshold = HEALTH_STALE_AFTER_SECONDS
@@ -403,6 +512,10 @@ def api_health() -> tuple[Response, int] | Response:
         "data_age_seconds": None if age is None else round(age, 3),
         "stale_after_seconds": threshold,
     }
+    # 真机有效性（区别于"链路在流"）：见文件上方 INVALID_* 与 sensor_invalid_verdict 的注释
+    invalid_count = count_invalid_points()
+    payload["invalid_points_window_seconds"] = INVALID_WINDOW_SECONDS
+    payload["invalid_points_threshold"] = INVALID_POINTS_THRESHOLD
     if not rows:
         reason = "no_rows_last_1min"
     elif age is None:
@@ -413,6 +526,9 @@ def api_health() -> tuple[Response, int] | Response:
         # 恢复 ⇒ 清掉停流计时：下一次不健康从这一刻重新算
         _stale_since = None
         payload.update({"ok": True, "healthy": True, "reason": "fresh"})
+        # healthy=链路在流；sensor_ok=真机读数有效（真机坏了不该让健康接口整体 503，
+        # 否则 nginx 的 depends_on=web healthy 会因为一个传感器起不来）
+        payload.update(sensor_invalid_verdict(invalid_count))
         return jsonify(payload)
 
     # ---- 不健康分支：维护"连续停流"计时，超阈值升到 CRITICAL ----
