@@ -198,6 +198,14 @@ location /api/cache/ {
 
 **容器全栈形态不需要替身。** 反过来说：哪天 web 也进了容器（应用镜像构建路径打通后），把 `deploy/nginx/host/` 这套替身删掉、`docker compose up -d nginx` 一条命令即可——差异就是一个替身文件对。
 
+> ⚠️ **2026-10-22 实测补记（这条必须做）**：web 后来真的进了容器（应用镜像已在 Linux 本机构建），
+> 但替身当时没拆，结果 `cems-web` 与 `cems-nginx-web` **同时在 `cems-net` 上持别名字 `web`**，
+> Docker DNS 交替返回两个地址。从 nginx 容器里连测 `http://web:5000/` 12 次：**5 次成功、7 次失败**
+> （失败的是替身 → 转发到宿主 5000，那里已经没有进程）。外层 nginx 连测 30 次恰好都命中真 web，
+> 是因为 resolver 缓存 `valid=10s`——容器一重建就可能变成整段 502。
+> ⇒ **web 容器化后第一件事就是拆替身**：`docker compose -f deploy/nginx/host/web-forward.compose.yml down`。
+> 拆除后实测：`web` 只解析到一个地址，12/12 成功、20/20 200。
+
 ---
 
 ## 八、拆除与回退
