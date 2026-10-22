@@ -315,6 +315,8 @@ services:
 
   # ---------------- 1 设备层：Modbus 仿真设备 ----------------
   device:
+    # profile sim（仿真数据源）：边缘部署时设备层在树莓派上，平台侧不要再起仿真从站，否则真假数据会混写同一子表
+    profiles: ["sim"]
     <<: [*app, *edge-limits]      # ★ 边缘侧：数采，受资源约束（见文件头 x-edge-limits）
     container_name: cems-device
     build: .                       # 全项目唯一的构建入口，产出 cems-pipeline:latest
@@ -371,6 +373,8 @@ services:
   # ---------------- 2 网关层：轮询设备 → 发 MQTT ----------------
   # 第一套实例（现状）：从站 1 → 主题 cems/plant1/data → 缓存目录 ./data
   gateway:
+    # profile sim：同 device，平台侧不该起仿真网关（边缘部署时网关在树莓派上）
+    profiles: ["sim"]
     <<: [*app, *edge-limits]      # ★ 边缘侧：网关，受资源约束（见文件头 x-edge-limits）
     container_name: cems-gateway
     command: python src/gateway/gateway.py

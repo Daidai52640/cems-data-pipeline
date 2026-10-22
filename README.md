@@ -94,7 +94,11 @@
 本项目**统一用 Docker Compose 启动**（不再提供 `一键启动.bat` / `start.ps1` 这类一键启动脚本；Windows / Linux / macOS 命令一致）。
 
 ```bash
-# 构建镜像并启动 8 个基础服务（后台运行）
+# ① 本机全仿真演示（设备层 + 网关也在这台机器上）：8 个服务
+docker compose --profile sim up -d --build
+
+# ② 平台侧（南向 device + 网关跑在边缘节点上，见 docs/runbooks/边缘节点下板.md）：6 个服务
+#    ⚠️ 不要带 --profile sim：那会在这台机器上另起一个仿真从站 1，与真机数据混写同一张子表
 docker compose up -d --build
 
 # 查看运行状态
@@ -170,7 +174,7 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
 ## 双设备 / 高并发
 
 双设备能力**已具备，配置即可**：开关一在 `.env` 设 `SLAVE_IDS=1,2`（设备层双从站），
-开关二用 `docker compose --profile plant2 up -d` 拉起第二套网关 + 接入实例（共 10 个容器）；
+开关二用 `docker compose --profile sim --profile plant2 up -d` 拉起第二套网关 + 接入实例（共 10 个容器；`plant2` 依赖 `sim` 里的设备层，两个 profile 要一起带）；
 两个开关缺一不可，且必须做"同一时刻逐值对比"验收。
 高并发实测 N=50 下端到端 52.59 条/秒、missing=0；注意网关节拍硬上限约 1.05 条/秒/实例，扩容靠加实例。
 
