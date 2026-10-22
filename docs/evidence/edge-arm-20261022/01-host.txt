@@ -1,0 +1,14 @@
+# cmd: ssh ddf@cems-edge.local "uname -a; cat /etc/os-release | head -3; python3 -V; free -m | head -2; df -h /; lsblk -o NAME,SIZE,TYPE,MOUNTPOINT; lsusb | grep -i ch34"
+Linux cems-edge 6.12.109+rpt-rpi-v7 #1 SMP Raspbian 1:6.12.109-1+rpt1 (2026-09-11) armv7l GNU/Linux
+PRETTY_NAME="Raspbian GNU/Linux 12 (bookworm)"
+VERSION_ID="12"
+Python 3.11.2
+               total        used        free      shared  buff/cache   available
+Mem:             921         132         743           3          96         788
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/mmcblk0p2   15G  2.1G   12G  16% /
+NAME         SIZE TYPE MOUNTPOINT
+mmcblk0     14.8G disk 
+├─mmcblk0p1  512M part /boot/firmware
+└─mmcblk0p2 14.3G part /
+

@@ -1,0 +1,10 @@
+# cmd: ssh ddf@cems-edge.local "for u in ...; ps -o rss,pcpu"
+cems-device            pid=449    RSS=18.7MB CPU=1.8%
+cems-gateway-plant1    pid=523    RSS=21.4MB CPU=1.1%
+cems-gateway-plant2    pid=524    RSS=21.2MB CPU=1.1%
+
+               total        used        free      shared  buff/cache   available
+Mem:             921         137         737           3          97         783
+
+ 18:34:03 up 4 min,  0 user,  load average: 0.45, 0.31, 0.15
+

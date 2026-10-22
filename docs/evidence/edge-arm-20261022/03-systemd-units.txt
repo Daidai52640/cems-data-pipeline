@@ -1,0 +1,81 @@
+# cmd: ssh ddf@cems-edge.local "systemctl is-enabled cems-device cems-gateway-plant1 cems-gateway-plant2; systemctl cat cems-device cems-gateway-plant1 cems-gateway-plant2"
+enabled
+enabled
+enabled
+
+# /etc/systemd/system/cems-device.service
+[Unit]
+Description=CEMS Modbus device server (dual-slave, real RTU sensor)
+After=network.target
+
+[Service]
+Type=simple
+User=ddf
+WorkingDirectory=/home/ddf/cems
+Environment=SERVER_HOST=0.0.0.0
+Environment=SERVER_PORT=5020
+Environment=SLAVE_IDS=1,2
+Environment=REAL_DEVICE_ENABLE=1
+Environment=REAL_DEVICE_SOURCE=serial
+Environment=REAL_DEVICE_SERIAL_PORT=/dev/ttyUSB0
+ExecStart=/home/ddf/cems/.venv/bin/python -m src.device.modbus_server
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
+# /etc/systemd/system/cems-gateway-plant1.service
+[Unit]
+Description=CEMS gateway plant1 (slave 1 -> MQTT)
+After=network.target cems-device.service
+Wants=cems-device.service
+
+[Service]
+Type=simple
+User=ddf
+WorkingDirectory=/home/ddf/cems
+Environment=MODBUS_HOST=127.0.0.1
+Environment=MODBUS_PORT=5020
+Environment=MQTT_HOST=192.168.31.18
+Environment=MQTT_PORT=1883
+Environment=MQTT_TOPIC=cems/plant1/data
+Environment=MQTT_CLIENT_ID=cems-gateway-plant1
+ExecStart=/home/ddf/cems/.venv/bin/python -m src.gateway.gateway
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
+# /etc/systemd/system/cems-gateway-plant2.service
+[Unit]
+Description=CEMS gateway plant2 (slave 2 -> MQTT)
+After=network.target cems-device.service
+Wants=cems-device.service
+
+[Service]
+Type=simple
+User=ddf
+WorkingDirectory=/home/ddf/cems
+Environment=MODBUS_HOST=127.0.0.1
+Environment=MODBUS_PORT=5020
+Environment=MODBUS_UNIT=2
+Environment=MQTT_HOST=192.168.31.18
+Environment=MQTT_PORT=1883
+Environment=MQTT_TOPIC=cems/plant2/data
+Environment=MQTT_CLIENT_ID=cems-gateway-plant2
+Environment=GATEWAY_DATA_DIR=/home/ddf/cems/data-plant2
+ExecStart=/home/ddf/cems/.venv/bin/python -m src.gateway.gateway
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

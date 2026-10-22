@@ -1,0 +1,6 @@
+# cmd: ssh ddf@cems-edge.local "vcgencmd get_throttled; dmesg | grep -i undervoltage; uptime -p"
+throttled=0x50005
+[   27.930524] hwmon hwmon1: Undervoltage detected!
+up 4 minutes
+/dev/mmcblk0p2   15G  2.1G   12G  16% /
+

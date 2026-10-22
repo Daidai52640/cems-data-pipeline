@@ -1,0 +1,18 @@
+# cmd: Mint 上平台侧（容器形态，镜像本机构建）
+cems-pipeline:latest 2 hours ago 222MB
+python:3.12-slim 33 hours ago 179MB
+docker.m.daocloud.io/library/python:3.12-slim 33 hours ago 179MB
+
+created=2026-10-22T16:40:59.76964038+08:00 size=52498371
+
+compose_project=cems service=web restart=unless-stopped
+
+cems-web-plant2 | cems-pipeline:latest | Up 2 hours
+cems-subscriber-plant2 | cems-pipeline:latest | Up 2 hours (healthy)
+cems-web | cems-pipeline:latest | Up 2 hours (healthy)
+cems-subscriber | cems-pipeline:latest | Up 2 hours (healthy)
+tdengine | tdengine/tdengine:3.3.6.13 | Up 2 hours (healthy)
+emqx | emqx/emqx:6.3.0 | Up 56 seconds (healthy)
+cems-nginx | nginx:1.31.6-alpine | Up 3 hours (healthy)
+cems-redis | redis:7.4.11-alpine | Up 3 hours (healthy)
+

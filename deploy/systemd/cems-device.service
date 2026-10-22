@@ -1,0 +1,24 @@
+[Unit]
+# 设备层：Modbus TCP 从站（:5020），1 号炉的 Temp/Humidity 由 RS485 真机直读供给。
+# 为什么不是容器：宿主的 /dev/ttyUSB0 拿不到容器里（见 docs/runbooks/直读串口.md §4.3）。
+Description=CEMS Modbus device server (dual-slave, real RTU sensor)
+After=network.target
+
+[Service]
+Type=simple
+User=ddf
+WorkingDirectory=/home/ddf/cems
+Environment=SERVER_HOST=0.0.0.0
+Environment=SERVER_PORT=5020
+Environment=SLAVE_IDS=1,2
+Environment=REAL_DEVICE_ENABLE=1
+Environment=REAL_DEVICE_SOURCE=serial
+Environment=REAL_DEVICE_SERIAL_PORT=/dev/ttyUSB0
+ExecStart=/home/ddf/cems/.venv/bin/python -m src.device.modbus_server
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

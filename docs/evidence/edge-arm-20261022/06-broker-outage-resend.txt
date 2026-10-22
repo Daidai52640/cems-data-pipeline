@@ -1,0 +1,25 @@
+# cmd: docker stop emqx -> sleep 90 -> docker start emqx（在 Mint 上，2026-10-22）
+STOP  18:34:48
+START 18:36:18
+
+# 网关 side（cems-edge）
+Oct 22 18:36:20 cems-edge python[524]: 2026-10-22 18:36:20 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-22 18:36:20 Flow=28918.0 Dust=2.93 SO2=22.8 NOx=26.9 O2=6.2 Velocity=13.8 Temp=207.9 Humidity=43.9 Pressure=95.9 Flag=N Cfg=359aac47
+Oct 22 18:36:25 cems-edge python[524]: 2026-10-22 18:36:25 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-22 18:36:25 Flow=28923.0 Dust=2.92 SO2=22.4 NOx=26.9 O2=6.2 Velocity=13.7 Temp=206.6 Humidity=43.9 Pressure=95.9 Flag=N Cfg=359aac47
+Oct 22 18:36:30 cems-edge python[524]: 2026-10-22 18:36:30 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-22 18:36:30 Flow=29089.0 Dust=2.92 SO2=21.7 NOx=27.0 O2=6.2 Velocity=13.8 Temp=207.8 Humidity=43.7 Pressure=95.9 Flag=N Cfg=359aac47
+Oct 22 18:36:35 cems-edge python[524]: 2026-10-22 18:36:35 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-22 18:36:35 Flow=28907.0 Dust=2.93 SO2=21.3 NOx=26.9 O2=6.3 Velocity=13.8 Temp=206.9 Humidity=43.7 Pressure=95.9 Flag=N Cfg=359aac47
+Oct 22 18:36:40 cems-edge python[524]: 2026-10-22 18:36:40 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-22 18:36:40 Flow=28885.0 Dust=2.92 SO2=20.8 NOx=26.9 O2=6.3 Velocity=13.8 Temp=207.5 Humidity=44.1 Pressure=95.9 Flag=N Cfg=359aac47
+Oct 22 18:36:45 cems-edge python[524]: 2026-10-22 18:36:45 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-22 18:36:45 Flow=28948.0 Dust=2.93 SO2=20.8 NOx=26.9 O2=6.3 Velocity=13.8 Temp=207.2 Humidity=43.9 Pressure=95.9 Flag=N Cfg=359aac47
+Oct 22 18:36:50 cems-edge python[524]: 2026-10-22 18:36:50 [INFO] gateway: [缓存] 断网，数据已入本地队列: 2026-10-22 18:36:50 Flow=28987.0 Dust=2.93 SO2=20.8 NOx=26.9 O2=6.3 Velocity=13.8 Temp=207.4 Humidity=43.9 Pressure=95.9 Flag=N Cfg=359aac47
+Oct 22 18:36:52 cems-edge python[524]: 2026-10-22 18:36:52 [INFO] gateway: MQTT 已连接: 192.168.31.18:1883
+Oct 22 18:36:52 cems-edge python[524]: 2026-10-22 18:36:52 [INFO] gateway: [补传] 开始补传 25 条，在途窗口 100 条
+Oct 22 18:36:52 cems-edge python[524]: 2026-10-22 18:36:52 [INFO] gateway: [补传完成] broker 已确认 25 条
+
+--- cache ---
+-rw-r--r-- 1 ddf ddf 0 Oct 22 18:36 /home/ddf/cems/data-plant2/cache.jsonl
+--- alive ---
+{"ts":1792665425.5412078,"pid":524,"cfg":"359aac47","south_protocol":"modbus","south_ok":true,"mqtt_ok":true,"backlog_bytes":0,"samples":84,"published":58,"cached":26,"read_failures":0,"modbus_reconnects":0}
+
+# TDengine: device2 近 6 分钟行数（覆盖停网窗口与恢复补传）
+                    71 |
+Query OK, 1 row(s) in set (0.002569s)
+

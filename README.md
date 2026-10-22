@@ -251,16 +251,19 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
    扩容方式是增加网关实例，而非压单实例。
 6. ⭐ **串口两种形态并存**：容器部署仍是"宿主辅助脚本"形态（`scripts/serial_bridge.py` 把 RS485/RTU 转成
    Modbus TCP，重启电脑后需重跑，或走 `scripts/up.ps1` 一条命令拉起）；设备进程与串口同宿主时可让 **device
-   进程自己直读**（`REAL_DEVICE_SOURCE=serial`），已在 Linux 宿主的 `/dev/ttyUSB0` 上实测（原始帧与
-   《物理层取证》逐字节一致）。默认值仍是 `tcp`，容器形态行为不变；取舍、越界值语义与 10 条未验证项见
-   [`直读串口.md`](docs/runbooks/直读串口.md)，旧形态细节见 `真机接入-基线冻结v2.md`。
-7. ⭐ **平台**：已在 **x86 Linux 宿主**（Mint 22.3）跑通；nginx 也在该宿主上以容器形态跑起来，验过 80 端口、
-   `/api/cache/*` 403 口径、静态缓存与 `X-Real-IP`。但形态是**容器 + 宿主机 venv 混合**（基础设施与 nginx 用
-   容器、4 个 Python 服务用 venv），**与上面"Docker Compose 统一启动"不完全一致**，且宿主形态需要一个
-   `web` 占位转发容器（[`nginx-对外入口.md`](docs/runbooks/nginx-对外入口.md) §七）。
-   ⚠️ **应用镜像的构建路径未在 Linux 上验证**（离线包里的 `cems-pipeline` 是空镜像）；
-   ⚠️ **服务未由 systemd 托管**（`nohup` / 容器 `restart` 策略拉起，掉电自愈与重启后自动拉起未验证）；
-   ⚠️ **未在 ARM 边缘设备上验证**。详见 [`跨平台部署.md`](docs/runbooks/跨平台部署.md)。
+   进程自己直读**（`REAL_DEVICE_SOURCE=serial`），已在 **x86 Linux（Mint）** 与 **ARM（树莓派 2B）** 的
+   `/dev/ttyUSB0` 上各实测一次（原始帧与《物理层取证》逐字节一致）。默认值仍是 `tcp`，容器形态行为不变；
+   取舍、越界值语义与未验证项见 [`直读串口.md`](docs/runbooks/直读串口.md)、[`边缘节点下板.md`](docs/runbooks/边缘节点下板.md)。
+7. ⭐ **平台**：三处已收窄、三处未变。
+   ✅ **应用镜像构建已在 Linux 本机验证**（`cems-pipeline:latest`，222 MB，容器以 compose 项目 `cems` 运行）；
+   ✅ **南向两层已上 ARM 边缘节点**（树莓派 2B / Raspbian 12 armv7）：systemd 托管、`reboot` 自启、
+   `kill -9` 自愈、停 broker 90 s 后缓存 25 条全部补传、485 真机直读，全部实测（见
+   [`边缘节点下板.md`](docs/runbooks/边缘节点下板.md)）；
+   ✅ **nginx 已在 x86 Linux 宿主以容器形态验过** 80 端口与 `/api/cache/*` 403 口径。
+   ⚠️ **ARM 上只跑了南向两层**（device + 网关），web / 接入层 / 时序库仍在 x86，"整栈上 ARM"未验证；
+   ⚠️ **没有应用级看门狗**（只有 `Restart=always`），**断电自愈未验证**；
+   ⚠️ **MQTT 无认证**（broker 只靠网络边界）；**单机，无 HA**。详见
+   [`跨平台部署.md`](docs/runbooks/跨平台部署.md)、[`边缘节点下板.md`](docs/runbooks/边缘节点下板.md)。
 
 ---
 

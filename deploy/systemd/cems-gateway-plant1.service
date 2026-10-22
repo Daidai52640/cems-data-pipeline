@@ -1,0 +1,25 @@
+[Unit]
+# 网关（1 号炉）：轮询 :5020 从站 1 → MQTT。断网时写本地缓存，恢复后补传。
+# MQTT_HOST 填平台侧（broker）地址；本文件按本次实测填 192.168.31.18。
+Description=CEMS gateway plant1 (slave 1 -> MQTT)
+After=network.target cems-device.service
+Wants=cems-device.service
+
+[Service]
+Type=simple
+User=ddf
+WorkingDirectory=/home/ddf/cems
+Environment=MODBUS_HOST=127.0.0.1
+Environment=MODBUS_PORT=5020
+Environment=MQTT_HOST=192.168.31.18
+Environment=MQTT_PORT=1883
+Environment=MQTT_TOPIC=cems/plant1/data
+Environment=MQTT_CLIENT_ID=cems-gateway-plant1
+ExecStart=/home/ddf/cems/.venv/bin/python -m src.gateway.gateway
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

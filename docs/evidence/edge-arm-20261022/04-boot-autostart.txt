@@ -1,0 +1,19 @@
+# cmd: ssh ddf@cems-edge.local "uptime -s; last -x reboot | head -3; journalctl -b -u cems-device -u cems-gateway-plant1 -u cems-gateway-plant2 --no-pager | grep -E "Started|网关启动|真机接入已启用|MQTT 已连接" | head -12"
+2026-10-22 18:29:21
+up 4 minutes
+reboot   system boot  6.12.109+rpt-rpi Thu Oct 22 18:16   still running
+reboot   system boot  6.12.109+rpt-rpi Thu Oct 22 17:56   still running
+reboot   system boot  6.12.109+rpt-rpi Tue Oct  6 08:19 - 17:56 (16+09:36)
+
+Oct 22 18:27:51 cems-edge systemd[1]: Started cems-device.service - CEMS Modbus device server (dual-slave, real RTU sensor).
+Oct 22 18:27:51 cems-edge systemd[1]: Started cems-gateway-plant1.service - CEMS gateway plant1 (slave 1 -> MQTT).
+Oct 22 18:27:51 cems-edge systemd[1]: Started cems-gateway-plant2.service - CEMS gateway plant2 (slave 2 -> MQTT).
+Oct 22 18:27:55 cems-edge python[450]: 2026-10-22 18:27:55 [INFO] gateway: 网关启动: 设备 127.0.0.1:5020 从站1 → MQTT 192.168.31.18:1883 主题 cems/plant1/data (QoS=1) client_id=cems-gateway-plant1
+Oct 22 18:27:55 cems-edge python[451]: 2026-10-22 18:27:55 [INFO] gateway: 网关启动: 设备 127.0.0.1:5020 从站2 → MQTT 192.168.31.18:1883 主题 cems/plant2/data (QoS=1) client_id=cems-gateway-plant2
+Oct 22 18:28:00 cems-edge systemd[1]: Started cems-gateway-plant1.service - CEMS gateway plant1 (slave 1 -> MQTT).
+Oct 22 18:28:00 cems-edge systemd[1]: Started cems-gateway-plant2.service - CEMS gateway plant2 (slave 2 -> MQTT).
+Oct 22 18:28:02 cems-edge python[523]: 2026-10-22 18:28:02 [INFO] gateway: 网关启动: 设备 127.0.0.1:5020 从站1 → MQTT 192.168.31.18:1883 主题 cems/plant1/data (QoS=1) client_id=cems-gateway-plant1
+Oct 22 18:28:02 cems-edge python[524]: 2026-10-22 18:28:02 [INFO] gateway: 网关启动: 设备 127.0.0.1:5020 从站2 → MQTT 192.168.31.18:1883 主题 cems/plant2/data (QoS=1) client_id=cems-gateway-plant2
+Oct 22 18:28:02 cems-edge python[523]: 2026-10-22 18:28:02 [INFO] gateway: MQTT 已连接: 192.168.31.18:1883
+Oct 22 18:28:03 cems-edge python[524]: 2026-10-22 18:28:03 [INFO] gateway: MQTT 已连接: 192.168.31.18:1883
+

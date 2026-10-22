@@ -5,7 +5,7 @@
 
 ## 目录与归档判据
 
-共 **196 份入库**（2026-10-18 重新清点；⚠️ `edge/` 下另有 3 份被 `.gitignore` 排除的采证运行产物），分布如下：
+共 **207 份入库**（2026-10-22 重新清点；⚠️ `edge/` 下另有 3 份被 `.gitignore` 排除的采证运行产物），分布如下：
 
 | 子目录 | 份数 | 放什么 | 判据（按文件名 + 内容双重确认） |
 |---|---|---|---|
@@ -22,8 +22,12 @@
 | `physical-layer-20261018/` | 8 | 485 物理层取证的仪器原始输出（`runbooks/物理层取证.md`） | 逻辑分析仪导出的波形/解码原始文件与 CRC 复算输入 |
 | ⭐ `serial-20261018/` | 19 | **device 进程内直读 485** 的原始证据（`runbooks/直读串口.md`） | `ev_02_probe.txt`（真机 5 次连读的原始请求/应答帧）、`ev_07_success_rate.txt`（20 连读）、`ev_04_mixed_flow.txt`（2 真 + 7 仿真）、`ev_03/05/06`（总线干扰下的状态位与越界值、进程存活、恢复）、`ev_09_pty_*`（**模拟对端**，pty）、`ev_10/11/12/13`（Mint 上 `:5020` 换成直读实例前后：TDengine 条数、`/api/data`、网关与接入层日志）；3 个证据脚本 `read_registers.py` / `noise_on_rtu_bus.py` / `sim_peer_rtu_slave.py` |
 | ⭐ `nginx-20261018/` | 11 | **nginx 对外入口在 Linux 宿主启动**的原始输出（`runbooks/nginx-对外入口.md`） | `02-healthz.txt`、`03-proxy-root-apidata.txt`、`04-403-api-cache.txt`（403 原始响应头 + 直连 5000 的 200 对照）、`05-static-cache-headers.txt`（304 / gzip）、`07-x-real-ip-probe-from-lan.txt`（伪造头被丢弃）、`08-why-web-name-required.txt`（`web` 名解析失败的原始日志）、`10-lan-client-final.txt`（跨机逐项状态码） |
+| ⭐ `edge-arm-20261022/` | 11 | **ARM 边缘节点下板**的原始证据（`runbooks/边缘节点下板.md`） | `01-host.txt`（板子/系统/内存/USB）、`02-serial-read.txt`（真机直读日志段）、`03-systemd-units.txt`（三个 unit 定义与启用状态）、`04-boot-autostart.txt`（reboot 自启）、`05-crash-recovery.txt`（`kill -9` 自愈）、`06-broker-outage-resend.txt`（停 broker 90 s：缓存 25 条→补传确认 25 条）、`07-e2e-tdengine.txt`（真值行/仿真行/拔线后 NULL）、`08-platform-image.txt`（Linux 本机构建的应用镜像与容器）、`09-resources.txt`（RSS/CPU）、`10-power.txt`（欠压记录）、`12-485-absent-stale.txt`（拔线后的失败语义） |
 
-> 加上本 `README.md`，本目录共 **197** 个入库条目。
+> 加上本 `README.md`，本目录共 **208** 个入库条目。
+
+> ⚠️ **2026-10-22 重新清点**：新增 `edge-arm-20261022/`（11 份，ARM 边缘节点下板）；
+> 其余 13 个子目录的份数与 2026-10-18 那一轮一致（196 → 207 份文件，+1 为 README 自身）。
 
 > ⚠️ **2026-10-18 重新清点**：上一版写"共 157 份（2026-10-12 清点）"—— 那个数字当时是对的，
 > 但此后新增 `linux-deploy-20261018/`(1)、`physical-layer-20261018/`(8)、`serial-20261018/`(19)、

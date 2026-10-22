@@ -1,0 +1,20 @@
+# cmd: 485 USB 拔出后的状态（换电源时脱开）
+--- lsusb ---
+Bus 001 Device 003: ID 0424:ec00 Microchip Technology, Inc. (formerly SMSC) SMSC9512/9514 Fast Ethernet Adapter
+Bus 001 Device 002: ID 0424:9514 Microchip Technology, Inc. (formerly SMSC) SMC9514 Hub
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+
+--- /dev/ttyUSB* ---
+ls: cannot access '/dev/ttyUSB*': No such file or directory
+
+--- device 失败日志 ---
+Oct 22 18:34:20 cems-edge python[449]: 2026-10-22 18:34:20 [ERROR] device.modbus_server: [从站1] 真机尚无有效读数（桥不可达或未轮询到）—— Temp/Humidity 写越界值让接入层拒收，不把仿真值冒充真机值
+Oct 22 18:34:20 cems-edge python[449]: 2026-10-22 18:34:20 [ERROR] device.rtu_master: 串口直读失败（连续第 134 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：SerialException: [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0'
+Oct 22 18:34:22 cems-edge python[449]: 2026-10-22 18:34:22 [ERROR] device.modbus_server: [从站1] 真机尚无有效读数（桥不可达或未轮询到）—— Temp/Humidity 写越界值让接入层拒收，不把仿真值冒充真机值
+Oct 22 18:34:22 cems-edge python[449]: 2026-10-22 18:34:22 [ERROR] device.rtu_master: 串口直读失败（连续第 135 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：SerialException: [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0'
+Oct 22 18:34:24 cems-edge python[449]: 2026-10-22 18:34:24 [ERROR] device.modbus_server: [从站1] 真机尚无有效读数（桥不可达或未轮询到）—— Temp/Humidity 写越界值让接入层拒收，不把仿真值冒充真机值
+Oct 22 18:34:24 cems-edge python[449]: 2026-10-22 18:34:24 [ERROR] device.rtu_master: 串口直读失败（连续第 136 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：SerialException: [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0'
+
+--- 网关 alive ---
+{"ts":1792665264.9210143,"pid":523,"cfg":"359aac47","south_protocol":"modbus","south_ok":true,"mqtt_ok":true,"backlog_bytes":0,"samples":52,"published":51,"cached":1,"read_failures":0,"modbus_reconnects":0}
+

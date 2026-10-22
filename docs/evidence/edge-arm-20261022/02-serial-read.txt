@@ -1,0 +1,5 @@
+# cmd: ssh ddf@cems-edge.local "journalctl -u cems-device greps"
+--- /dev/ttyUSB0 曾在线（历史日志） ---
+
+--- 第一次启动时的真机接入日志 ---
+

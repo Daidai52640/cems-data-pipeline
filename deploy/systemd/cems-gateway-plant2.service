@@ -1,0 +1,26 @@
+[Unit]
+# 网关（2 号炉）：读从站 2（纯仿真），独立缓存目录与 MQTT 主题。
+Description=CEMS gateway plant2 (slave 2 -> MQTT)
+After=network.target cems-device.service
+Wants=cems-device.service
+
+[Service]
+Type=simple
+User=ddf
+WorkingDirectory=/home/ddf/cems
+Environment=MODBUS_HOST=127.0.0.1
+Environment=MODBUS_PORT=5020
+Environment=MODBUS_UNIT=2
+Environment=MQTT_HOST=192.168.31.18
+Environment=MQTT_PORT=1883
+Environment=MQTT_TOPIC=cems/plant2/data
+Environment=MQTT_CLIENT_ID=cems-gateway-plant2
+Environment=GATEWAY_DATA_DIR=/home/ddf/cems/data-plant2
+ExecStart=/home/ddf/cems/.venv/bin/python -m src.gateway.gateway
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
