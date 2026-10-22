@@ -139,7 +139,7 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
 |---|---|---|
 | Nginx 统一入口 | http://localhost | 对外主入口，反代 Web 与 API |
 | Web 直连后端 | http://localhost:5001 | 直连 web 容器（容器内端口 5000），对照 nginx 层差异 |
-| EMQX Dashboard | http://localhost:18083 | MQTT 管理台，默认 admin/public |
+| EMQX Dashboard | http://localhost:18083 | MQTT 管理台。演示默认值是 `admin/public`；本部署**已改口令**（只存本机、不入库），且只绑回环 |
 | TDengine | 6041（REST）/ 6030（原生） | 默认 root/taosdata |
 | Modbus 设备 | 5020 | 仿真设备 Modbus TCP 端口 |
 
@@ -267,7 +267,7 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
    [`边缘节点下板.md`](docs/runbooks/边缘节点下板.md)）；
    ✅ **nginx 已在 x86 Linux 宿主以容器形态验过** 80 端口与 `/api/cache/*` 403 口径。
    ⚠️ **ARM 上只跑了南向两层**（device + 网关），web / 接入层 / 时序库仍在 x86，"整栈上 ARM"未验证；
-   ⚠️ **看门狗只覆盖"循环卡住"**（`Type=notify` + `WatchdogSec=60`，采集循环每圈发 `WATCHDOG=1`）；`kill -STOP` 冻结进程 60 s 后被 systemd 杀掉重启已实测。**断电自愈未验证**（`reboot` 验过）；
+   ⚠️ **看门狗只覆盖"循环卡住"**（`Type=notify` + `WatchdogSec=60`，采集循环每圈发 `WATCHDOG=1`）；`kill -STOP` 冻结进程 60 s 后被 systemd 杀掉重启已实测；`reboot` 后自动拉起也验过（硬断电未测）；
    ⚠️ **MQTT 已开认证但仍是明文**（无 TLS，跨不可信网络不行）；**单机，无 HA**。详见
    [`跨平台部署.md`](docs/runbooks/跨平台部署.md)、[`边缘节点下板.md`](docs/runbooks/边缘节点下板.md)。
 
