@@ -16,13 +16,13 @@
 > 容器里连 `/dev/ttyS*` 都没有，**且 WSL2 内核没有 ch341 模块**（所以光装 `usbipd` 也不够）。
 > 这条路径恰好等价于现场那台**串口服务器**。
 >
-> **当前形态**：**10 个容器**（8 个基础 + `plant2` profile 的 2 个）。
+> **当前形态**：平台侧 **6 个容器**（emqx / tdengine / redis / subscriber / nginx / web）；`--profile sim` 再加设备层 + 网关（本机全仿真 = 8）；再带 `--profile plant2` = 10（双设备）。边缘部署时南向两层在树莓派上，平台侧**不带** `sim`（见 `docs/runbooks/边缘节点下板.md`）。
 >
 > ⚠️ **语义边界（必须说清，否则会被误读）**：真机**只接 1 号炉**；`Temp`/`Humidity` 两列承载的是
 > **环境**温湿度、**不是烟气参数**（本部署只作**数据链路演示**，不作环保口径依据）。
 > **尚未做现场联调**（未与真实监测平台/环保平台对拍）。完整清单见文末「已知边界」。
 
-> ✅ **最小验收 25 项全通过**（`python scripts\acceptance_min.py`，退出码 0）。
+> ✅ **最小验收 25 项全通过**（`python scripts\acceptance_min.py`，退出码 0；本机全仿真形态，即 `--profile sim`。边缘部署时 A7 的两项网关缓存判据会自动 SKIP）。
 > v4.0 首验于 2026-10-03；⭐ **2026-10-11 真机接入后重跑，仍 25/25**。
 > ⚠️ 但它**不专门覆盖真机链路**（判据看的是链路整体健康，真机只占其中 2 个测点）。
 > 验收单与边界声明见 [`ACCEPTANCE.md`](ACCEPTANCE.md)。
@@ -131,7 +131,7 @@ pwsh -NoProfile -File scripts\export_images.ps1
 
 # 目标机（干净、无外网）：导入 → 起链路
 pwsh -NoProfile -File scripts\import_images.ps1 -From <tar 所在目录>
-docker compose up -d --build          # 基础层已在本地，--build 不需要联网
+docker compose --profile sim up -d --build   # 本机全仿真；基础层已在本地，--build 不需要联网
 ```
 
 两个脚本都内置"按 digest 导出的包一律拒绝"的校验，并会核对包内镜像是否覆盖 compose 所需。

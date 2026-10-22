@@ -338,3 +338,15 @@ docker compose -f deploy/nginx/host/web-forward.compose.yml up -d
 > **nginx 已在 Linux 宿主启动（容器形态），对外 80 反代到宿主机 venv 的 web；但采"独立替身容器 + `--no-deps`"的形态，且 systemd 化、TLS、限流压测、掉电自愈均未验证（见 §九）。**
 
 ⚠️ 措辞上不夸大：这不等于"compose 全栈形态的 nginx 已验证"——应用镜像仍未构建（边界 1），替身是宿主形态的权宜（边界 9）。
+
+---
+
+## 十二、后续进展（2026-10-22，本文件写完之后）
+
+| 本文当时的边界 | 现状 |
+|---|---|
+| §九 边界 1：systemd 未接管 | **已在边缘节点上做完**：树莓派 2B 的 device + 双网关由 systemd 托管，`Type=notify` + `WatchdogSec=60`，`kill -STOP` 验证（见 `边缘节点下板.md`）。平台侧的 nginx/web 仍由容器 `restart: unless-stopped` 拉起，**未** systemd 化 |
+| §九 边界 5：应用镜像构建路径未验证 | **已验证**：`cems-pipeline:latest` 在 Linux 本机离线构建成功（222 MB），容器以 compose 项目 `cems` 运行（见 `边缘节点下板.md` §五、`evidence/edge-arm-20261022/08-platform-image.txt`） |
+| §七：web 容器化后必须拆占位替身 | 已拆（2026-10-22），并补了实测记录：不拆时 `web:5000` 12 次中 7 次打到死端口 |
+
+⚠️ 本文其余内容（如 `BIND_ADDR=0.0.0.0` 的跨机验收写法）保持不变；当前默认部署里 nginx 只绑回环，跨机验收要么临时放开 `BIND_ADDR`，要么走 SSH 隧道。

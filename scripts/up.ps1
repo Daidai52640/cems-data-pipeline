@@ -134,7 +134,7 @@ else {
 # ---------------------------------------------------------------- 2. compose
 $env:DOCKER_BUILDKIT = '0'
 # NOTE: do NOT name this `$args` -- that is a PowerShell automatic variable.
-$composeArgs = @('compose', '--profile', 'plant2', 'up', '-d')
+$composeArgs = @('compose', '--profile', 'sim', '--profile', 'plant2', 'up', '-d')
 if (-not $NoBuild) { $composeArgs += '--build' }
 Write-Host "[2/3] docker $($composeArgs -join ' ')" -ForegroundColor Cyan
 & docker @composeArgs
@@ -143,7 +143,7 @@ if ($LASTEXITCODE -ne 0) { throw "docker compose up failed (exit $LASTEXITCODE)"
 # ---------------------------------------------------------------- 3. report
 Start-Sleep -Seconds 5
 Write-Host '[3/3] status' -ForegroundColor Cyan
-& docker compose --profile plant2 ps --format '{{.Name}}|{{.Status}}'
+& docker compose --profile sim --profile plant2 ps --format '{{.Name}}|{{.Status}}'
 $unhealthy = @(& docker ps --format '{{.Names}}' --filter health=unhealthy)
 if ($unhealthy.Count -gt 0) {
     Write-Host "UNHEALTHY: $($unhealthy -join ', ')" -ForegroundColor Red

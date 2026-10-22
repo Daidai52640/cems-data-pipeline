@@ -5653,7 +5653,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <li>北向出口：一套接口三条出口（HJ212/TCP 含 SM4、HTTP-JSON、Modbus-TCP），含心跳与超时重连</li>
           <li>三条出口均已本地回环 + 官方向量独立验证；是否接进主链路按项目需要决定（当前为演示脚本调用）</li>
           <li>只读被直读：网关另可开一个只读 Modbus TCP 从站（:5022，默认关），供厂里既有的 SCADA / DCS 直接读当前值</li>
-          <li>部署形态：单机 Docker Compose 一键起（10 个容器），端口默认只绑 127.0.0.1</li>
+          <li>部署形态：单机 Docker Compose（平台侧 6 个容器；--profile sim 8 个；双设备 10 个），端口默认只绑 127.0.0.1</li>
           <li>扩展方式：多设备 = 多实例（每台炉子一套网关 + 接入，各自库表与缓存目录），已按两实例验证</li>
           <li>镜像是具体版本号，不用 latest：同一份编排在任何时候重建都得到同一套软件</li>
         </ul>

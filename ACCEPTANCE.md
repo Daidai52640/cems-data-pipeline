@@ -136,7 +136,7 @@
 |---|---|
 | **本次最小验收：通过** | 25 项判据全部通过，无未通过、无跳过 |
 | **可以交付使用** | 在本机（单机 Docker）环境下，采集→传输→入库→展示→告警→报表全链路可用 |
-| **可以对外演示** | 10 个容器一键起，两台设备同时跑，界面与报表均已成版 |
+| **可以对外演示** | 本机全仿真形态下 `docker compose --profile sim --profile plant2 up -d` 一键起 10 个服务，两台设备同时跑，界面与报表均已成版 |
 
 ### 但下面这些，我不能替你宣称"已经具备"
 
@@ -153,7 +153,7 @@
 
 另外两条**部署前必须知道**的运行时约束：
 
-- **消息总线（1883 端口）目前没有任何认证**。要放到局域网/公网，必须先加认证并让采集端带上凭据（属代码改动，当前未做）。默认只绑 `127.0.0.1` 是安全的。
+- **消息总线（1883 端口）已开认证**（`password_based` + `built_in_database`，网关/接入层带凭据；匿名连接被拒）。⚠️ 但**没有 TLS**：凭据与数据在局域网内是明文，只适合可信内网。MQTT 单独用 `MQTT_BIND_ADDR` 控制对外，其余端口默认仍只绑 `127.0.0.1`。
 - **接入层的落盘队列仍有两种会丢的情形**：落盘本身失败（磁盘满/无权限）、积压超过 256 MB 上限（丢最旧）。两种都会打 CRITICAL 日志，不是静默的。
 
 ---
@@ -161,11 +161,13 @@
 ## 四、怎么复验（任何人都能跑）
 
 ```powershell
-# 1) 起系统（首次会构建镜像）
-docker compose up -d --build
+# 1) 起系统（首次会构建镜像）—— 本机全仿真形态
+docker compose --profile sim up -d --build
+#    双设备演示再加 plant2（两个 profile 必须一起带）：
+# docker compose --profile sim --profile plant2 up -d --build
 
-# 2) 确认 10 个容器都健康
-docker compose --profile plant2 ps
+# 2) 确认 8 个服务（双设备 10 个）都健康
+docker compose --profile sim ps
 
 # 3) 跑这份验收单（只读，不改任何东西）
 python scripts\acceptance_min.py
@@ -175,6 +177,7 @@ python scripts\acceptance_min.py --json docs\evidence\acceptance\acceptance_min.
 ```
 
 退出码：`0` = 全部通过；`1` = 有未通过项（末页会列出未通过明细）。
+⚠️ 本脚本按"南向 device+网关也在本机"的全仿真形态写；边缘部署（南向在树莓派上）时 A7 的两项网关缓存判据会自动 SKIP。
 想只看某几条：`python scripts\acceptance_min.py --only A1 A5 A8`。
 
 更严格的工程师口径（逐跳血缘 T1~T8，会起临时链路）：

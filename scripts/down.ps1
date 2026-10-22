@@ -75,7 +75,7 @@ if ($StopBridgeOnly -or $KeepContainers) {
     Write-Host '[2/2] containers: kept' -ForegroundColor DarkGray
 }
 else {
-    $composeArgs = @('compose', '--profile', 'plant2', 'down')
+    $composeArgs = @('compose', '--profile', 'sim', '--profile', 'plant2', 'down')
     if ($PurgeVolumes) { $composeArgs += '-v'; $composeArgs += '--remove-orphans' }
     Write-Host "[2/2] docker $($composeArgs -join ' ')" -ForegroundColor Cyan
     & docker @composeArgs

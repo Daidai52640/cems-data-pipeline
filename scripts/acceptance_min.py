@@ -1,5 +1,10 @@
 """最小验收：只验"使用方会在乎的 8 条"，每条给出可复算的证据。
 
+⚠️ **适用拓扑**：A7 的两项网关缓存判据要求本机有 `cems-gateway*` 容器，也就是
+"南向 device+网关也在本机"的全仿真形态（`docker compose --profile sim ...`）。
+边缘部署（南向在树莓派上，见 docs/runbooks/边缘节点下板.md）时这两项会自动 SKIP，
+其余判据照常适用。
+
 与仓库里其它脚本的分工（不要重复，也不要互相替代）：
   · scripts/verify_data_lineage.py —— 工程师口径的逐跳血缘（T1~T8，起临时链路）
   · scripts/verify_alarm_offline.py / verify_report_coverage.py —— 单点深挖
@@ -83,6 +88,14 @@ def _skip(item: str, claim: str, why: str) -> None:
     RESULTS.append({"item": item, "pass": None, "claim": claim, "evidence": why})
     print(f"  [SKIP] {claim}\n         原因：{why}")
 
+
+def container_running(name: str) -> bool:
+    """本机是否有正在运行的该容器（边缘部署时网关不在本机）。"""
+    proc = subprocess.run(
+        ["docker", "inspect", "-f", "{{.State.Running}}", name],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+    )
+    return proc.returncode == 0 and proc.stdout.strip().lower() == "true"
 
 def taos(sql: str, timeout: int = 60) -> list[list[str]]:
     """在 tdengine 容器里跑一条 SQL，返回数据行（去掉表头与统计行）。
@@ -525,6 +538,13 @@ def a7_self_healing() -> None:
     #    GATEWAY_DATA_DIR=/app/data-plant2 指定（compose 里就是这么写的）。
     #    所以这里不能硬编码路径，直接在容器里找 *.jsonl —— 找不到才是真问题。
     for service in ("cems-gateway", "cems-gateway-plant2"):
+        if not container_running(service):
+            _skip(
+                "A7", f"{service} 的断网缓存机制在位",
+                "本机没有该容器：南向 device+网关部署在边缘节点（docs/runbooks/边缘节点下板.md），"
+                "本项只适用于 `docker compose --profile sim ...` 的本机全仿真形态",
+            )
+            continue
         proc = subprocess.run(
             ["docker", "exec", service, "sh", "-lc",
              "find /app -name '*.jsonl' -printf '%f %s\\n' 2>/dev/null; echo '---'; "
