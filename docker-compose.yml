@@ -18,13 +18,22 @@
 #        管理台 http://localhost:18083 看 MQTT 连接（默认 admin/public）
 #
 # ★ 端口默认只绑定 127.0.0.1（仅本机可访问）：
-#   EMQX 1883 默认匿名可发布、TDengine 6041 用演示口令、18083 默认 admin/public，
+#   TDengine 6041 用演示口令、18083 默认 admin/public，
 #   一旦绑到 0.0.0.0，同一 WiFi 下任何设备都能免登录读全量数据、甚至删库。
 #   nginx 的 80 同理走 BIND_ADDR —— 它前面就是这套展示面，绝不能默认对外。
 #   需要在局域网演示大屏时，在 .env 里设 BIND_ADDR=0.0.0.0，并把 TD_PASS 改成自己的口令。
-#   ⚠️ EMQX 的 1883 本项目**没有接任何认证**（网关 / 接入层都不带凭据；`admin/public` 只是
-#      18083 管理台口令），改它挡不住匿名 MQTT。要对外暴露，必须先给 EMQX 开认证，并在
-#      src/gateway/gateway.py、src/platform/subscriber_to_td.py 里补 MQTT 用户名口令。
+#
+# ⚠️ MQTT（1883）是**唯一**单独面向局域网开放的端口（由 MQTT_BIND_ADDR 控制）。它的访问控制
+#   分两层，别只记住其中一层：
+#     ① 账号认证**不写在这份编排里**：认证是在 EMQX 侧开的 `password_based` +
+#        `built_in_database`（用 REST API / 管理台建用户），用户存在 EMQX 自己的数据里 ——
+#        换机器、或 `down -v` / 删掉 emqx 数据卷，用户就没了，必须照
+#        docs/runbooks/边缘节点下板.md §六 重开。仓库这边只提供**凭据注入**：
+#        MQTT_USERNAME / MQTT_PASSWORD 进网关与接入层（见 src/common/mqtt_auth.py，
+#        默认空串 = 不带凭据、行为与改造前一致）。
+#     ② 现场状态（2026-10-22）：认证已开、匿名连接被拒（CONNACK 135）、两个客户端都带凭据；
+#        **但仍无 TLS**，凭据与监测数据在局域网内是明文。所以 1883 只能放在可信内网，
+#        跨不可信网络必须先加 TLS（本项目未实现）。
 # =============================================================================
 
 name: cems
