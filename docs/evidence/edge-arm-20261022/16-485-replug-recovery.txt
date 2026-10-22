@@ -1,0 +1,28 @@
+# cmd: 485 拔出（18:36）→ 插回（18:52）→ 自动恢复，进程未重启
+=== 拔线期间（18:36~18:52） ===
+Oct 22 18:36:00 cems-edge python[449]: 2026-10-22 18:36:00 [ERROR] device.rtu_master: 串口直读失败（连续第 184 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：SerialException: [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0'
+Oct 22 18:36:02 cems-edge python[449]: 2026-10-22 18:36:02 [ERROR] device.rtu_master: 串口直读失败（连续第 185 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：SerialException: [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0'
+Oct 22 18:36:04 cems-edge python[449]: 2026-10-22 18:36:04 [ERROR] device.rtu_master: 串口直读失败（连续第 186 次）：/dev/ttyUSB0 @ 4800 8N1，从站 1 —— 状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：SerialException: [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0'
+
+=== 插回后（自动恢复，未重启进程） ===
+Oct 22 18:52:00 cems-edge python[1039]: 2026-10-22 18:52:00 [INFO] device.rtu_master: 串口直读：湿度 57.4 %RH ｜ 温度 26.1 degC ｜ 状态位=0
+Oct 22 18:52:02 cems-edge python[1039]: 2026-10-22 18:52:02 [INFO] device.rtu_master: 串口直读：湿度 57.4 %RH ｜ 温度 26.1 degC ｜ 状态位=0
+Oct 22 18:52:04 cems-edge python[1039]: 2026-10-22 18:52:04 [INFO] device.rtu_master: 串口直读：湿度 57.4 %RH ｜ 温度 26.1 degC ｜ 状态位=0
+
+=== 服务未重启 ===
+MainPID=1039
+NRestarts=0
+up 24 minutes
+
+=== TDengine（device1 最近 6 行：拔线期间为 NULL，插回后恢复真值） ===
+           ts            |         temp         |       humidity       |
+========================================================================
+ 2026-10-22 18:53:40.000 |                 26.1 |                 57.2 |
+ 2026-10-22 18:53:35.000 |                 26.1 |                 57.2 |
+ 2026-10-22 18:53:30.000 |                 26.1 |                 57.2 |
+ 2026-10-22 18:53:25.000 |                 26.1 |                 57.2 |
+ 2026-10-22 18:53:20.000 |                 26.1 |                 57.2 |
+ 2026-10-22 18:53:15.000 |                 26.1 |                 57.2 |
+Query OK, 6 row(s) in set (0.002894s)
+
+
