@@ -10,17 +10,17 @@
       "url": "https://github.com/Daidai52640/cems-data-pipeline.git",
       "provider": "github",
       "link_mode": "local-only",
-      "revision": "5a1ab244172a68558c0e5d70c1fe8d30f4e81ecb"
+      "revision": "dd486a2ec7f31edcd80981459df8155746c46757"
     }
   },
   "components": [
     {
       "id": "device",
       "type": "backend",
-      "label": "Modbus 仿真设备",
-      "sublabel": "9 个测点 · 5 秒一个数",
+      "label": "设备层 · 真机 / 仿真",
+      "sublabel": "9 测点 · 温湿度真机直读",
       "pos": [
-        40,
+        72,
         270
       ],
       "size": [
@@ -30,19 +30,19 @@
       "sources": [
         {
           "path": "src/device/modbus_server.py",
-          "line": 94,
-          "label": "SLAVE_IDS 解析"
+          "line": 477,
+          "end_line": 512,
+          "label": "按 REAL_DEVICE_SOURCE 建读取器（serial = 进程内 RTU 直读）"
         },
         {
           "path": "src/device/modbus_server.py",
-          "line": 497,
-          "label": "main / StartTcpServer",
-          "end_line": 597
+          "line": 707,
+          "label": "StartTcpServer :5020（systemd 里绑 127.0.0.1）"
         },
         {
           "path": "src/device/simulator.py",
           "line": 570,
-          "label": "sample（正弦+日周期+噪声）"
+          "label": "sample（正弦+日周期+噪声，合成测点）"
         }
       ]
     },
@@ -52,7 +52,7 @@
       "label": "网关 1 · plant1",
       "sublabel": "Modbus / OPC UA 取数 · 换算 · 打时间戳",
       "pos": [
-        250,
+        282,
         150
       ],
       "size": [
@@ -62,17 +62,17 @@
       "sources": [
         {
           "path": "src/gateway/gateway.py",
-          "line": 662,
+          "line": 765,
           "label": "main（读→发→缓存）"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 366,
+          "line": 457,
           "label": "publish（等 PUBACK）"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 529,
+          "line": 620,
           "label": "resend_cache 补传"
         }
       ]
@@ -83,7 +83,7 @@
       "label": "断网缓存 1",
       "sublabel": "发不到 broker 就先存本地",
       "pos": [
-        250,
+        282,
         50
       ],
       "size": [
@@ -93,13 +93,18 @@
       "sources": [
         {
           "path": "src/gateway/gateway.py",
-          "line": 107,
+          "line": 134,
           "label": "CACHE_MAX_BYTES 64 MB"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 458,
-          "label": "原子段文件交接"
+          "line": 327,
+          "label": "超限按丢最旧、保最新裁剪"
+        },
+        {
+          "path": "src/gateway/gateway.py",
+          "line": 297,
+          "label": "原子写（临时文件 + os.replace）"
         }
       ]
     },
@@ -109,7 +114,7 @@
       "label": "网关 2 · plant2",
       "sublabel": "轮询从站2 · 同代码另一实例",
       "pos": [
-        250,
+        282,
         420
       ],
       "size": [
@@ -119,14 +124,14 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 396,
-          "end_line": 410,
-          "label": "gateway2 服务（profile）"
+          "line": 436,
+          "end_line": 451,
+          "label": "gateway2 服务（profile plant2）"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 563,
-          "label": "ResendWorker（同代码）"
+          "line": 654,
+          "label": "ResendWorker（同一份代码）"
         }
       ]
     },
@@ -136,7 +141,7 @@
       "label": "断网缓存 2",
       "sublabel": "每实例一份，互不干扰",
       "pos": [
-        250,
+        282,
         535
       ],
       "size": [
@@ -146,13 +151,14 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 410,
+          "line": 450,
           "label": "GATEWAY_DATA_DIR 每实例一份"
         },
         {
           "path": "src/gateway/gateway.py",
-          "line": 279,
-          "label": "超限丢最旧"
+          "line": 124,
+          "end_line": 126,
+          "label": "段文件 inflight-*.jsonl"
         }
       ]
     },
@@ -172,9 +178,9 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 242,
-          "end_line": 255,
-          "label": "离线队列 20000 / 会话 24 h / 落盘"
+          "line": 255,
+          "end_line": 270,
+          "label": "离线队列 20000 / 会话 24 h / 落盘持久化"
         }
       ]
     },
@@ -194,12 +200,12 @@
       "sources": [
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 1601,
+          "line": 1663,
           "label": "on_message（校验+入库+判告警）"
         },
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 1824,
+          "line": 1890,
           "label": "main"
         },
         {
@@ -225,12 +231,13 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 449,
-          "label": "subscriber2 服务（profile）"
+          "line": 502,
+          "end_line": 514,
+          "label": "subscriber2 服务（profile plant2）"
         },
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 205,
+          "line": 210,
           "label": "enforce_topic_scope 主题↔标签自检"
         }
       ]
@@ -251,19 +258,19 @@
       "sources": [
         {
           "path": "src/platform/subscriber_to_td.py",
-          "line": 756,
-          "label": "建库建超级表"
+          "line": 814,
+          "label": "KEEP 365 d"
+        },
+        {
+          "path": "src/platform/subscriber_to_td.py",
+          "line": 818,
+          "label": "CREATE STABLE 主数据表"
         },
         {
           "path": "src/common/alarm_judge.py",
           "line": 751,
-          "label": "3 张告警超级表",
-          "end_line": 768
-        },
-        {
-          "path": "src/platform/subscriber_to_td.py",
-          "line": 134,
-          "label": "KEEP 365d"
+          "end_line": 768,
+          "label": "3 张告警超级表"
         }
       ]
     },
@@ -310,18 +317,19 @@
       "sources": [
         {
           "path": "src/web/web_dashboard.py",
-          "line": 326,
+          "line": 431,
           "label": "/api/data 曲线"
         },
         {
           "path": "src/web/web_dashboard.py",
-          "line": 377,
-          "label": "/api/health 新鲜度 200/503"
+          "line": 482,
+          "end_line": 530,
+          "label": "/api/health：新鲜度 200/503 + sensor_ok 判真机有效性"
         },
         {
           "path": "src/web/web_dashboard.py",
-          "line": 598,
-          "label": "/api/report/export"
+          "line": 714,
+          "label": "/api/report/export 导出"
         }
       ]
     },
@@ -346,9 +354,8 @@
         },
         {
           "path": "docker-compose.yml",
-          "line": 489,
-          "end_line": 494,
-          "label": "allkeys-lru / 不持久化"
+          "line": 542,
+          "label": "maxmemory-policy allkeys-lru / 不持久化"
         }
       ]
     },
@@ -374,11 +381,11 @@
         {
           "path": "deploy/nginx/conf.d/cems.conf",
           "line": 91,
-          "label": "proxy_pass web:5000"
+          "label": "proxy_pass 到 web"
         },
         {
           "path": "docker-compose.yml",
-          "line": 511,
+          "line": 564,
           "label": "nginx 服务"
         }
       ]
@@ -403,7 +410,7 @@
       "label": "北向出口",
       "sublabel": "对环保平台的三条标准出口（按需接线）",
       "pos": [
-        250,
+        282,
         660
       ],
       "size": [
@@ -449,7 +456,7 @@
         },
         {
           "path": "docker-compose.yml",
-          "line": 438,
+          "line": 491,
           "label": "SUBSCRIBER_DATA_DIR=/app/data/subscriber"
         }
       ]
@@ -470,12 +477,12 @@
       "sources": [
         {
           "path": "docker-compose.yml",
-          "line": 461,
+          "line": 514,
           "label": "SUBSCRIBER_DATA_DIR=/app/data-plant2/subscriber"
         },
         {
           "path": "docs/reference/配置项全表.md",
-          "line": 129,
+          "line": 144,
           "label": "两实例共用会拿自己的标签写对方的报文"
         }
       ]
@@ -484,23 +491,30 @@
   "boundaries": [
     {
       "kind": "region",
-      "label": "单机 Docker Compose · cems-net（默认仅绑 127.0.0.1；nginx :80 为唯一对外入口）",
+      "label": "边缘节点 · 树莓派 2B（systemd 托管；Modbus 只绑回环）",
       "wraps": [
         "device",
         "gw1",
         "cache1",
         "gw2",
-        "cache2",
+        "cache2"
+      ],
+      "pad": 20
+    },
+    {
+      "kind": "region",
+      "label": "平台侧 · Linux 主机 Docker Compose（cems-net；除 MQTT 1883 外全部绑 127.0.0.1）",
+      "wraps": [
         "emqx",
         "sub1",
         "sub2",
+        "spool1",
+        "spool2",
         "td",
         "backup",
         "web",
         "redis",
-        "nginx",
-        "spool1",
-        "spool2"
+        "nginx"
       ],
       "pad": 20
     },
@@ -517,7 +531,7 @@
     {
       "from": "device",
       "to": "gw1",
-      "label": "Modbus 读从站1（5 s）",
+      "label": "Modbus 读从站1（5 s，本机 :5020）",
       "variant": "emphasis"
     },
     {
@@ -541,13 +555,13 @@
     {
       "from": "gw1",
       "to": "emqx",
-      "label": "QoS1 发布",
+      "label": "QoS1 发布（1883 · 账号认证 · 明文）",
       "variant": "emphasis"
     },
     {
       "from": "gw2",
       "to": "emqx",
-      "label": "QoS1 发布",
+      "label": "QoS1 发布（1883 · 账号认证 · 明文）",
       "variant": "emphasis"
     },
     {
@@ -621,7 +635,7 @@
       "dot": "cyan",
       "title": "图上每一块在干什么（按数据流向）",
       "items": [
-        "① Modbus 仿真设备 —— 代替现场仪表：9 个测点，每 5 秒变一个数（值 ×10 存进寄存器）",
+        "① 设备层 —— 9 个测点，每 5 秒变一个数（值 ×10 存进寄存器）；1 号炉的 Temp/Humidity 两点由现场 485 温湿度变送器**真机直读**，其余 7 个测点为合成波形",
         "② 网关 —— 每 5 秒去设备取一次数（南向二选一：Modbus / OPC UA），换算成工程量 + 打时间戳，发到消息总线",
         "③ 断网缓存（网关本地文件）—— 发不出去就先落盘，恢复后自动补传；这是网关侧的兜底",
         "④ EMQX（消息总线）—— 按订阅关系统一分发；订阅方离线时替它存着，重连后补投",
@@ -672,7 +686,7 @@
       "dot": "emerald",
       "title": "展示层与查询缓存",
       "items": [
-        "Web：/ 实时大屏、/report 报表、/api/data、/api/health（新鲜度判 200/503）、/api/report/export 导出",
+        "Web：/ 实时大屏、/report 报表、/api/data、/api/health、/api/report/export 导出；/api/health 用新鲜度判 200/503，另给 sensor_ok 判真机读数是否有效 —— 真机坏了 healthy 仍为 true，不把“传感器死”误报成“链路死”",
         "Redis 只缓存已闭合时间窗（上界 ≤ 库内最新数据 − 60 s），TTL 300 s；Redis 挂掉整体退化为直连库",
         "nginx：/static 直接落盘、/api/cache/* 返回 403；web 直连 :5001 是绕过反代的对照通路"
       ]
@@ -693,7 +707,8 @@
         "北向出口：一套接口三条出口（HJ212/TCP 含 SM4、HTTP-JSON、Modbus-TCP），含心跳与超时重连",
         "三条出口均已本地回环 + 官方向量独立验证；是否接进主链路按项目需要决定（当前为演示脚本调用）",
         "只读被直读：网关另可开一个只读 Modbus TCP 从站（:5022，默认关），供厂里既有的 SCADA / DCS 直接读当前值",
-        "部署形态：单机 Docker Compose（平台侧 6 个容器；--profile sim 8 个；双设备 10 个），端口默认只绑 127.0.0.1",
+        "部署形态：南向两层（device + 双网关）跑在树莓派 2B 的 systemd 上（Type=notify + WatchdogSec=60，Modbus :5020 只绑回环）；平台侧是 Linux 主机上的 Docker Compose —— 默认 6 个容器，--profile sim 8 个，再叠加 plant2（含二号炉大屏 web2）11 个",
+        "消息总线：MQTT 1883 已开账号认证（匿名连接被拒 CONNACK 135），凭据由 MQTT_USERNAME / MQTT_PASSWORD 注入；⚠️ 仍无 TLS，凭据与数据明文，只放可信内网",
         "扩展方式：多设备 = 多实例（每台炉子一套网关 + 接入，各自库表与缓存目录），已按两实例验证",
         "镜像是具体版本号，不用 latest：同一份编排在任何时候重建都得到同一套软件"
       ]
