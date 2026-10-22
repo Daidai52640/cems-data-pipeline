@@ -682,6 +682,45 @@ services:
       retries: 3
       start_period: 20s
 
+  # ---------------- 4b 展示层：2 号炉大屏（双设备演示；profiles plant2）----------------
+  # 与 web 同一镜像，只换设备维度与宿主机端口。⚠️ 要和 sim 一起带：
+  #   docker compose --profile sim --profile plant2 up -d web2
+  # （gateway2 依赖 device，而 device 在 profile sim 下，单独 --profile plant2 会报依赖错）
+  web2:
+    <<: *app
+    profiles: ["plant2"]
+    container_name: cems-web-plant2
+    command: python src/web/web_dashboard.py
+    environment:
+      TZ: Asia/Shanghai
+      TD_URL: http://tdengine:6041
+      TD_USER: ${TD_USER:-root}
+      TD_PASS: ${TD_PASS:-taosdata}
+      TD_DB: cems
+      TD_STABLE: cems_data
+      TD_PLANT: plant2
+      TD_DEVICE: device2
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: "5000"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CACHE_ENABLED: ${CACHE_ENABLED:-1}
+    ports:
+      # 仍沿用 BIND_ADDR（默认只绑回环）；对外入口是 nginx，这里只是第二台设备的直连对照通路
+      - "${BIND_ADDR:-127.0.0.1}:${WEB2_HOST_PORT:-5002}:5000"
+    depends_on:
+      tdengine:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u\nu.urlopen('http://127.0.0.1:5000/api/health',timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
 networks:
   cems:
     name: cems-net

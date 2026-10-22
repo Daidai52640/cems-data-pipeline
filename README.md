@@ -143,6 +143,7 @@ docker compose up -d --build          # 基础层已在本地，--build 不需�
 |---|---|---|
 | Nginx 统一入口 | http://localhost | 对外主入口，反代 Web 与 API |
 | Web 直连后端 | http://localhost:5001 | 直连 web 容器（容器内端口 5000），对照 nginx 层差异 |
+| 2 号炉大屏 | http://localhost:5002 | 双设备演示的第二套展示实例（compose 服务 `web2`，`--profile sim --profile plant2`） |
 | EMQX Dashboard | http://localhost:18083 | MQTT 管理台。演示默认值是 `admin/public`；本部署**已改口令**（只存本机、不入库），且只绑回环 |
 | TDengine | 6041（REST）/ 6030（原生） | 默认 root/taosdata |
 | Modbus 设备 | 5020 | 仿真设备 Modbus TCP 端口 |

@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import threading
 import time
@@ -73,9 +74,15 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.common import points_transmitter as tx                    # noqa: E402
+from src.common.log_throttle import should_emit                     # noqa: E402
 from src.common.points import POINTS as CEMS_POINTS, WIRE_BYTE_ORDER, decode_register  # noqa: E402
 
 LOGGER: Final[logging.Logger] = logging.getLogger("device.rtu_master")
+# ---- 日志节流（2026-10-22）：稳态逐条 DEBUG + 每 60 s 一条 INFO 汇总；
+#      失败在状态变化时 WARNING，之后每 300 s 提醒一次。理由见 src/common/log_throttle.py。
+INFO_SUMMARY_SECONDS: Final[float] = float(os.getenv("SERIAL_INFO_SUMMARY_SECONDS", "60"))
+FAILURE_REMIND_SECONDS: Final[float] = float(os.getenv("SERIAL_FAILURE_REMIND_SECONDS", "300"))
+
 
 # ==================== 配置区（设备事实全部取自 points_transmitter，不在这里抄一遍） ====================
 
@@ -494,30 +501,58 @@ class RtuMaster:
 
     # -------------------------------------------------- 轮询线程
     def poll_forever(self) -> None:
-        """后台轮询循环：任何失败都只记日志、不抛、不退出。"""
+        """后台轮询循环：任何失败都只记日志、不抛、不退出。
+
+        日志节流（规则见 src/common/log_throttle.py）：
+        - 成功：逐条 DEBUG；每 `INFO_SUMMARY_SECONDS` 一条 INFO 汇总（含窗口内成功次数）
+        - 失败：状态变化时打一条 WARNING（连续次数 + 原因），之后每
+          `FAILURE_REMIND_SECONDS` 提醒一次；恢复由 `read_once` 里的 WARNING 负责定位
+        效果：稳态日志从约 10.7 MB/天 降到约 1 MB/天；故障期从"每 2 s 一条"变成
+        "起点一条 + 每 5 分钟一条"，信号（何时坏、何时好）反而更清楚。
+        """
+        last_summary = 0.0
+        last_failure_log = 0.0
+        window_success = 0
+        was_failing = False
         while True:
             got = self.read_once()
+            now = time.monotonic()
             if got is None:
                 failures = self.consecutive_failures
-                LOGGER.error(
-                    "串口直读失败（连续第 %d 次）：%s @ %d %d%s%d，从站 %d —— "
-                    "状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：%s",
-                    failures,
-                    self.port,
-                    self.baud,
-                    DATA_BITS,
-                    PARITY,
-                    STOP_BITS,
-                    self.slave,
-                    self.last_error,
-                )
+                if not was_failing or should_emit(last_failure_log, now, FAILURE_REMIND_SECONDS):
+                    LOGGER.warning(
+                        "串口直读失败（连续第 %d 次）：%s @ %d %d%s%d，从站 %d —— "
+                        "状态位=1(陈旧)、Temp/Humidity 写越界值让接入层拒收，不回落到仿真值；原因：%s",
+                        failures,
+                        self.port,
+                        self.baud,
+                        DATA_BITS,
+                        PARITY,
+                        STOP_BITS,
+                        self.slave,
+                        self.last_error,
+                    )
+                    last_failure_log = now
+                was_failing = True
             else:
-                LOGGER.info(
+                was_failing = False
+                window_success += 1
+                LOGGER.debug(
                     "串口直读：湿度 %.1f %%RH ｜ 温度 %.1f degC ｜ 状态位=%d",
                     got[0] / tx.SCALE,
                     int16_from_wire(got[1]) / tx.SCALE,
                     STATUS_FRESH,
                 )
+                if should_emit(last_summary, now, INFO_SUMMARY_SECONDS):
+                    LOGGER.info(
+                        "串口直读汇总：湿度 %.1f %%RH ｜ 温度 %.1f degC ｜ 状态位=%d ｜ 本窗口成功 %d 次",
+                        got[0] / tx.SCALE,
+                        int16_from_wire(got[1]) / tx.SCALE,
+                        STATUS_FRESH,
+                        window_success,
+                    )
+                    last_summary = now
+                    window_success = 0
             time.sleep(self.interval)
 
 

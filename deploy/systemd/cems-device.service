@@ -11,7 +11,8 @@ WatchdogSec=60
 NotifyAccess=main
 User=ddf
 WorkingDirectory=/home/ddf/cems
-Environment=SERVER_HOST=0.0.0.0
+Environment=SERVER_HOST=127.0.0.1
+# ⚠️ 只绑回环：网关就在本机读 127.0.0.1:5020，Modbus 无认证，没必要对局域网开放
 Environment=SERVER_PORT=5020
 Environment=SLAVE_IDS=1,2
 Environment=REAL_DEVICE_ENABLE=1

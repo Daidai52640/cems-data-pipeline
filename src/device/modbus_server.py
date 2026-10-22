@@ -34,6 +34,7 @@ PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.common.log_throttle import should_emit                     # noqa: E402
 from src.common.logging import setup_logging                       # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT, SCALE   # noqa: E402
 from src.common.points_transmitter import BAUD_RATE as TRANSMITTER_BAUD_RATE  # noqa: E402
@@ -445,6 +446,10 @@ def _stale_raw(point_name: str) -> int:
 #: 真机陈旧时写进寄存器的越界值（导入期按契约算一次，不写魔数）
 STALE_TEMP_RAW: Final[int] = _stale_raw("Temp")
 STALE_HUMIDITY_RAW: Final[int] = _stale_raw("Humidity")
+#: 真机"尚无有效读数"的告警节流：overlay 每轮刷新都会走到这里，逐轮 ERROR 会把日志淹掉。
+#: 规则同串口轮询：状态变化打一条，之后每 N 秒提醒一次（2026-10-22）。
+REAL_OVERLAY_WARN_INTERVAL: Final[float] = float(os.getenv("REAL_DEVICE_WARN_INTERVAL", "300"))
+_last_overlay_warn_at: float = 0.0
 
 
 class RealDeviceSource(Protocol):
@@ -544,11 +549,16 @@ def overlay_real_values(values: list[int], slave_id: int) -> list[int]:
                 out[point.address - REG_BASE] = STALE_HUMIDITY_RAW
             elif point.name == "Temp":
                 out[point.address - REG_BASE] = STALE_TEMP_RAW
-        LOGGER.error(
-            "[从站%d] 真机尚无有效读数（桥不可达或未轮询到）—— "
-            "Temp/Humidity 写越界值让接入层拒收，不把仿真值冒充真机值",
-            slave_id,
-        )
+        global _last_overlay_warn_at
+        now = time.monotonic()
+        if should_emit(_last_overlay_warn_at, now, REAL_OVERLAY_WARN_INTERVAL):
+            LOGGER.error(
+                "[从站%d] 真机尚无有效读数（桥不可达或未轮询到）—— "
+                "Temp/Humidity 写越界值让接入层拒收，不把仿真值冒充真机值（后续同类告警每 %.0f s 一条）",
+                slave_id,
+                REAL_OVERLAY_WARN_INTERVAL,
+            )
+            _last_overlay_warn_at = now
         return out
     humidity_raw, temperature_raw, stale = snap
     out = list(values)

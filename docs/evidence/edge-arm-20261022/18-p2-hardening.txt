@@ -1,0 +1,31 @@
+# cmd: P2-1~P2-4 收口（2026-10-22 19:39~19:42）
+# P2-1 设备层 Modbus 只绑回环；P2-2 设备层日志节流；P2-3 二号炉大屏进 compose；
+# P2-4 清理 0 字节 inflight 残留。改完重启过设备层，属于一次受控解冻，随后重新冻结。
+=== P2-1 5020 只绑回环 ===
+LISTEN 0      100        127.0.0.1:5020      0.0.0.0:*    users:(("python",pid=2095,fd=11))
+=== P2-2 日志节流（70 s 窗口） ===
+1
+2026-10-22 19:40:20 [INFO] device.rtu_master: 串口直读汇总：湿度 58.6 %RH ｜ 温度 26.1 degC ｜ 状态位=0 ｜ 本窗口成功 30 次
+=== P2-4 空 inflight 清理 ===
+0
+=== 冻结复核 ===
+active
+active
+active
+NRestarts=0
+{"ts":1792669273.2936633,"pid":2100,"cfg":"359aac47","south_protocol":"modbus","south_ok":true,"mqtt_ok":true,"backlog_bytes":0,"samples":22,"published":21,"cached":1,"read_failures":0,"modbus_reconnects":0}
+up 1 hour, 11 minutes
+               Local time: Thu 2026-10-22 19:41:18 CST
+           Universal time: Thu 2026-10-22 11:41:18 UTC
+                 RTC time: n/a
+
+=== P2-3 web2 已由 compose 管理 ===
+compose_project=cems service=web2 restart=unless-stopped
+cems-web-plant2 | Up About a minute (healthy) | 127.0.0.1:5002->5000/tcp
+cems-web | Up 12 minutes (healthy) | 127.0.0.1:5001->5000/tcp
+=== 5002 health ===
+{"data_age_seconds":1.103,"healthy":true,"invalid_points_last_window":0,"invalid_points_threshold":12,"invalid_points_window_seconds":300,"ok":true,"reason":"fresh","rows_last_1min":12,"sensor_ok":true,"sensor_reason":"valid","stale_after_seconds":15.0,"td":"up"}
+
+=== 默认面服务数（应为 6） ===
+6
+
