@@ -23,6 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.common.logging import setup_logging                # noqa: E402
 from src.common.points import POINTS, REG_BASE, REG_COUNT, contract_version   # noqa: E402
 from src.common.mqtt_auth import apply_mqtt_credentials           # noqa: E402
+from src.common.mqtt_ready import default_ready_topic, ready_verdict   # noqa: E402
 from src.common.sd_notify import notify_ready, notify_watchdog  # noqa: E402
 from src.gateway.opcua_south import OpcUaReader             # noqa: E402
 from src.gateway.upstream_modbus import (                   # noqa: E402
@@ -141,6 +142,21 @@ CACHE_TRIM_RATIO: Final[float] = float(os.getenv("CACHE_TRIM_RATIO", "0.5"))  # 
 PUBLISH_ACK_TIMEOUT: Final[float] = float(os.getenv("PUBLISH_ACK_TIMEOUT", "5.0"))
 RESEND_WINDOW: Final[int] = int(os.getenv("RESEND_WINDOW", "100"))
 RESEND_RETRY_INTERVAL: Final[float] = float(os.getenv("RESEND_RETRY_INTERVAL", "30.0"))
+
+# ---- 补传前的「订阅端就绪」门（2026-10-25，修 broker 重启丢积压）----
+# 机理：broker 重启后若订阅端会话没恢复，网关补传/直发的报文会被 broker 当作
+#   「当前无订阅」丢掉，而 PUBACK 照常回来 —— 网关以为发成功、缓存删掉、库永久缺口。
+# 做法：订阅端连上并订阅成功后周期发心跳；网关要求「最近心跳足够新，且在本轮重连之后」，
+#   否则先不往下游发、继续缓存。等不到最多 READY_WAIT_MAX 秒后降级放行（打 WARNING），
+#   避免订阅端真挂掉时数据永远出不去。判据纯函数见 src/common/mqtt_ready.py。
+SUBSCRIBER_READY_TOPIC: Final[str] = os.getenv(
+    "SUBSCRIBER_READY_TOPIC", default_ready_topic(os.getenv("MQTT_TOPIC", "cems/plant1/data")),
+)
+SUBSCRIBER_READY_REQUIRED: Final[bool] = os.getenv(
+    "SUBSCRIBER_READY_REQUIRED", "1",
+).strip().lower() not in ("0", "false", "no", "off")
+SUBSCRIBER_READY_MAX_AGE: Final[float] = float(os.getenv("SUBSCRIBER_READY_MAX_AGE", "30.0"))
+SUBSCRIBER_READY_WAIT_MAX: Final[float] = float(os.getenv("SUBSCRIBER_READY_WAIT_MAX", "120.0"))
 
 # ---- 日志 ----
 # 级别/格式/时间格式统一在 src/common/logging.py（唯一真源）；
@@ -623,6 +639,13 @@ def resend_cache(client: mqtt.Client) -> int:
     必须跑在独立线程里：paho 的 wait_for_publish() 要等网络线程处理 PUBACK，
     在 on_connect 回调（本身就在网络线程里）中调用会自等死锁。
     """
+    # 补传前置门：订阅端没就绪就不动缓存 —— 否则 broker 会照常回 PUBACK、
+    # 报文却被当"无订阅"丢掉，缓存删了、库里永久缺口（2026-10-25 实测复现）。
+    ready, reason = subscriber_ready()
+    if not ready:
+        LOGGER.info("[补传] 订阅端未就绪（%s），积压继续留在缓存，暂不补传", reason)
+        return 0
+
     batch = _take_over_pending()
     if not batch:
         return 0
@@ -710,6 +733,67 @@ class ResendWorker:
 RESEND_WORKER: Final[ResendWorker] = ResendWorker()
 
 
+# ==================== 订阅端就绪状态 ====================
+# 三个时间戳都是 time.monotonic()：
+#   last_beat     —— 最近一次收到订阅端心跳的时刻
+#   after_connect —— 本轮 MQTT 连接建立的时刻（心跳必须晚于它，才算"重启后发过"）
+#   wait_started  —— 首次判定"未就绪"的时刻（降级等待的上限起点）
+# 网络回调线程写、主循环读，用一把小锁保证三者一致（临界区只有几条赋值）。
+_READY_LOCK: Final[threading.Lock] = threading.Lock()
+READY_STATE: Final[dict[str, Optional[float]]] = {
+    "last_beat": None,
+    "after_connect": None,
+    "wait_started": None,
+}
+_READY_DEGRADE_WARNED: list[float] = [0.0]     # 上次打降级 WARNING 的时刻（避免刷屏）
+
+
+def note_subscriber_beat(now: Optional[float] = None) -> None:
+    """收到订阅端心跳（由 on_message 调用）。"""
+    ts = time.monotonic() if now is None else now
+    with _READY_LOCK:
+        READY_STATE["last_beat"] = ts
+
+
+def note_mqtt_connected(now: Optional[float] = None) -> None:
+    """本轮 MQTT 连接建立：重置"就绪等待"，并让上一轮的心跳失效。"""
+    ts = time.monotonic() if now is None else now
+    with _READY_LOCK:
+        READY_STATE["after_connect"] = ts
+        READY_STATE["wait_started"] = None
+
+
+def subscriber_ready(now: Optional[float] = None) -> tuple[bool, str]:
+    """订阅端是否已就绪（可以往下游发）。返回 (可否, 原因)。"""
+    ts = time.monotonic() if now is None else now
+    with _READY_LOCK:
+        verdict, reason = ready_verdict(
+            required=SUBSCRIBER_READY_REQUIRED,
+            last_beat=READY_STATE["last_beat"],
+            after_connect=READY_STATE["after_connect"],
+            now=ts,
+            max_age=SUBSCRIBER_READY_MAX_AGE,
+            wait_started=READY_STATE["wait_started"],
+            wait_max=SUBSCRIBER_READY_WAIT_MAX,
+        )
+        if verdict and reason == "ok":
+            READY_STATE["wait_started"] = None
+        elif not verdict:
+            if READY_STATE["wait_started"] is None:
+                READY_STATE["wait_started"] = ts
+            elif reason == "degraded-wait-timeout":
+                pass
+        if verdict and reason == "degraded-wait-timeout":
+            if ts - _READY_DEGRADE_WARNED[0] >= 60.0:
+                _READY_DEGRADE_WARNED[0] = ts
+                LOGGER.warning(
+                    "[就绪] 等订阅端心跳超时（%.0f 秒），降级放行：这段时间的报文若发送，"
+                    "broker 可能因订阅端未就绪而丢弃，事后无法恢复",
+                    SUBSCRIBER_READY_WAIT_MAX,
+                )
+    return verdict, reason
+
+
 # ==================== MQTT 回调 ====================
 
 def on_connect(
@@ -722,7 +806,12 @@ def on_connect(
     """连接/重连成功 → 触发补传（补传跑在独立线程，不阻塞网络回调线程）。"""
     if reason_code == 0:
         LOGGER.info("MQTT 已连接: %s:%d", MQTT_HOST, MQTT_PORT)
-        RESEND_WORKER.trigger(client)   # 重连成功 → 补传缓存
+        note_mqtt_connected()
+        # 订阅"订阅端就绪"心跳：补传前要先确认下游真的在订阅，
+        # 而不是"broker 收到了"（后者在 broker 重启窗口里会骗人）。
+        client.subscribe(SUBSCRIBER_READY_TOPIC, qos=0)
+        LOGGER.info("[就绪] 已订阅订阅端心跳主题: %s", SUBSCRIBER_READY_TOPIC)
+        RESEND_WORKER.trigger(client)   # 重连成功 → 补传缓存（内部先校验就绪）
     else:
         LOGGER.error("MQTT 连接失败 reason_code=%s，数据将写入本地缓存", reason_code)
 
@@ -737,6 +826,13 @@ def on_disconnect(
     """连接断开 → 提示进入断网缓存模式（后台 loop 会自动重连）。"""
     if reason_code != 0:
         LOGGER.error("MQTT 连接断开 reason_code=%s，后续数据写入本地缓存", reason_code)
+
+
+def on_message(client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
+    """网关只订阅一个主题：订阅端就绪心跳。收到就记下时刻，供补传前判据使用。"""
+    if msg.topic == SUBSCRIBER_READY_TOPIC:
+        note_subscriber_beat()
+        LOGGER.debug("[就绪] 收到订阅端心跳")
 
 
 # ==================== 主流程 ====================
@@ -785,6 +881,7 @@ def main() -> None:
         LOGGER.info("MQTT 认证: 使用用户名口令（用户 %s）", MQTT_USERNAME)
     mqtt_client.on_connect = on_connect
     mqtt_client.on_disconnect = on_disconnect
+    mqtt_client.on_message = on_message
     try:
         mqtt_client.connect_async(MQTT_HOST, MQTT_PORT, keepalive=MQTT_KEEPALIVE)
         mqtt_client.loop_start()
@@ -907,7 +1004,11 @@ def main() -> None:
             # 与"发出去的那一份"同源，所以上游直读与入库数据必然一致。
             SNAPSHOT.update(data, modbus_ok=True, mqtt_ok=mqtt_client.is_connected())
 
-            if mqtt_client.is_connected() and not resend_in_flight:
+            # 订阅端就绪门：下游还没重新订阅时，直发也会被 broker 当"无订阅"丢掉，
+            # 所以和断网一样先落缓存（缓存有 64MB 上限、超限丢最旧并打 CRITICAL）。
+            ready_ok, ready_reason = subscriber_ready()
+
+            if mqtt_client.is_connected() and not resend_in_flight and ready_ok:
                 # 在线且本轮开始前没有在途补传批次：直接发；没收到 PUBACK 就落盘，绝不静默丢
                 if publish(mqtt_client, payload, tag=f"第{count}条 在线直发"):
                     STATS["published"] += 1
@@ -918,6 +1019,11 @@ def main() -> None:
                 # 断网：写缓存，数据不丢
                 STATS["cached"] += 1
                 save_to_cache(payload, reason="断网")
+            elif not ready_ok:
+                # 已连 broker，但订阅端还没就绪（典型：broker 重启后会话没恢复）：
+                # 这一段正是"ACK 照回、数据被丢"的窗口，必须等，不能发。
+                STATS["cached"] += 1
+                save_to_cache(payload, reason=f"订阅端未就绪:{ready_reason}")
             else:
                 # 本轮开始前已有在途补传批次（那批数据比本轮旧）：新数据先排队。
                 # 顺序语义是"近似时序"，不是严格全局 FIFO：只有"本轮开始前就在途的

@@ -88,6 +88,7 @@ from src.common.errors import (   # noqa: E402
 )
 from src.common.logging import setup_logging   # noqa: E402
 from src.common.mqtt_auth import apply_mqtt_credentials  # noqa: E402
+from src.common.mqtt_ready import default_ready_topic    # noqa: E402
 from src.common.points import (   # noqa: E402
     COLUMNS,
     NAMES,
@@ -126,6 +127,18 @@ MQTT_PASSWORD: Final[str] = os.getenv("MQTT_PASSWORD", "")
 #   持久会话依赖固定的 client_id，所以 MQTT_CLIENT_ID 不能改成随机值。
 MQTT_CLEAN_SESSION: Final[bool] = os.getenv("MQTT_CLEAN_SESSION", "0").strip().lower() in (
     "1", "true", "yes", "on",
+)
+
+# ---- 「订阅端就绪」心跳（2026-10-25，配合网关的补传前置门）----
+# 为什么需要它：broker 重启后若本端会话没恢复，网关补传的报文会被 broker 当作
+# "当前无订阅"丢掉，但 PUBACK 照常回 —— 网关以为发成功、缓存删掉、库里永久缺口。
+# 所以订阅生效后主动发心跳；网关收到才放行补传/直发（判据见 src/common/mqtt_ready.py）。
+SUBSCRIBER_STATUS_TOPIC: Final[str] = os.getenv(
+    "SUBSCRIBER_STATUS_TOPIC",
+    default_ready_topic(os.getenv("MQTT_TOPIC", "cems/plant1/data")),
+)
+SUBSCRIBER_STATUS_INTERVAL: Final[float] = float(
+    os.getenv("SUBSCRIBER_STATUS_INTERVAL", "10.0"),
 )
 
 # ---- TDengine（对应 taosAdapter 的 REST 接口）----
@@ -1646,6 +1659,32 @@ def on_connect(
         LOGGER.info("已订阅主题: %s (QoS=%d)", TOPIC, MQTT_QOS)
     except Exception as exc:
         LOGGER.error("订阅主题失败: %s", exc)
+        return      # 订阅都没成功，发"就绪"心跳就是骗网关
+
+    # 订阅生效后才发心跳：网关收到它才放行补传（见 src/common/mqtt_ready.py）。
+    # 放在 subscribe 之后是刻意的——先发心跳后订阅，等于告诉网关"可以发了"，而其实还没订阅。
+    publish_status_beat(client)
+    LOGGER.info("[就绪] 已发送订阅端心跳: %s", SUBSCRIBER_STATUS_TOPIC)
+
+
+def publish_status_beat(client: mqtt.Client) -> None:
+    """发一条「订阅端就绪」心跳：QoS0、不 retained（retained 会在 broker 重启后
+    残留或丢失，反而把这道门变成假的 —— 见 src/common/mqtt_ready.py 顶部说明）。"""
+    try:
+        client.publish(SUBSCRIBER_STATUS_TOPIC, payload="online", qos=0, retain=False)
+    except Exception as exc:      # 心跳失败不是致命错误，下一拍会重试
+        LOGGER.debug("发送订阅端心跳失败: %s", exc)
+
+
+def status_heartbeat_loop(client: mqtt.Client) -> None:
+    """周期发心跳：网关的补传前置门靠它判断"下游还在订阅"。"""
+    while True:
+        try:
+            if client.is_connected():
+                publish_status_beat(client)
+        except Exception:         # 线程边界：任何异常都不能让心跳线程静默死掉
+            LOGGER.exception("订阅端心跳线程异常")
+        time.sleep(SUBSCRIBER_STATUS_INTERVAL)
 
 
 def on_disconnect(
@@ -2021,6 +2060,18 @@ def main() -> None:
         client.connect_async(BROKER, PORT, keepalive=MQTT_KEEPALIVE)
     except Exception as exc:
         LOGGER.error("MQTT 初始化失败: %s", exc)
+
+    # 订阅端就绪心跳线程：每 SUBSCRIBER_STATUS_INTERVAL 秒发一条，网关据此放行补传。
+    threading.Thread(
+        target=status_heartbeat_loop,
+        args=(client,),
+        name="subscriber-status-heartbeat",
+        daemon=True,
+    ).start()
+    LOGGER.info(
+        "订阅端就绪心跳: 每 %.0f 秒一条 → %s（网关据此判断下游是否已订阅）",
+        SUBSCRIBER_STATUS_INTERVAL, SUBSCRIBER_STATUS_TOPIC,
+    )
 
     LOGGER.info("等待 MQTT 数据...（Ctrl+C 停止）")
     try:

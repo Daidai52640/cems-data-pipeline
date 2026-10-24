@@ -126,6 +126,12 @@ x-gateway-env: &gateway-env
   PUBLISH_ACK_TIMEOUT: "5.0"      # 单条等 PUBACK 的秒数，超时就转本地缓存
   RESEND_WINDOW: "100"             # 补传在途窗口条数
   RESEND_RETRY_INTERVAL: "30.0"    # 补传部分失败后的重试间隔（秒）
+  # 补传前置门（2026-10-25）：broker 重启后若订阅端会话没恢复，补传会被 broker 当
+  #   "当前无订阅"丢掉、却照回 PUBACK。开启后网关先等订阅端心跳，再放行补传/直发。
+  #   等不到最多 SUBSCRIBER_READY_WAIT_MAX 秒后降级放行（打 WARNING）。
+  SUBSCRIBER_READY_REQUIRED: ${SUBSCRIBER_READY_REQUIRED:-1}
+  SUBSCRIBER_READY_MAX_AGE: ${SUBSCRIBER_READY_MAX_AGE:-30.0}
+  SUBSCRIBER_READY_WAIT_MAX: ${SUBSCRIBER_READY_WAIT_MAX:-120.0}
 
 # ---- 网关健康检查的公共节奏（test 各实例不同：心跳文件在自己的缓存目录里）----
 x-gateway-healthcheck: &gateway-healthcheck
@@ -152,6 +158,8 @@ x-subscriber-env: &subscriber-env
   # broker 打开认证后必须带凭据；默认空 = 行为不变（见 src/common/mqtt_auth.py）
   MQTT_USERNAME: ${MQTT_USERNAME:-}
   MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+  # 订阅端就绪心跳（2026-10-25）：订阅生效后每 N 秒给网关发一条，网关据此放行补传。
+  SUBSCRIBER_STATUS_INTERVAL: ${SUBSCRIBER_STATUS_INTERVAL:-10.0}
   TD_URL: http://tdengine:6041
   # 口令从 .env 读取，未配置时回落到本机演示默认值（见 .env.example）
   TD_USER: ${TD_USER:-root}
