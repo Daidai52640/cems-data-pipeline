@@ -115,6 +115,12 @@ x-gateway-env: &gateway-env
   TZ: Asia/Shanghai
   MQTT_HOST: emqx
   MQTT_PORT: "1883"
+  # broker 开了认证就必须带凭据。⚠️ 2026-10-25 修：这两个键原先只在 subscriber 服务块里注入，
+  #   容器形态的网关拿不到（边缘节点走 systemd 的 EnvironmentFile，所以一直没暴露）；
+  #   一旦 EMQX 打开认证，容器网关就会一直 Not authorized、全部数据只落缓存。
+  #   默认空串 = 不带凭据、行为与改造前一致（见 src/common/mqtt_auth.py）。
+  MQTT_USERNAME: ${MQTT_USERNAME:-}
+  MQTT_PASSWORD: ${MQTT_PASSWORD:-}
   MQTT_QOS: "1"
   POLL_INTERVAL: "5.0"
   PUBLISH_ACK_TIMEOUT: "5.0"      # 单条等 PUBACK 的秒数，超时就转本地缓存
